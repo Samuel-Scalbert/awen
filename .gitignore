@@ -12,6 +12,7 @@ env/
 
 # Base de données locale
 data/*.db
+data/*.db-journal
 data/*.sqlite
 data/*.sqlite3
 
