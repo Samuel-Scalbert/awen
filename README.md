@@ -124,3 +124,5 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 ## Licence
 
 MIT — voir [LICENSE](LICENSE).
+
+Photos de démonstration des exercices : [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (domaine public).

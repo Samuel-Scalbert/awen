@@ -12,8 +12,10 @@ et le coach te dit quoi faire pour la suivante.</p>
          data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
          data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
          data-rest="{{ pe.rest_sec }}">
-  <img src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '.svg') }}"
-       alt="{{ pe.name }}" loading="lazy">
+  <img class="demo" alt="{{ pe.name }}" loading="lazy"
+       src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
+       data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
+       onerror="this.style.display='none'">
   <div class="exo-body">
     <h3>{{ loop.index }}. {{ pe.name }}</h3>
     <p class="target">🎯 {{ pe.sets }} × {{ pe.rep_min }}-{{ pe.rep_max }}
@@ -85,6 +87,16 @@ function startTimer(sec) {
 
 document.getElementById('timer-plus').onclick = () => { deadline += 30000; tick(); };
 document.getElementById('timer-skip').onclick = () => { deadline = Date.now(); tick(); };
+
+// Démo animée : alterne photo départ / arrivée
+setInterval(() => {
+  document.querySelectorAll('img.demo').forEach(img => {
+    if (img.style.display === 'none') return;
+    const tmp = img.src;
+    img.src = img.dataset.alt;
+    img.dataset.alt = tmp;
+  });
+}, 1300);
 
 document.querySelectorAll('form.log').forEach(form => {
   form.addEventListener('submit', async e => {
