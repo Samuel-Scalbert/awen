@@ -13,3 +13,8 @@ form { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1.5rem; }
 input, textarea, button { padding:.5rem; border-radius:8px; border:1px solid #333; background:#12151c; color:var(--text); }
 button { background:var(--accent); color:#0f1115; border:none; cursor:pointer; font-weight:600; }
 ul { line-height:1.8; }
+.pre { white-space:pre-line; }
+.recipes summary { cursor:pointer; }
+table { border-collapse:collapse; width:100%; margin-bottom:1.5rem; }
+th, td { border:1px solid #333; padding:.5rem .75rem; text-align:left; }
+th { background:var(--card); }

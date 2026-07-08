@@ -4,7 +4,9 @@
 <p>Bienvenue sur Awen, ton assistant perso pour l'été.</p>
 <ul class="cards">
   <li><a href="{{ url_for('workout.list_workouts') }}">🏋️ Séances de muscu</a></li>
+  <li><a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a></li>
   <li><a href="{{ url_for('meals.list_meals') }}">🍚 Recettes meal prep</a></li>
+  <li><a href="{{ url_for('meals.nutrition') }}">🎯 Plan nutrition</a></li>
   <li><a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a></li>
 </ul>
 {% endblock %}

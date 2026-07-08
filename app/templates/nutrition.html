@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Plan nutrition — Awen{% endblock %}
+{% block content %}
+<h2>Plan nutrition — Prise de masse 64 → 72 kg</h2>
+<p><em>1m86, 64 kg, petit mangeur, saute souvent le petit-déjeuner. Objectif 72 kg via meal prepping. Rythme réaliste : +0,5 à 1 kg/mois → objectif atteint en 8 à 12 mois (les 2-3 premiers kilos viendront plus vite : reprise d'entraînement + glycogène).</em></p>
+<p><a href="{{ url_for('meals.list_meals') }}">← Retour aux recettes</a></p>
+
+<h3>Les chiffres</h3>
+<table>
+  <tr><th></th><th>Valeur</th></tr>
+  <tr><td>Maintenance estimée (TDEE)</td><td>~2 600 kcal</td></tr>
+  <tr><td><strong>Cible prise de masse</strong></td><td><strong>~2 950-3 000 kcal/jour</strong></td></tr>
+  <tr><td>Protéines</td><td>140-150 g (≈ 2 g/kg du poids cible)</td></tr>
+  <tr><td>Lipides</td><td>90-100 g</td></tr>
+  <tr><td>Glucides</td><td>~380-400 g</td></tr>
+</table>
+
+<h3>Stratégie petit mangeur</h3>
+<p>Le problème n'est pas quoi manger mais réussir à tout manger. Les règles : privilégier le dense en calories (huile d'olive, beurre de cacahuète, noix, lait entier — jamais écrémé), boire des calories (un shake passe même sans appétit), ne jamais partir de la maison sans une barre snickers maison, et manger 5 fois de petites quantités plutôt que 3 gros repas qui te coupent l'appétit.</p>
+
+<h3>Journée type (~3 000 kcal, ~145 g protéines)</h3>
+<table>
+  <tr><th>Moment</th><th>Quoi</th><th>kcal</th><th>Prot</th></tr>
+  <tr><td>Matin (même sans faim)</td><td>2 snickers maison + 300 ml lait entier</td><td>~570</td><td>22 g</td></tr>
+  <tr><td>Déjeuner</td><td>1 portion meal prep (ex : saumon bowl)</td><td>~650</td><td>39 g</td></tr>
+  <tr><td>Après-midi / post-training</td><td>Shake : 400 ml lait entier + banane + 60 g avoine + 20 g beurre de cacahuète</td><td>~710</td><td>27 g</td></tr>
+  <tr><td>Dîner</td><td>Repas complet : 150-200 g viande/poisson + féculents généreux + légumes + filet d'huile d'olive</td><td>~800</td><td>40 g</td></tr>
+  <tr><td>Soirée</td><td>200 g fromage blanc + 20 g miel + poignée de noix</td><td>~290</td><td>17 g</td></tr>
+</table>
+<p>Ajoute 30 g de whey au shake les jours d'entraînement si tu en as : +120 kcal et +24 g de protéines pour rien.</p>
+
+<h3>Meal prep — organisation hebdo</h3>
+<p>Une session de 1h30-2h le dimanche : 4 portions de plat principal (déjeuners lun-jeu, ex. saumon bowl), 1 batch de snickers maison (8 barres = les matins de la semaine), et les ingrédients du shake prêts (avoine pesée en sachets, bananes achetées). Le dîner reste le seul repas « frais » à cuisiner — garde-le simple : une protéine, un féculent, un légume, de l'huile.</p>
+<p>Les recettes sont dans <a href="{{ url_for('meals.list_meals') }}">Recettes meal prep</a>.</p>
+
+<h3>Suivi</h3>
+<p>Pèse-toi 1×/semaine, le matin à jeun, même jour même heure. Si le poids stagne 2 semaines de suite → ajoute 200 kcal (le plus simple : +20 g de beurre de cacahuète dans le shake). Si tu prends plus de 1,5 kg/mois après le premier mois → retire 200 kcal. Note ton poids dans Awen pour suivre la courbe.</p>
+
+<h3>Repères de progression</h3>
+<table>
+  <tr><th>Étape</th><th>Poids</th><th>Échéance indicative</th></tr>
+  <tr><td>Départ</td><td>64 kg</td><td>juillet 2026</td></tr>
+  <tr><td>Cap 1</td><td>67 kg</td><td>octobre 2026</td></tr>
+  <tr><td>Cap 2</td><td>70 kg</td><td>février 2027</td></tr>
+  <tr><td>Objectif</td><td>72 kg</td><td>printemps 2027</td></tr>
+</table>
+{% endblock %}

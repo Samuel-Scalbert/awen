@@ -10,6 +10,11 @@ def list_workouts():
     return render_template("workouts.html", workouts=workouts)
 
 
+@bp.route("/programme")
+def programme():
+    return render_template("programme.html")
+
+
 @bp.route("/add", methods=["POST"])
 def add_workout():
     w = Workout(focus=request.form.get("focus"),

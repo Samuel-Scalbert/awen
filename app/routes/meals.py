@@ -11,6 +11,11 @@ def list_meals():
     return render_template("meals.html", recipes=recipes)
 
 
+@bp.route("/nutrition")
+def nutrition():
+    return render_template("nutrition.html")
+
+
 @bp.route("/add", methods=["POST"])
 def add_recipe():
     r = Recipe(

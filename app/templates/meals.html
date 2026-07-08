@@ -2,6 +2,7 @@
 {% block title %}Meal prep — Awen{% endblock %}
 {% block content %}
 <h2>Recettes meal prep</h2>
+<p><a href="{{ url_for('meals.nutrition') }}">🎯 Voir le plan nutrition complet</a></p>
 <form method="post" action="{{ url_for('meals.add_recipe') }}">
   <input name="name" placeholder="Nom de la recette" required>
   <input name="calories" type="number" placeholder="kcal">
@@ -13,10 +14,17 @@
   <textarea name="steps" placeholder="Préparation"></textarea>
   <button type="submit">Ajouter</button>
 </form>
-<ul>
+<ul class="recipes">
   {% for r in recipes %}
-    <li>{% if r.is_favorite %}⭐ {% endif %}<strong>{{ r.name }}</strong>
-        {% if r.calories %}— {{ r.calories }} kcal, {{ r.protein_g }}g prot{% endif %}</li>
+    <li>
+      <details>
+        <summary>{% if r.is_favorite %}⭐ {% endif %}<strong>{{ r.name }}</strong>
+          {% if r.calories %}— {{ r.calories }} kcal, {{ r.protein_g }}g prot, {{ r.carbs_g }}g gluc, {{ r.fat_g }}g lip{% endif %}</summary>
+        {% if r.notes %}<p class="pre"><em>{{ r.notes }}</em></p>{% endif %}
+        {% if r.ingredients %}<p><strong>Ingrédients :</strong></p><p class="pre">{{ r.ingredients }}</p>{% endif %}
+        {% if r.steps %}<p><strong>Préparation :</strong></p><p class="pre">{{ r.steps }}</p>{% endif %}
+      </details>
+    </li>
   {% else %}
     <li>Aucune recette enregistrée.</li>
   {% endfor %}

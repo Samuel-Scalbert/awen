@@ -2,6 +2,7 @@
 {% block title %}Muscu — Awen{% endblock %}
 {% block content %}
 <h2>Séances de muscu</h2>
+<p><a href="{{ url_for('workout.programme') }}">📋 Voir le programme PPL complet</a></p>
 <form method="post" action="{{ url_for('workout.add_workout') }}">
   <input name="focus" placeholder="Focus (ex: Pecs/Triceps)" required>
   <input name="notes" placeholder="Notes">
