@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Awen{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <header>
+    <h1><a href="{{ url_for('main.index') }}">Awen 🌀</a></h1>
+    <nav>
+      <a href="{{ url_for('workout.list_workouts') }}">Muscu</a>
+      <a href="{{ url_for('meals.list_meals') }}">Meal prep</a>
+      <a href="{{ url_for('calendar.view_calendar') }}">Calendrier</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

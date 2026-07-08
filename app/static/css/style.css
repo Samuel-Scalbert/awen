@@ -1,0 +1,15 @@
+:root { --bg:#0f1115; --card:#1a1e26; --accent:#6ee7b7; --text:#e6e6e6; }
+* { box-sizing: border-box; }
+body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
+header { padding:1rem 1.5rem; background:var(--card); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; }
+header h1 a { color:var(--accent); text-decoration:none; }
+nav a { color:var(--text); margin-left:1rem; text-decoration:none; }
+nav a:hover { color:var(--accent); }
+main { max-width:800px; margin:2rem auto; padding:0 1.5rem; }
+.cards { list-style:none; padding:0; display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
+.cards a { display:block; padding:1.5rem; background:var(--card); border-radius:12px; text-decoration:none; color:var(--text); }
+.cards a:hover { outline:2px solid var(--accent); }
+form { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1.5rem; }
+input, textarea, button { padding:.5rem; border-radius:8px; border:1px solid #333; background:#12151c; color:var(--text); }
+button { background:var(--accent); color:#0f1115; border:none; cursor:pointer; font-weight:600; }
+ul { line-height:1.8; }

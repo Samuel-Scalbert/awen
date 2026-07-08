@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Tableau de bord</h2>
+<p>Bienvenue sur Awen, ton assistant perso pour l'été.</p>
+<ul class="cards">
+  <li><a href="{{ url_for('workout.list_workouts') }}">🏋️ Séances de muscu</a></li>
+  <li><a href="{{ url_for('meals.list_meals') }}">🍚 Recettes meal prep</a></li>
+  <li><a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a></li>
+</ul>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Calendrier — Awen{% endblock %}
+{% block content %}
+<h2>Prochains évènements</h2>
+<ul>
+  {% for e in events %}
+    <li>{{ e.start }} — {{ e.title }}</li>
+  {% else %}
+    <li>Aucun évènement (configure <code>SAMSUNG_CALENDAR_ICS_URL</code>).</li>
+  {% endfor %}
+</ul>
+{% endblock %}

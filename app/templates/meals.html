@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Meal prep — Awen{% endblock %}
+{% block content %}
+<h2>Recettes meal prep</h2>
+<form method="post" action="{{ url_for('meals.add_recipe') }}">
+  <input name="name" placeholder="Nom de la recette" required>
+  <input name="calories" type="number" placeholder="kcal">
+  <input name="protein_g" type="number" step="0.1" placeholder="Protéines (g)">
+  <input name="carbs_g" type="number" step="0.1" placeholder="Glucides (g)">
+  <input name="fat_g" type="number" step="0.1" placeholder="Lipides (g)">
+  <label><input type="checkbox" name="is_favorite"> Favori</label>
+  <textarea name="ingredients" placeholder="Ingrédients"></textarea>
+  <textarea name="steps" placeholder="Préparation"></textarea>
+  <button type="submit">Ajouter</button>
+</form>
+<ul>
+  {% for r in recipes %}
+    <li>{% if r.is_favorite %}⭐ {% endif %}<strong>{{ r.name }}</strong>
+        {% if r.calories %}— {{ r.calories }} kcal, {{ r.protein_g }}g prot{% endif %}</li>
+  {% else %}
+    <li>Aucune recette enregistrée.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

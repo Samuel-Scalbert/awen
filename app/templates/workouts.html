@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Muscu — Awen{% endblock %}
+{% block content %}
+<h2>Séances de muscu</h2>
+<form method="post" action="{{ url_for('workout.add_workout') }}">
+  <input name="focus" placeholder="Focus (ex: Pecs/Triceps)" required>
+  <input name="notes" placeholder="Notes">
+  <button type="submit">Ajouter</button>
+</form>
+<ul>
+  {% for w in workouts %}
+    <li><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> — {{ w.focus }}
+        {% if w.notes %}<em>({{ w.notes }})</em>{% endif %}</li>
+  {% else %}
+    <li>Aucune séance enregistrée.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

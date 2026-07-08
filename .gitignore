@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+env/
+
+# Env / secrets
+.env
+*.local
+
+# Base de données locale
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# ESP32 build
+esp32/build/
+esp32/.pio/
