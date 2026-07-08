@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Liste de courses — Awen{% endblock %}
+{% block content %}
+<h2>🛒 Liste de courses</h2>
+<p class="muted">Coche ce que tu as <strong>déjà dans le frigo</strong>, puis génère
+la liste finale — elle ne contiendra que ce qu'il te manque.</p>
+
+<details class="batch-form">
+  <summary>⚙️ Recettes incluses (batchs par semaine)</summary>
+  <form method="get">
+    {% for r in recipes %}
+    <label class="batch">
+      <input type="number" name="r{{ r.id }}" value="{{ counts[r.id] }}"
+             min="0" max="30"> × {{ r.name }}
+    </label>
+    {% endfor %}
+    <button type="submit">Mettre à jour</button>
+  </form>
+</details>
+
+<div id="checklist">
+  {% for s in sections %}
+  <h3>{{ s.name }}{% if s.count > 1 %} <small>(× {{ s.count }})</small>{% endif %}</h3>
+  <ul class="shop">
+    {% for item in s.lines %}
+    <li><label><input type="checkbox" class="have"> <span>{{ item }}{% if s.count > 1 %} <em class="muted">(recette × {{ s.count }})</em>{% endif %}</span></label></li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+
+  <h3>Base de la semaine <small>(petits-déjs, soirs, dîners)</small></h3>
+  <ul class="shop">
+    {% for item in staples %}
+    <li><label><input type="checkbox" class="have"> <span>{{ item }}</span></label></li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="final-actions">
+  <button type="button" id="gen">📋 Générer la liste finale</button>
+</div>
+<div id="result" hidden>
+  <h3>À acheter</h3>
+  <pre id="final"></pre>
+  <button type="button" id="copy">📱 Copier pour le téléphone</button>
+  <span id="copied" class="muted" hidden>Copié ✅</span>
+</div>
+
+<script>
+document.getElementById('gen').addEventListener('click', () => {
+  const lines = [];
+  document.querySelectorAll('#checklist ul.shop').forEach(ul => {
+    const title = ul.previousElementSibling.childNodes[0].textContent.trim();
+    const missing = [...ul.querySelectorAll('li')]
+      .filter(li => !li.querySelector('.have').checked)
+      .map(li => li.querySelector('span').childNodes[0].textContent.trim());
+    if (missing.length) {
+      lines.push('— ' + title + ' —');
+      missing.forEach(m => lines.push('· ' + m));
+      lines.push('');
+    }
+  });
+  const result = document.getElementById('result');
+  document.getElementById('final').textContent =
+    lines.length ? lines.join('\n').trim() : 'Rien à acheter, tout est au frigo 🎉';
+  result.hidden = false;
+  result.scrollIntoView({ behavior: 'smooth' });
+});
+
+document.getElementById('copy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(document.getElementById('final').textContent);
+    document.getElementById('copied').hidden = false;
+  } catch (e) {
+    alert('Copie impossible — sélectionne le texte à la main.');
+  }
+});
+</script>
+{% endblock %}

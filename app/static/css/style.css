@@ -49,3 +49,16 @@ button.danger { background:#e26d6d; }
 .badge.done { background:var(--accent); color:#0f1115; font-weight:700; }
 .badge.done.pending { background:#b9a44c; }
 .badge.plan { border:1px dashed var(--accent); color:var(--accent); }
+
+/* Liste de courses */
+.batch-form { background:var(--card); border-radius:12px; padding:.8rem 1rem; margin-bottom:1rem; }
+.batch-form summary { cursor:pointer; }
+.batch-form form { margin:.8rem 0 0; }
+.batch { display:flex; align-items:center; gap:.5rem; width:100%; }
+.batch input { width:4.5rem; }
+ul.shop { list-style:none; padding-left:0; }
+ul.shop label { display:flex; gap:.6rem; align-items:baseline; cursor:pointer; }
+ul.shop input:checked + span { text-decoration:line-through; opacity:.45; }
+.final-actions { margin:1.5rem 0 .5rem; }
+#final { background:var(--card); border-radius:10px; padding:1rem; white-space:pre-wrap; }
+#copied { margin-left:.8rem; }
