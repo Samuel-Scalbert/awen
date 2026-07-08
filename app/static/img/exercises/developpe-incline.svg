@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- banc incliné -->
+  <g stroke="#4b5563" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M42 122 L92 62"/>
+    <path d="M92 100 L118 122"/>
+  </g>
+  <!-- figure -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="101" cy="46" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M95 56 L66 92"/>
+    <path d="M66 92 L92 104 L90 124"/>
+    <path d="M90 56 L118 44"/>
+  </g>
+  <!-- poignée + mouvement -->
+  <circle cx="124" cy="41" r="6" fill="#6ee7b7"/>
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M138 66 L160 30"/>
+    <path d="M160 30 L148 32 M160 30 L158 42"/>
+  </g>
+</svg>

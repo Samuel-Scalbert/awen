@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- sol -->
+  <path d="M28 116 L172 116" stroke="#4b5563" stroke-width="5" stroke-linecap="round"/>
+  <!-- figure en planche -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="150" cy="66" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M140 74 L62 96"/>
+    <path d="M62 96 L44 112"/>
+    <path d="M136 78 L142 114"/>
+  </g>
+  <!-- mouvement : monter/descendre -->
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M96 74 L96 40"/>
+    <path d="M96 40 L88 50 M96 40 L104 50"/>
+  </g>
+</svg>

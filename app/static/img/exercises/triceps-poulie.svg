@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- colonne + câble -->
+  <g stroke="#4b5563" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M146 16 L146 124"/>
+  </g>
+  <circle cx="146" cy="22" r="6" fill="#4b5563"/>
+  <path d="M146 22 L116 58" stroke="#4b5563" stroke-width="3" fill="none"/>
+  <!-- figure -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="88" cy="34" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M90 44 L94 94"/>
+    <path d="M94 94 L84 124 M94 94 L106 122"/>
+    <path d="M91 52 L106 66 L116 60"/>
+  </g>
+  <!-- barre + mouvement vers le bas -->
+  <path d="M102 64 L128 54" stroke="#6ee7b7" stroke-width="6" stroke-linecap="round"/>
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M118 78 L118 106"/>
+    <path d="M118 106 L110 96 M118 106 L126 96"/>
+  </g>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- poulie haute + câble -->
+  <circle cx="100" cy="14" r="6" fill="#4b5563"/>
+  <path d="M100 14 L100 38" stroke="#4b5563" stroke-width="3" fill="none"/>
+  <!-- poignée V -->
+  <path d="M92 46 L100 38 L108 46" stroke="#6ee7b7" stroke-width="6"
+        stroke-linecap="round" fill="none"/>
+  <!-- figure assise -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="100" cy="62" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M94 68 L96 46"/>
+    <path d="M106 68 L104 46"/>
+    <path d="M100 72 L100 102"/>
+    <path d="M100 102 L84 124 M100 102 L116 124"/>
+  </g>
+  <!-- siège -->
+  <path d="M74 110 L126 110" stroke="#4b5563" stroke-width="7" stroke-linecap="round"/>
+  <!-- mouvement vers le bas -->
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M154 40 L154 76"/>
+    <path d="M154 76 L146 66 M154 76 L162 66"/>
+  </g>
+</svg>

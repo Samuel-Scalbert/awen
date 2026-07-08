@@ -1,5 +1,5 @@
-"""Recettes de départ, chargées une seule fois si la table est vide."""
-from .models import db, Recipe
+"""Données de départ (recettes, programme PPL), chargées si les tables sont vides."""
+from .models import db, Recipe, ProgramExercise
 
 DEFAULT_RECIPES = [
     dict(
@@ -73,4 +73,55 @@ def seed_default_recipes():
         return
     for data in DEFAULT_RECIPES:
         db.session.add(Recipe(**data))
+    db.session.commit()
+
+
+# Programme PPL — charges de reprise (~70 % des anciens maxes).
+# (session_type, position, name, slug, sets, rep_min, rep_max,
+#  weight_kg, increment_kg, notes)
+PPL_PROGRAM = [
+    ("push", 1, "Développé incliné machine", "developpe-incline",
+     4, 8, 12, 27.5, 2.5, "Ancien max : 5×11 @ 37,5 kg"),
+    ("push", 2, "Chest press (banc)", "chest-press",
+     4, 8, 10, 7.5, 2.5, "Ancien max : 5×8 @ 10 kg"),
+    ("push", 3, "Développé épaules", "developpe-epaules",
+     4, 10, 15, 17.5, 2.5, "Ancien max : 5×15 @ 25 kg"),
+    ("push", 4, "Extension triceps poulie", "triceps-poulie",
+     4, 8, 12, 40, 2.5, "Ancien max : 5×8 @ 55 kg"),
+    ("push", 5, "Extension nuque (overhead)", "extension-nuque",
+     3, 12, 16, 5, 2.5, "Ancien max : 5×16 @ 7,5 kg"),
+    ("pull", 1, "Low row", "low-row",
+     4, 10, 15, 40, 2.5, "Ancien max : 5×15 @ 55 kg"),
+    ("pull", 2, "Tractions (assistées si besoin)", "tractions",
+     4, 6, 10, 45, -2.5,
+     "Charge = assistance, elle baisse quand tu progresses. "
+     "Ancien max : 5×13 assisté / 5×7 libre"),
+    ("pull", 3, "Tirage dos prise rapprochée", "tirage-rapproche",
+     4, 10, 15, 22.5, 2.5, "Ancien max : 5×15-16 @ 30 kg"),
+    ("pull", 4, "Curl marteau", "curl-marteau",
+     3, 8, 12, 12.5, 2.5, "Ancien max : 5×12 @ 17,5 kg"),
+    ("pull", 5, "Curl inversé (avant-bras)", "curl-inverse",
+     3, 12, 15, 15, 2.5, "Ancien max : 5×15 @ 20 kg"),
+    ("legs", 1, "Squat", "squat",
+     4, 8, 12, 55, 5, "Ancien max : 5×14 @ 80 kg"),
+    ("legs", 2, "Leg extension", "leg-extension",
+     4, 12, 16, 32.5, 5, "Ancien max : 5×16 @ 45 kg"),
+    ("legs", 3, "Leg curl", "leg-curl",
+     4, 12, 16, 32.5, 5, "Ancien max : 5×16 @ 45 kg"),
+    ("legs", 4, "Mollets debout ou presse", "mollets",
+     3, 12, 20, 0, 0, "Au feeling — note quand même la charge utilisée"),
+    ("legs", 5, "Pompes (rappel push)", "pompes",
+     3, 8, 25, 0, 0, "Au max de reps à chaque série (ancien repère : 5×12)"),
+]
+
+
+def seed_program():
+    if ProgramExercise.query.count() > 0:
+        return
+    for (stype, pos, name, slug, sets, rmin, rmax, weight, inc, notes) in PPL_PROGRAM:
+        db.session.add(ProgramExercise(
+            session_type=stype, position=pos, name=name, slug=slug,
+            sets=sets, rep_min=rmin, rep_max=rmax, weight_kg=weight,
+            increment_kg=inc, rest_sec=60, notes=notes,
+        ))
     db.session.commit()

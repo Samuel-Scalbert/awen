@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Séance {{ workout.focus }} — Awen{% endblock %}
+{% block content %}
+<h2>Séance {{ workout.focus }} — {{ workout.date.strftime('%d/%m/%Y') }}</h2>
+<p class="muted">Valide chaque série : le chrono de repos (60 s) démarre tout seul
+et le coach te dit quoi faire pour la suivante.</p>
+
+{% for pe in exercises %}
+{% set done = logged[pe.id] %}
+<section class="exo{% if done|length >= pe.sets %} done{% endif %}"
+         id="exo-{{ pe.id }}"
+         data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
+         data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
+         data-rest="{{ pe.rest_sec }}">
+  <img src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '.svg') }}"
+       alt="{{ pe.name }}" loading="lazy">
+  <div class="exo-body">
+    <h3>{{ loop.index }}. {{ pe.name }}</h3>
+    <p class="target">🎯 {{ pe.sets }} × {{ pe.rep_min }}-{{ pe.rep_max }}
+      {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}</p>
+    {% if pe.notes %}<p class="muted">{{ pe.notes }}</p>{% endif %}
+    <ul class="sets">
+      {% for s in done %}
+      <li>Série {{ s.set_number }} : {{ s.reps }} reps × {{ '%g'|format(s.weight_kg) }} kg</li>
+      {% endfor %}
+    </ul>
+    <p class="advice" hidden></p>
+    <form class="log" method="post"
+          action="{{ url_for('workout.log_set', workout_id=workout.id) }}">
+      <input type="hidden" name="exercise_id" value="{{ pe.id }}">
+      <input name="reps" type="number" inputmode="numeric" min="0" max="99"
+             placeholder="reps" required>
+      <input name="weight" type="number" inputmode="decimal" step="0.5" min="0"
+             value="{{ '%g'|format(pe.weight_kg) }}" placeholder="kg">
+      <button type="submit">Valider la série</button>
+    </form>
+  </div>
+</section>
+{% endfor %}
+
+<form method="post" class="finish"
+      action="{{ url_for('workout.finish_session', workout_id=workout.id) }}">
+  <textarea name="notes" placeholder="Notes de séance (forme, ressenti, douleurs…)"></textarea>
+  <button type="submit">✅ Terminer la séance (applique la progression)</button>
+</form>
+<form method="post" action="{{ url_for('workout.delete_session', workout_id=workout.id) }}"
+      onsubmit="return confirm('Supprimer cette séance et ses séries ?')">
+  <button type="submit" class="danger">Annuler la séance</button>
+</form>
+
+<div id="timer" hidden>
+  <span>⏱️ Repos</span>
+  <span id="timer-count">60 s</span>
+  <button type="button" id="timer-plus">+30 s</button>
+  <button type="button" id="timer-skip">Passer</button>
+</div>
+
+<script>
+const timer = document.getElementById('timer');
+const countEl = document.getElementById('timer-count');
+let deadline = 0, iv = null;
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.25;
+    o.start(); o.stop(ctx.currentTime + 0.5);
+  } catch (e) {}
+  if (navigator.vibrate) navigator.vibrate([250, 100, 250]);
+}
+
+function tick() {
+  const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+  countEl.textContent = left + ' s';
+  if (left <= 0) { clearInterval(iv); timer.hidden = true; beep(); }
+}
+
+function startTimer(sec) {
+  deadline = Date.now() + sec * 1000;
+  timer.hidden = false;
+  clearInterval(iv); iv = setInterval(tick, 250); tick();
+}
+
+document.getElementById('timer-plus').onclick = () => { deadline += 30000; tick(); };
+document.getElementById('timer-skip').onclick = () => { deadline = Date.now(); tick(); };
+
+document.querySelectorAll('form.log').forEach(form => {
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const card = form.closest('.exo'), d = card.dataset;
+    const btn = form.querySelector('button'); btn.disabled = true;
+    try {
+      const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+      if (!res.ok) throw new Error();
+      const j = await res.json();
+      const li = document.createElement('li');
+      li.textContent = `Série ${j.set_number} : ${j.reps} reps × ${j.weight} kg`;
+      card.querySelector('.sets').appendChild(li);
+
+      // Le coach : module l'effort pour la série suivante
+      const advice = card.querySelector('.advice');
+      advice.hidden = false;
+      const inc = Math.abs(parseFloat(d.inc)) || 0;
+      const wInput = form.querySelector('[name=weight]');
+      if (j.reps < +d.repmin && inc) {
+        const nw = Math.max(0, j.weight - inc);
+        advice.textContent = `⬇️ Sous la fourchette (${d.repmin}-${d.repmax}) : `
+          + `passe à ${nw} kg pour la série suivante.`;
+        wInput.value = nw;
+      } else if (j.reps >= +d.repmax) {
+        advice.textContent = `🔥 Haut de fourchette ! Garde ${j.weight} kg — si toutes `
+          + `les séries y sont, la charge montera automatiquement à la prochaine séance.`;
+      } else {
+        advice.textContent = `✅ Dans la fourchette : garde ${j.weight} kg et vise ${d.repmax} reps.`;
+      }
+      form.querySelector('[name=reps]').value = '';
+
+      if (j.set_number >= j.total_sets) {
+        card.classList.add('done');
+        advice.textContent += ' Exercice terminé 💪';
+        const next = document.querySelector('.exo:not(.done)');
+        if (next) setTimeout(() => next.scrollIntoView({ behavior: 'smooth' }), 500);
+      }
+      startTimer(+j.rest_sec || 60);
+    } catch (err) {
+      alert("Impossible d'enregistrer la série — vérifie la connexion.");
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+</script>
+{% endblock %}

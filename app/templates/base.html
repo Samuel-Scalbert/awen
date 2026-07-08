@@ -16,6 +16,13 @@
     </nav>
   </header>
   <main>
+    {% with msgs = get_flashed_messages() %}
+      {% if msgs %}
+      <ul class="flash">
+        {% for m in msgs %}<li>{{ m }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+    {% endwith %}
     {% block content %}{% endblock %}
   </main>
 </body>

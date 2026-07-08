@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- figure debout -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="92" cy="32" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M92 42 L92 96"/>
+    <path d="M92 96 L80 126 M92 96 L104 126"/>
+    <path d="M92 50 L94 74 L118 62"/>
+  </g>
+  <!-- haltère vertical (prise neutre) -->
+  <path d="M118 50 L118 74" stroke="#6ee7b7" stroke-width="6" stroke-linecap="round"/>
+  <!-- mouvement : arc de curl -->
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M148 88 Q160 66 146 48"/>
+    <path d="M146 48 L158 50 M146 48 L148 60"/>
+  </g>
+</svg>

@@ -2,18 +2,38 @@
 {% block title %}Muscu — Awen{% endblock %}
 {% block content %}
 <h2>Séances de muscu</h2>
-<p><a href="{{ url_for('workout.programme') }}">📋 Voir le programme PPL complet</a></p>
-<form method="post" action="{{ url_for('workout.add_workout') }}">
-  <input name="focus" placeholder="Focus (ex: Pecs/Triceps)" required>
-  <input name="notes" placeholder="Notes">
-  <button type="submit">Ajouter</button>
-</form>
-<ul>
+<p>
+  <a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a> ·
+  <a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a>
+</p>
+
+{% if current %}
+<a class="cta" href="{{ url_for('workout.session') }}">▶️ Reprendre la séance
+  {{ current.focus }} en cours ({{ current.sets|length }} séries faites)</a>
+{% else %}
+<a class="cta" href="{{ url_for('workout.session') }}">▶️ Démarrer la séance du jour
+  — {{ next_type }}</a>
+{% endif %}
+
+<h3>Historique</h3>
+<ul class="history">
   {% for w in workouts %}
-    <li><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> — {{ w.focus }}
-        {% if w.notes %}<em>({{ w.notes }})</em>{% endif %}</li>
+  <li>
+    <details>
+      <summary><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> — {{ w.focus }}
+        {% if not w.completed %}<em>(en cours)</em>{% endif %}
+        · {{ w.sets|length }} séries</summary>
+      {% for name, items in w.sets|groupby('exercise') %}
+      <p><strong>{{ name }}</strong><br>
+        {% for s in items|sort(attribute='set_number') -%}
+          {{ s.reps }}×{{ '%g'|format(s.weight_kg or 0) }} kg{{ " · " if not loop.last }}
+        {%- endfor %}</p>
+      {% endfor %}
+      {% if w.notes %}<p><em>{{ w.notes }}</em></p>{% endif %}
+    </details>
+  </li>
   {% else %}
-    <li>Aucune séance enregistrée.</li>
+  <li>Aucune séance enregistrée — lance la première ! 💪</li>
   {% endfor %}
 </ul>
 {% endblock %}

@@ -1,12 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Calendrier — Awen{% endblock %}
 {% block content %}
-<h2>Prochains évènements</h2>
+<h2>Calendrier</h2>
+<p class="cal-nav">
+  <a href="{{ url_for('calendar.view_calendar', y=prev_y, m=prev_m) }}">← précédent</a>
+  <strong>{{ month_label }}</strong>
+  <a href="{{ url_for('calendar.view_calendar', y=next_y, m=next_m) }}">suivant →</a>
+</p>
+<table class="cal">
+  <tr>{% for d in days %}<th>{{ d }}</th>{% endfor %}</tr>
+  {% for week in weeks %}
+  <tr>
+    {% for cell in week %}
+    <td class="{% if not cell.in_month %}out{% endif %}{% if cell.is_today %} today{% endif %}">
+      <span class="daynum">{{ cell.day }}</span>
+      {% for w in cell.done %}
+        <span class="badge done{% if not w.completed %} pending{% endif %}"
+              title="{{ w.sets|length }} séries{% if w.notes %} — {{ w.notes }}{% endif %}">
+          {% if w.completed %}✅{% else %}⏳{% endif %} {{ w.focus }}</span>
+      {% endfor %}
+      {% if cell.planned %}
+        <a class="badge plan" href="{{ url_for('workout.session') }}"
+           title="Séance prévue — clique pour la démarrer">🏋️ {{ cell.planned }}</a>
+      {% endif %}
+    </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+<p class="muted">✅ séance faite · ⏳ séance en cours · 🏋️ séance prévue
+  (rotation Push/Pull/Legs sur lun-mer-ven-sam — clique dessus pour la lancer)</p>
+
+<h3>Prochains évènements (calendrier Samsung)</h3>
 <ul>
   {% for e in events %}
     <li>{{ e.start }} — {{ e.title }}</li>
   {% else %}
-    <li>Aucun évènement (configure <code>SAMSUNG_CALENDAR_ICS_URL</code>).</li>
+    <li class="muted">Aucun évènement (configure <code>SAMSUNG_CALENDAR_ICS_URL</code> dans le .env).</li>
   {% endfor %}
 </ul>
 {% endblock %}

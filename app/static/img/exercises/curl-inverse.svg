@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- figure debout -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="88" cy="32" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M88 42 L88 96"/>
+    <path d="M88 96 L76 126 M88 96 L100 126"/>
+    <path d="M88 50 L98 74 L112 66"/>
+  </g>
+  <!-- barre en pronation -->
+  <path d="M100 68 L142 62" stroke="#6ee7b7" stroke-width="6" stroke-linecap="round"/>
+  <path d="M138 54 L142 70" stroke="#6ee7b7" stroke-width="4" stroke-linecap="round"/>
+  <!-- mouvement : arc de curl -->
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M162 92 Q174 68 158 50"/>
+    <path d="M158 50 L170 52 M158 50 L160 62"/>
+  </g>
+</svg>

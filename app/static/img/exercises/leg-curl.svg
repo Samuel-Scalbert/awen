@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- banc -->
+  <g stroke="#4b5563" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M36 92 L148 92"/>
+    <path d="M52 92 L52 122 M132 92 L132 122"/>
+  </g>
+  <!-- figure allongée sur le ventre -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="50" cy="78" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M60 84 L104 86"/>
+    <path d="M104 86 L128 88"/>
+    <path d="M128 88 L138 62"/>
+  </g>
+  <!-- boudin + mouvement : flexion vers les fesses -->
+  <circle cx="140" cy="58" r="7" fill="#6ee7b7"/>
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M170 84 Q172 56 152 44"/>
+    <path d="M152 44 L164 44 M152 44 L158 54"/>
+  </g>
+</svg>

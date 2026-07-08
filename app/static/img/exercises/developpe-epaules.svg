@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- figure debout, bras en chandelier -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="100" cy="52" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M100 62 L100 98"/>
+    <path d="M100 98 L86 126 M100 98 L114 126"/>
+    <path d="M100 66 L76 54 L74 34"/>
+    <path d="M100 66 L124 54 L126 34"/>
+  </g>
+  <!-- haltères -->
+  <g stroke="#6ee7b7" stroke-width="6" stroke-linecap="round">
+    <path d="M64 30 L84 30"/>
+    <path d="M116 30 L136 30"/>
+  </g>
+  <!-- mouvement vertical -->
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M164 66 L164 30"/>
+    <path d="M164 30 L156 40 M164 30 L172 40"/>
+  </g>
+</svg>

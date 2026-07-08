@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- figure debout, haltère derrière la nuque -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="100" cy="46" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M100 56 L100 98"/>
+    <path d="M100 98 L88 126 M100 98 L112 126"/>
+    <path d="M100 60 L84 42 L88 22"/>
+    <path d="M100 60 L112 44 L104 24"/>
+  </g>
+  <!-- haltère -->
+  <path d="M84 18 L108 16" stroke="#6ee7b7" stroke-width="6" stroke-linecap="round"/>
+  <!-- mouvement : extension vers le haut -->
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M148 60 Q158 38 144 22"/>
+    <path d="M144 22 L156 24 M144 22 L146 34"/>
+  </g>
+</svg>

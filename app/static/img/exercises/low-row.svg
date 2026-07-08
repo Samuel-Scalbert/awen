@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140">
+  <!-- cale-pieds + câble -->
+  <g stroke="#4b5563" stroke-width="7" stroke-linecap="round" fill="none">
+    <path d="M138 84 L138 118"/>
+    <path d="M50 118 L150 118"/>
+  </g>
+  <path d="M158 70 L114 72" stroke="#4b5563" stroke-width="3" fill="none"/>
+  <!-- figure assise -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round" fill="none">
+    <circle cx="70" cy="38" r="9" fill="#cbd5e1" stroke="none"/>
+    <path d="M72 48 L78 96"/>
+    <path d="M78 96 L118 98 L132 88"/>
+    <path d="M74 58 L104 72"/>
+  </g>
+  <!-- poignée + mouvement vers soi -->
+  <circle cx="110" cy="72" r="6" fill="#6ee7b7"/>
+  <g stroke="#6ee7b7" stroke-width="5" stroke-linecap="round" fill="none">
+    <path d="M150 44 L112 44"/>
+    <path d="M112 44 L122 36 M112 44 L122 52"/>
+  </g>
+</svg>
