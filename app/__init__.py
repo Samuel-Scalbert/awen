@@ -27,7 +27,9 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        from .seed import seed_default_recipes, seed_program
+        from .seed import (ensure_recipe_servings, seed_default_recipes,
+                           seed_program)
+        ensure_recipe_servings()
         seed_default_recipes()
         seed_program()
 

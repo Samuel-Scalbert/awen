@@ -1,4 +1,8 @@
 """Données de départ (recettes, programme PPL), chargées si les tables sont vides."""
+import re
+
+from sqlalchemy import text as sqltext
+
 from .models import db, Recipe, ProgramExercise
 
 DEFAULT_RECIPES = [
@@ -23,6 +27,7 @@ DEFAULT_RECIPES = [
             "6. Assembler 4 boîtes : riz, salade de concombre, cubes de saumon, filet de sauce spicy."
         ),
         calories=650, protein_g=39, carbs_g=60, fat_g=25, is_favorite=True,
+        servings=4,
         notes=(
             "Portions : 4 · Cuisine : japonisant · Cuisson : four\n"
             "Conservation : 3-4 jours au frigo. Réchauffer riz + saumon, garder concombre et sauce à part."
@@ -46,6 +51,7 @@ DEFAULT_RECIPES = [
             "8. Couper en 8 barres."
         ),
         calories=190, protein_g=6, carbs_g=16, fat_g=13, is_favorite=True,
+        servings=8,
         notes=(
             "Portions : 8 barres · Sans cuisson\n"
             "Rôle : 2 barres + un verre de lait entier = le petit-déjeuner des matins sans appétit (~570 kcal).\n"
@@ -60,12 +66,30 @@ DEFAULT_RECIPES = [
         ),
         steps="Tout au blender.",
         calories=710, protein_g=27, carbs_g=91, fat_g=29, is_favorite=True,
+        servings=1,
         notes=(
             "Portions : 1\n"
             "Option jours d'entraînement : +30 g de whey (+120 kcal, +24 g prot)."
         ),
     ),
 ]
+
+
+def ensure_recipe_servings():
+    """Migration légère : ajoute la colonne servings aux bases existantes.
+
+    Backfill depuis la mention « Portions : N » des notes quand elle existe.
+    """
+    cols = [row[1] for row in
+            db.session.execute(sqltext("PRAGMA table_info(recipes)"))]
+    if "servings" not in cols:
+        db.session.execute(
+            sqltext("ALTER TABLE recipes ADD COLUMN servings INTEGER"))
+        db.session.commit()
+    for r in Recipe.query.filter(Recipe.servings.is_(None)):
+        m = re.search(r"Portions\s*:\s*(\d+)", r.notes or "")
+        r.servings = int(m.group(1)) if m else 1
+    db.session.commit()
 
 
 def seed_default_recipes():

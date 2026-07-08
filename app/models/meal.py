@@ -12,4 +12,5 @@ class Recipe(db.Model):
     carbs_g = db.Column(db.Float)
     fat_g = db.Column(db.Float)
     is_favorite = db.Column(db.Boolean, default=False)
-    notes = db.Column(db.Text)  # portions, conservation, contexte...
+    notes = db.Column(db.Text)  # conservation, contexte...
+    servings = db.Column(db.Integer, default=1)  # portions par recette

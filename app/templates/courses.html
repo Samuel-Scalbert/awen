@@ -6,24 +6,25 @@
 la liste finale — elle ne contiendra que ce qu'il te manque.</p>
 
 <details class="batch-form">
-  <summary>⚙️ Recettes incluses (batchs par semaine)</summary>
+  <summary>⚙️ Portions voulues cette semaine</summary>
   <form method="get">
     {% for r in recipes %}
     <label class="batch">
-      <input type="number" name="r{{ r.id }}" value="{{ counts[r.id] }}"
-             min="0" max="30"> × {{ r.name }}
+      <input type="number" name="p{{ r.id }}" value="{{ portions[r.id] }}"
+             min="0" max="60"> portions — {{ r.name }}
+      <small class="muted">(recette pour {{ r.servings or 1 }})</small>
     </label>
     {% endfor %}
-    <button type="submit">Mettre à jour</button>
+    <button type="submit">Recalculer les quantités</button>
   </form>
 </details>
 
 <div id="checklist">
   {% for s in sections %}
-  <h3>{{ s.name }}{% if s.count > 1 %} <small>(× {{ s.count }})</small>{% endif %}</h3>
+  <h3>{{ s.name }} <small class="muted">— {{ s.portions }} portion{{ 's' if s.portions > 1 }}</small></h3>
   <ul class="shop">
     {% for item in s.lines %}
-    <li><label><input type="checkbox" class="have"> <span>{{ item }}{% if s.count > 1 %} <em class="muted">(recette × {{ s.count }})</em>{% endif %}</span></label></li>
+    <li><label><input type="checkbox" class="have"> <span>{{ item }}</span></label></li>
     {% endfor %}
   </ul>
   {% endfor %}

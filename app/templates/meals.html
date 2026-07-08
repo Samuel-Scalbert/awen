@@ -8,7 +8,9 @@
 </p>
 <form method="post" action="{{ url_for('meals.add_recipe') }}">
   <input name="name" placeholder="Nom de la recette" required>
-  <input name="calories" type="number" placeholder="kcal">
+  <input name="servings" type="number" min="1" value="1" title="Portions par recette"
+         placeholder="portions">
+  <input name="calories" type="number" placeholder="kcal / portion">
   <input name="protein_g" type="number" step="0.1" placeholder="Protéines (g)">
   <input name="carbs_g" type="number" step="0.1" placeholder="Glucides (g)">
   <input name="fat_g" type="number" step="0.1" placeholder="Lipides (g)">

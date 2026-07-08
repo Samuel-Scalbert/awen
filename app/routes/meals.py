@@ -41,6 +41,40 @@ def parse_ingredients(text):
     return items
 
 
+_QTY_RE = re.compile(
+    r"(?P<lo>\d+(?:[.,]\d+)?)"
+    r"(?:\s*-\s*(?P<hi>\d+(?:[.,]\d+)?))?"
+    r"\s*(?P<unit>g|kg|ml|cl|l)?"
+    r"(?!\s*%)(?=[\s,.)]|$)", re.IGNORECASE)
+
+
+def _fmt_qty(value):
+    return f"{round(value, 1):g}".replace(".", ",")
+
+
+def scale_item(text, factor):
+    """Multiplie les quantités d'un ingrédient par le facteur de portions.
+
+    « 400 ml de lait » ×7 → « 2,8 L de lait » ; « 35-40 g de miel » ×2 →
+    « 70-80 g de miel ». Les items sans nombre restent tels quels.
+    """
+    if abs(factor - 1) < 1e-9:
+        return text
+
+    def repl(m):
+        values = [float(m.group("lo").replace(",", ".")) * factor]
+        if m.group("hi"):
+            values.append(float(m.group("hi").replace(",", ".")) * factor)
+        unit = (m.group("unit") or "")
+        if unit.lower() in ("g", "ml") and min(values) >= 1000:
+            values = [v / 1000 for v in values]
+            unit = "kg" if unit.lower() == "g" else "L"
+        out = "-".join(_fmt_qty(v) for v in values)
+        return out + (f" {unit}" if unit else "")
+
+    return _QTY_RE.sub(repl, text)
+
+
 @bp.route("/")
 def list_meals():
     recipes = Recipe.query.order_by(Recipe.is_favorite.desc(),
@@ -57,19 +91,28 @@ def nutrition():
 def shopping_list():
     """Liste de courses générée depuis les recettes + la base hebdo.
 
-    ?r<id>=N choisit le nombre de batchs par recette (0 = exclue). Le tri
+    ?p<id>=N choisit le nombre de portions voulues par recette (0 = exclue) ;
+    les quantités sont recalculées depuis les portions de la recette. Le tri
     frigo (« j'ai déjà ») se fait côté client, rien n'est persisté.
     """
     recipes = Recipe.query.order_by(Recipe.name).all()
-    counts = {}
+    portions = {}
     for r in recipes:
-        default = 7 if "shake" in (r.name or "").lower() else 1
-        counts[r.id] = max(0, request.args.get(f"r{r.id}",
-                                               default=default, type=int))
-    sections = [{"name": r.name, "count": counts[r.id],
-                 "lines": parse_ingredients(r.ingredients)}
-                for r in recipes if counts[r.id] > 0]
-    return render_template("courses.html", recipes=recipes, counts=counts,
+        default = 7 if "shake" in (r.name or "").lower() else (r.servings or 1)
+        portions[r.id] = max(0, request.args.get(f"p{r.id}",
+                                                 default=default, type=int))
+    sections = []
+    for r in recipes:
+        if portions[r.id] <= 0:
+            continue
+        factor = portions[r.id] / (r.servings or 1)
+        sections.append({
+            "name": r.name,
+            "portions": portions[r.id],
+            "lines": [scale_item(i, factor)
+                      for i in parse_ingredients(r.ingredients)],
+        })
+    return render_template("courses.html", recipes=recipes, portions=portions,
                            sections=sections, staples=WEEKLY_STAPLES)
 
 
@@ -84,6 +127,7 @@ def add_recipe():
         carbs_g=request.form.get("carbs_g") or None,
         fat_g=request.form.get("fat_g") or None,
         is_favorite=bool(request.form.get("is_favorite")),
+        servings=int(request.form.get("servings") or 1),
     )
     db.session.add(r)
     db.session.commit()
