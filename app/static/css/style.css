@@ -50,6 +50,17 @@ button.danger { background:#e26d6d; }
 .badge.done.pending { background:#b9a44c; }
 .badge.plan { border:1px dashed var(--accent); color:var(--accent); }
 
+/* Jobs du jour */
+.daily-jobs { background:var(--card); border-radius:12px; padding:1rem 1.2rem; margin-bottom:1.2rem; }
+.daily-jobs.today { border-left:4px solid var(--accent); }
+.daily-jobs h3 { margin-top:.2rem; }
+.daily-jobs h3 .badge { display:inline-block; margin-left:.5rem; }
+.offer { background:#12151c; border-radius:10px; padding:.8rem 1rem; margin:.8rem 0; }
+.offer h4 { margin:.1rem 0 .4rem; color:var(--accent); }
+.offer-links a.cta.small { padding:.4rem .7rem; margin:0 .4rem 0 0; font-size:.9rem; }
+.md ul { line-height:1.5; }
+.conclusion { border-top:1px solid #2a2f3a; padding-top:.5rem; }
+
 /* Liste de courses */
 .batch-form { background:var(--card); border-radius:12px; padding:.8rem 1rem; margin-bottom:1rem; }
 .batch-form summary { cursor:pointer; }

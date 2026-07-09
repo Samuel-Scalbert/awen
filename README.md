@@ -91,6 +91,7 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 | `DATABASE_URL`               | URL de connexion SQLite                      |
 | `SAMSUNG_CALENDAR_ICS_URL`   | URL d'export ICS du calendrier Samsung        |
 | `ESP32_API_KEY`              | Clé partagée avec l'ESP32                    |
+| `JOB_SEARCH_DIR`             | Dossier du pipeline Claude cowork de recherche d'emploi (page Jobs) |
 
 ## Endpoint ESP32
 
@@ -114,12 +115,12 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 ## Roadmap
 
 - [x] Scaffold Flask + structure repo
-- [ ] Modèle & pages séances de muscu
-- [ ] Modèle & pages recettes / meal prep + calcul macros
-- [ ] Endpoint JSON ESP32 + firmware
-- [ ] Sync calendrier Samsung
+- [x] Séances de muscu guidées (suivi par série, progression auto, photos)
+- [x] Recettes / meal prep + liste de courses en portions
+- [x] Calendrier (séances + planning + événements Samsung ICS)
+- [x] Module recherche d'emploi (veille quotidienne du pipeline Claude cowork)
+- [ ] Endpoint JSON ESP32 + firmware ([esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display))
 - [ ] Script auto-update sur commit (webhook Git)
-- [ ] Module recherche d'emploi
 
 ## Licence
 

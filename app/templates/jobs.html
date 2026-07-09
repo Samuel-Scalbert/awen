@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Jobs — Awen{% endblock %}
+{% block content %}
+<h2>💼 Jobs du jour</h2>
+
+{% if reports is none %}
+<p>Le dossier de veille n'est pas configuré. Ajoute dans ton <code>.env</code> :</p>
+<pre>JOB_SEARCH_DIR=C:\chemin\vers\Recherche de CDI</pre>
+<p class="muted">Awen lira alors les comptes rendus écrits chaque matin par le
+pipeline Claude cowork dans <code>Veille quotidienne/&lt;date&gt;/Compte rendu.md</code>.</p>
+
+{% elif not reports %}
+<p class="muted">Aucun compte rendu de veille trouvé pour l'instant —
+le pipeline tourne à 9h chaque matin.</p>
+
+{% else %}
+{% for r in reports %}
+<section class="daily-jobs{% if r.is_today %} today{% endif %}">
+  <h3>{{ r.date_fr }}
+    {% if r.is_today %}<span class="badge done">aujourd'hui</span>{% endif %}
+    <small class="muted">— {{ r.offers|length }} offre{{ 's' if r.offers|length > 1 }} retenue{{ 's' if r.offers|length > 1 }}</small>
+  </h3>
+
+  {% for o in r.offers %}
+  <article class="offer">
+    <h4>{{ o.title }}</h4>
+    <div class="md">{{ o.body_html|safe }}</div>
+    {% if o.links %}
+    <p class="offer-links">
+      {% for link in o.links %}
+      <a class="cta small" href="{{ link }}" target="_blank" rel="noopener">
+        {%- if 'apply' in link or 'ats.' in link %}✉️ Postuler{% else %}🔗 Voir l'offre{% endif %} ({{ loop.index }})</a>
+      {% endfor %}
+    </p>
+    {% endif %}
+  </article>
+  {% else %}
+  <p class="muted">Aucune offre retenue ce jour-là.</p>
+  {% endfor %}
+
+  {% if r.conclusion %}
+  <p class="muted conclusion">{{ r.conclusion_html|safe }}</p>
+  {% endif %}
+  <details class="muted">
+    <summary>Compte rendu complet (offres écartées…)</summary>
+    <div class="md">{{ r.raw_html|safe }}</div>
+  </details>
+</section>
+{% endfor %}
+{% endif %}
+{% endblock %}
