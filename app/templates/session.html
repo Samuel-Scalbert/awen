@@ -2,28 +2,33 @@
 {% block title %}Séance {{ workout.focus }} — Awen{% endblock %}
 {% block content %}
 <h2>Séance {{ workout.focus }} — {{ workout.date.strftime('%d/%m/%Y') }}</h2>
-<p class="muted">Valide chaque série : le chrono de repos (60 s) démarre tout seul
-et le coach te dit quoi faire pour la suivante.</p>
+
+<div id="progress">
+  <span id="progress-exo"></span>
+  <span id="progress-sets"></span>
+</div>
 
 {% for pe in exercises %}
 {% set done = logged[pe.id] %}
-<section class="exo{% if done|length >= pe.sets %} done{% endif %}"
-         id="exo-{{ pe.id }}"
+<section class="exo" id="exo-{{ pe.id }}"
          data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
          data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
-         data-rest="{{ pe.rest_sec }}">
+         data-rest="{{ pe.rest_sec }}" data-name="{{ pe.name }}"
+         data-num="{{ loop.index }}">
   <img class="demo" alt="{{ pe.name }}" loading="lazy"
        src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
        data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
        onerror="this.style.display='none'">
   <div class="exo-body">
-    <h3>{{ loop.index }}. {{ pe.name }}</h3>
-    <p class="target">🎯 {{ pe.sets }} × {{ pe.rep_min }}-{{ pe.rep_max }}
+    <h3><span class="exo-chip"></span>{{ loop.index }}/{{ exercises|length }} · {{ pe.name }}</h3>
+    <p class="target">🎯 {{ pe.sets }} séries × <strong>{{ pe.rep_min }}-{{ pe.rep_max }} reps</strong>
       {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}</p>
+    <p class="status"></p>
     {% if pe.notes %}<p class="muted">{{ pe.notes }}</p>{% endif %}
     <ul class="sets">
       {% for s in done %}
-      <li>Série {{ s.set_number }} : {{ s.reps }} reps × {{ '%g'|format(s.weight_kg) }} kg</li>
+      <li data-set-id="{{ s.id }}"><span>{{ s.reps }} reps × {{ '%g'|format(s.weight_kg) }} kg</span>
+        <button type="button" class="del" title="Supprimer cette série">✕</button></li>
       {% endfor %}
     </ul>
     <p class="advice" hidden></p>
@@ -31,7 +36,7 @@ et le coach te dit quoi faire pour la suivante.</p>
           action="{{ url_for('workout.log_set', workout_id=workout.id) }}">
       <input type="hidden" name="exercise_id" value="{{ pe.id }}">
       <input name="reps" type="number" inputmode="numeric" min="0" max="99"
-             placeholder="reps" required>
+             placeholder="{{ pe.rep_min }}-{{ pe.rep_max }} reps" required>
       <input name="weight" type="number" inputmode="decimal" step="0.5" min="0"
              value="{{ '%g'|format(pe.weight_kg) }}" placeholder="kg">
       <button type="submit">Valider la série</button>
@@ -58,6 +63,105 @@ et le coach te dit quoi faire pour la suivante.</p>
 </div>
 
 <script>
+const WORKOUT_ID = {{ workout.id }};
+const STORE_KEY = 'awen-session-' + WORKOUT_ID;
+const DELETE_URL = "{{ url_for('workout.delete_set', set_id=0) }}".replace('/0/', '/{id}/');
+
+/* ---------- état persistant (survit à la sortie de l'appli) ---------- */
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
+  catch (e) { return {}; }
+}
+function saveState(patch) {
+  const st = Object.assign(loadState(), patch);
+  localStorage.setItem(STORE_KEY, JSON.stringify(st));
+  return st;
+}
+
+/* ---------- messages du coach (variés, ton adapté à la perf) ---------- */
+const MSG = {
+  fix: [   // très en dessous : on corrige, pas de politesse
+    "🔧 On corrige tout de suite : passe à {w} kg, la technique avant l'ego.",
+    "🔧 Trop lourd pour aujourd'hui. {w} kg sur la prochaine, exécution propre.",
+    "🔧 Stop, on ajuste : {w} kg. Mieux vaut 10 reps propres que 4 arrachées.",
+  ],
+  low: [   // sous la fourchette
+    "⬇️ Sous la fourchette ({min}-{max}) : redescends à {w} kg pour la suivante.",
+    "⬇️ Pas grave, on adapte : {w} kg sur la prochaine série.",
+    "⬇️ {w} kg pour la suivante, et tu restes dans la fourchette.",
+  ],
+  ok: [    // dans la fourchette
+    "✅ Dans la cible. Garde {w} kg et vise {max} reps.",
+    "✅ Solide. Même charge, essaie d'aller chercher {max}.",
+    "✅ C'est le bon poids. Prochaine série : {max} reps si tu peux.",
+  ],
+  top: [   // haut de fourchette atteint
+    "🔥 Haut de fourchette ! Tiens {w} kg — toutes les séries au max = charge montée à la prochaine séance.",
+    "🔥 {max} reps, propre. Encore les autres séries comme ça et on monte.",
+    "🔥 Plafond touché. Garde {w} kg, la progression tombera toute seule.",
+  ],
+  boost: [ // surperformance : on augmente MAINTENANT
+    "🚀 Beaucoup trop facile. On monte à {w} kg dès la prochaine série.",
+    "🚀 {r} reps ?! Charge la prochaine à {w} kg, on ne s'endort pas.",
+    "🚀 Surperformance — {w} kg tout de suite, c'est ça la difficulté qu'il te faut.",
+  ],
+  done: [
+    " Exercice bouclé 💪",
+    " Terminé, passe au suivant 👉",
+    " C'est plié pour celui-là ✔️",
+  ],
+};
+function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+function msg(cat, vars) {
+  let t = pick(MSG[cat]);
+  for (const k in vars) t = t.replaceAll('{' + k + '}', vars[k]);
+  return t;
+}
+
+/* ---------- compteurs, exo courant, barre de progression ---------- */
+function refresh() {
+  const cards = [...document.querySelectorAll('.exo')];
+  let current = null, totalDone = 0, totalPlanned = 0;
+  cards.forEach(card => {
+    const total = +card.dataset.sets;
+    const done = card.querySelectorAll('.sets li').length;
+    totalDone += Math.min(done, total); totalPlanned += total;
+    const status = card.querySelector('.status');
+    const chip = card.querySelector('.exo-chip');
+    card.classList.toggle('done', done >= total);
+    card.classList.remove('current');
+    chip.textContent = '';
+    if (done >= total) {
+      status.textContent = `✔️ ${done}/${total} séries faites`;
+    } else {
+      const left = total - done;
+      status.innerHTML = `<strong>Série ${done + 1}/${total}</strong> — vise `
+        + `<strong>${card.dataset.repmin}-${card.dataset.repmax} reps</strong>`
+        + ` · encore ${left} série${left > 1 ? 's' : ''}`;
+      if (!current) current = card;
+    }
+    // renumérote l'affichage des séries
+    card.querySelectorAll('.sets li').forEach((li, i) => {
+      li.querySelector('span').textContent =
+        li.querySelector('span').textContent.replace(/^Série \d+ : /, '');
+      li.querySelector('span').textContent =
+        `Série ${i + 1} : ` + li.querySelector('span').textContent;
+    });
+  });
+  if (current) {
+    current.classList.add('current');
+    current.querySelector('.exo-chip').textContent = '▶ ';
+    document.getElementById('progress-exo').textContent =
+      `▶ Exo ${current.dataset.num}/${cards.length} : ${current.dataset.name}`;
+  } else {
+    document.getElementById('progress-exo').textContent =
+      '🏁 Tous les exercices sont faits — termine la séance !';
+  }
+  document.getElementById('progress-sets').textContent =
+    `${totalDone}/${totalPlanned} séries`;
+}
+
+/* ---------- chrono de repos ---------- */
 const timer = document.getElementById('timer');
 const countEl = document.getElementById('timer-count');
 let deadline = 0, iv = null;
@@ -72,69 +176,70 @@ function beep() {
   } catch (e) {}
   if (navigator.vibrate) navigator.vibrate([250, 100, 250]);
 }
-
 function tick() {
   const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
   countEl.textContent = left + ' s';
-  if (left <= 0) { clearInterval(iv); timer.hidden = true; beep(); }
+  if (left <= 0) { clearInterval(iv); timer.hidden = true; beep(); saveState({deadline: 0}); }
 }
-
 function startTimer(sec) {
   deadline = Date.now() + sec * 1000;
+  saveState({deadline});
   timer.hidden = false;
   clearInterval(iv); iv = setInterval(tick, 250); tick();
 }
-
-document.getElementById('timer-plus').onclick = () => { deadline += 30000; tick(); };
+document.getElementById('timer-plus').onclick = () => { deadline += 30000; saveState({deadline}); tick(); };
 document.getElementById('timer-skip').onclick = () => { deadline = Date.now(); tick(); };
 
-// Démo animée : alterne photo départ / arrivée
-setInterval(() => {
-  document.querySelectorAll('img.demo').forEach(img => {
-    if (img.style.display === 'none') return;
-    const tmp = img.src;
-    img.src = img.dataset.alt;
-    img.dataset.alt = tmp;
-  });
-}, 1300);
-
+/* ---------- log d'une série + conseil adaptatif ---------- */
 document.querySelectorAll('form.log').forEach(form => {
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const card = form.closest('.exo'), d = card.dataset;
-    const btn = form.querySelector('button'); btn.disabled = true;
+    const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
     try {
       const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
       if (!res.ok) throw new Error();
       const j = await res.json();
-      const li = document.createElement('li');
-      li.textContent = `Série ${j.set_number} : ${j.reps} reps × ${j.weight} kg`;
-      card.querySelector('.sets').appendChild(li);
+      addSetLine(card, j.id, j.reps, j.weight);
 
-      // Le coach : module l'effort pour la série suivante
       const advice = card.querySelector('.advice');
       advice.hidden = false;
       const inc = Math.abs(parseFloat(d.inc)) || 0;
       const wInput = form.querySelector('[name=weight]');
-      if (j.reps < +d.repmin && inc) {
+      const rmin = +d.repmin, rmax = +d.repmax;
+      let text;
+      if (inc && j.reps <= rmin - 3) {
         const nw = Math.max(0, j.weight - inc);
-        advice.textContent = `⬇️ Sous la fourchette (${d.repmin}-${d.repmax}) : `
-          + `passe à ${nw} kg pour la série suivante.`;
+        text = msg('fix', {w: nw, min: rmin, max: rmax});
         wInput.value = nw;
-      } else if (j.reps >= +d.repmax) {
-        advice.textContent = `🔥 Haut de fourchette ! Garde ${j.weight} kg — si toutes `
-          + `les séries y sont, la charge montera automatiquement à la prochaine séance.`;
+      } else if (inc && j.reps < rmin) {
+        const nw = Math.max(0, j.weight - inc);
+        text = msg('low', {w: nw, min: rmin, max: rmax});
+        wInput.value = nw;
+      } else if (inc && j.reps >= rmax + 3) {
+        const nw = j.weight + inc;
+        text = msg('boost', {w: nw, r: j.reps});
+        wInput.value = nw;
+      } else if (j.reps >= rmax) {
+        text = msg('top', {w: j.weight, max: rmax});
       } else {
-        advice.textContent = `✅ Dans la fourchette : garde ${j.weight} kg et vise ${d.repmax} reps.`;
+        text = msg('ok', {w: j.weight, max: rmax});
       }
       form.querySelector('[name=reps]').value = '';
 
-      if (j.set_number >= j.total_sets) {
-        card.classList.add('done');
-        advice.textContent += ' Exercice terminé 💪';
+      const doneCount = card.querySelectorAll('.sets li').length;
+      if (doneCount >= j.total_sets) {
+        text += pick(MSG.done);
         const next = document.querySelector('.exo:not(.done)');
-        if (next) setTimeout(() => next.scrollIntoView({ behavior: 'smooth' }), 500);
+        if (next && next !== card)
+          setTimeout(() => next.scrollIntoView({ behavior: 'smooth' }), 500);
       }
+      advice.textContent = text;
+      const st = loadState();
+      st.advice = st.advice || {}; st.weights = st.weights || {};
+      st.advice[card.id] = text; st.weights[card.id] = wInput.value;
+      saveState(st);
+      refresh();
       startTimer(+j.rest_sec || 60);
     } catch (err) {
       alert("Impossible d'enregistrer la série — vérifie la connexion.");
@@ -143,5 +248,60 @@ document.querySelectorAll('form.log').forEach(form => {
     }
   });
 });
+
+/* ---------- suppression d'une série mal saisie ---------- */
+function addSetLine(card, id, reps, weight) {
+  const li = document.createElement('li');
+  li.dataset.setId = id;
+  li.innerHTML = `<span>${reps} reps × ${weight} kg</span>`
+    + `<button type="button" class="del" title="Supprimer cette série">✕</button>`;
+  card.querySelector('.sets').appendChild(li);
+}
+document.addEventListener('click', async e => {
+  if (!e.target.classList.contains('del')) return;
+  const li = e.target.closest('li');
+  if (!confirm('Supprimer cette série ?')) return;
+  const res = await fetch(DELETE_URL.replace('{id}', li.dataset.setId), { method: 'POST' });
+  if (res.ok) { li.remove(); refresh(); }
+  else alert('Suppression impossible.');
+});
+
+/* ---------- démo animée + restauration au retour dans l'appli ---------- */
+setInterval(() => {
+  if (document.hidden) return;
+  document.querySelectorAll('img.demo').forEach(img => {
+    if (img.style.display === 'none') return;
+    const tmp = img.src;
+    img.src = img.dataset.alt;
+    img.dataset.alt = tmp;
+  });
+}, 1300);
+
+function restore() {
+  const st = loadState();
+  for (const [cardId, text] of Object.entries(st.advice || {})) {
+    const card = document.getElementById(cardId);
+    if (card && text) {
+      const a = card.querySelector('.advice');
+      a.textContent = text; a.hidden = false;
+    }
+  }
+  for (const [cardId, w] of Object.entries(st.weights || {})) {
+    const card = document.getElementById(cardId);
+    if (card && w) card.querySelector('[name=weight]').value = w;
+  }
+  if (st.deadline && st.deadline > Date.now()) {
+    deadline = st.deadline;
+    timer.hidden = false;
+    clearInterval(iv); iv = setInterval(tick, 250); tick();
+  }
+  refresh();
+  const current = document.querySelector('.exo.current');
+  if (current) current.scrollIntoView({ block: 'center' });
+}
+window.addEventListener('pageshow', restore);
+document.querySelector('form.finish').addEventListener('submit',
+  () => localStorage.removeItem(STORE_KEY));
+restore();
 </script>
 {% endblock %}

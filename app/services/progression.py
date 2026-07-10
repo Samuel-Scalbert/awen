@@ -31,12 +31,17 @@ def plan_upcoming(last_focus, after_date, count=8):
     return sessions
 
 
+# Marge de reps au-dessus du max qui déclenche un double incrément
+OVERPERF_MARGIN = 3
+
+
 def apply_progression(workout):
     """Double progression appliquée à la fin d'une séance.
 
     Toutes les séries au rep_max → charge +increment (repart au bas de la
-    fourchette). Toutes les séries sous rep_min → charge -increment (deload).
-    Renvoie la liste des changements pour affichage.
+    fourchette). Surperformance (toutes les séries à rep_max+3 ou plus) →
+    double incrément. Toutes les séries sous rep_min → charge -increment
+    (deload). Renvoie la liste des changements pour affichage.
     """
     by_exercise = {}
     for s in workout.sets:
@@ -49,11 +54,16 @@ def apply_progression(workout):
             continue
         reps = [s.reps or 0 for s in sets]
         old = pe.weight_kg
-        if all(r >= pe.rep_max for r in reps):
+        suffix = ""
+        if all(r >= pe.rep_max + OVERPERF_MARGIN for r in reps):
+            pe.weight_kg = max(0, round(old + 2 * pe.increment_kg, 2))
+            suffix = " (surperformance, double palier)"
+        elif all(r >= pe.rep_max for r in reps):
             pe.weight_kg = max(0, round(old + pe.increment_kg, 2))
         elif all(r < pe.rep_min for r in reps):
             pe.weight_kg = max(0, round(old - pe.increment_kg, 2))
+            suffix = " (deload, on corrige)"
         if pe.weight_kg != old:
-            changes.append(f"{pe.name} : {old:g} → {pe.weight_kg:g} kg")
+            changes.append(f"{pe.name} : {old:g} → {pe.weight_kg:g} kg{suffix}")
     db.session.commit()
     return changes

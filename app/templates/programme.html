@@ -2,7 +2,6 @@
 {% block title %}Programme PPL — Awen{% endblock %}
 {% block content %}
 <h2>Programme PPL — 4 séances/semaine (rotation continue)</h2>
-<p><em>Reprise après pause. Charges calibrées à ~70 % des anciennes perfs. Retour au niveau max estimé en 4 à 6 semaines.</em></p>
 <p><a href="{{ url_for('workout.list_workouts') }}">← Retour aux séances</a></p>
 
 <h3>Principe de la rotation</h3>
@@ -16,39 +15,37 @@
 <p>Jours conseillés : lundi / mercredi / vendredi / samedi (jamais plus de 2 jours consécutifs).</p>
 
 <h3>Progression (double progression)</h3>
-<p>Sur chaque exercice : quand tu atteins le haut de la fourchette de reps sur les 4 séries → +2,5 kg (haut du corps) ou +5 kg (jambes) la séance suivante, et tu repars au bas de la fourchette. Repos 2 min sur les gros mouvements, 90 s sur l'isolation. Garde 1-2 reps en réserve les 2 premières semaines.</p>
+<p>Quand tu atteins le haut de la fourchette sur toutes les séries → la charge monte automatiquement à la fin de la séance (+2,5 kg haut du corps, +5 kg jambes) et tu repars au bas de la fourchette. Grosse surperformance (max + 3 reps partout) → double palier. Toutes les séries sous le minimum → deload automatique. Repos ~60 s entre les séries.</p>
 
-<h3>PUSH (pectoraux, épaules, triceps)</h3>
-<table>
-  <tr><th>Exercice</th><th>Séries × Reps</th><th>Reprise</th><th>Ton ancien max</th></tr>
-  <tr><td>Développé incliné machine</td><td>4 × 8-12</td><td>27,5 kg</td><td>5×11 @ 37,5 kg</td></tr>
-  <tr><td>Chest press (banc)</td><td>4 × 8-10</td><td>7,5 kg</td><td>5×8 @ 10 kg</td></tr>
-  <tr><td>Développé épaules</td><td>4 × 10-15</td><td>17,5 kg</td><td>5×15 @ 25 kg</td></tr>
-  <tr><td>Extension triceps poulie</td><td>4 × 8-12</td><td>40 kg</td><td>5×8 @ 55 kg</td></tr>
-  <tr><td>Extension nuque (overhead)</td><td>3 × 12-16</td><td>5 kg</td><td>5×16 @ 7,5 kg</td></tr>
+<p class="muted">Les charges ci-dessous sont <strong>les charges actuelles</strong>, mises à jour
+automatiquement par la progression — tu peux les corriger à la main si besoin (mauvaise saisie,
+machine différente…).</p>
+
+{% for stype, exercises in groups %}
+<h3>{{ {'push': 'PUSH (pectoraux, épaules, triceps)',
+        'pull': 'PULL (dos, biceps, avant-bras)',
+        'legs': 'LEGS (quadriceps, ischios, mollets + rappel)'}[stype] }}</h3>
+<table class="prog">
+  <tr><th>Exercice</th><th>Séries</th><th>Reps</th><th>Charge (kg)</th><th></th></tr>
+  {% for pe in exercises %}
+  <tr>
+    <td>{{ pe.name }}{% if pe.notes %}<br><small class="muted">{{ pe.notes }}</small>{% endif %}</td>
+    <td><input form="pe{{ pe.id }}" name="sets" type="number" min="1" max="10" value="{{ pe.sets }}"></td>
+    <td><input form="pe{{ pe.id }}" name="rep_min" type="number" min="1" max="99" value="{{ pe.rep_min }}">-<input
+           form="pe{{ pe.id }}" name="rep_max" type="number" min="1" max="99" value="{{ pe.rep_max }}"></td>
+    <td><input form="pe{{ pe.id }}" name="weight_kg" type="number" step="0.5" min="0" value="{{ '%g'|format(pe.weight_kg) }}"></td>
+    <td><button form="pe{{ pe.id }}" type="submit" title="Enregistrer">💾</button></td>
+  </tr>
+  {% endfor %}
 </table>
+{% for pe in exercises %}
+<form id="pe{{ pe.id }}" method="post" style="display:none"
+      action="{{ url_for('workout.update_programme') }}">
+  <input type="hidden" name="id" value="{{ pe.id }}">
+</form>
+{% endfor %}
+{% endfor %}
 
-<h3>PULL (dos, biceps, avant-bras)</h3>
-<table>
-  <tr><th>Exercice</th><th>Séries × Reps</th><th>Reprise</th><th>Ton ancien max</th></tr>
-  <tr><td>Low row</td><td>4 × 10-15</td><td>40 kg</td><td>5×15 @ 55 kg</td></tr>
-  <tr><td>Tractions (assistées si besoin)</td><td>4 × 6-10</td><td>assistance 45 kg</td><td>5×13 assisté / 5×7 libre</td></tr>
-  <tr><td>Tirage dos prise rapprochée</td><td>4 × 10-15</td><td>22,5 kg</td><td>5×15-16 @ 30 kg</td></tr>
-  <tr><td>Curl marteau</td><td>3 × 8-12</td><td>12,5 kg</td><td>5×12 @ 17,5 kg</td></tr>
-  <tr><td>Curl inversé (avant-bras)</td><td>3 × 12-15</td><td>15 kg</td><td>5×15 @ 20 kg</td></tr>
-</table>
-
-<h3>LEGS (quadriceps, ischios, mollets + rappel)</h3>
-<table>
-  <tr><th>Exercice</th><th>Séries × Reps</th><th>Reprise</th><th>Ton ancien max</th></tr>
-  <tr><td>Squat</td><td>4 × 8-12</td><td>55 kg</td><td>5×14 @ 80 kg</td></tr>
-  <tr><td>Leg extension</td><td>4 × 12-16</td><td>32,5 kg</td><td>5×16 @ 45 kg</td></tr>
-  <tr><td>Leg curl</td><td>4 × 12-16</td><td>32,5 kg</td><td>5×16 @ 45 kg</td></tr>
-  <tr><td>Mollets debout ou presse</td><td>3 × 12-20</td><td>au feeling</td><td>—</td></tr>
-  <tr><td>Pompes (rappel push)</td><td>3 × max</td><td>poids du corps</td><td>5×12</td></tr>
-</table>
-
-<h3>Règles de la reprise</h3>
-<p>Semaines 1-2 : charges du tableau, 1-2 reps en réserve, technique propre. Semaines 3-4 : monte les charges dès que le haut de fourchette passe. Semaines 5-6 : tu devrais retrouver tes anciens maxes — au-delà, continue la double progression. Échauffement : 5 min cardio léger + 2 séries légères sur le premier exercice de la séance. Si une séance saute, la rotation continue simplement au prochain créneau (c'est l'avantage de la rotation continue).</p>
-<p><strong>Rappel prise de masse :</strong> le programme ne fonctionne que si les calories suivent (voir <a href="{{ url_for('meals.nutrition') }}">plan nutrition</a>). Pèse-toi 1×/semaine, le matin à jeun. Objectif : +0,5 à 0,7 kg/mois propre, ~1 kg/mois acceptable au début vu ton point de départ.</p>
+<p><strong>Rappel prise de masse :</strong> le programme ne fonctionne que si les calories suivent
+(voir <a href="{{ url_for('meals.nutrition') }}">plan nutrition</a>). Pèse-toi 1×/semaine, le matin à jeun.</p>
 {% endblock %}

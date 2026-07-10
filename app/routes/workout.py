@@ -38,7 +38,24 @@ def list_workouts():
 
 @bp.route("/programme")
 def programme():
-    return render_template("programme.html")
+    groups = [(st, ProgramExercise.query.filter_by(session_type=st)
+               .order_by(ProgramExercise.position).all())
+              for st in ("push", "pull", "legs")]
+    return render_template("programme.html", groups=groups)
+
+
+@bp.route("/programme/update", methods=["POST"])
+def update_programme():
+    """Correction manuelle d'un exercice (charge, fourchette, séries)."""
+    pe = db.get_or_404(ProgramExercise, int(request.form["id"]))
+    pe.weight_kg = float((request.form.get("weight_kg") or "0").replace(",", "."))
+    pe.rep_min = int(request.form.get("rep_min") or pe.rep_min)
+    pe.rep_max = int(request.form.get("rep_max") or pe.rep_max)
+    pe.sets = int(request.form.get("sets") or pe.sets)
+    db.session.commit()
+    flash(f"{pe.name} mis à jour : {pe.sets}×{pe.rep_min}-{pe.rep_max} "
+          f"@ {pe.weight_kg:g} kg.")
+    return redirect(url_for("workout.programme"))
 
 
 @bp.route("/session")
@@ -76,9 +93,25 @@ def log_set(workout_id):
     )
     db.session.add(s)
     db.session.commit()
-    return jsonify(ok=True, set_number=s.set_number, reps=s.reps,
+    return jsonify(ok=True, id=s.id, set_number=s.set_number, reps=s.reps,
                    weight=s.weight_kg, total_sets=pe.sets,
                    rest_sec=pe.rest_sec)
+
+
+@bp.route("/set/<int:set_id>/delete", methods=["POST"])
+def delete_set(set_id):
+    """Supprime une série mal saisie et renumérote les suivantes."""
+    s = db.get_or_404(ExerciseSet, set_id)
+    workout_id, pe_id = s.workout_id, s.program_exercise_id
+    db.session.delete(s)
+    db.session.flush()
+    remaining = (ExerciseSet.query
+                 .filter_by(workout_id=workout_id, program_exercise_id=pe_id)
+                 .order_by(ExerciseSet.id).all())
+    for i, other in enumerate(remaining, start=1):
+        other.set_number = i
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 @bp.route("/session/<int:workout_id>/finish", methods=["POST"])

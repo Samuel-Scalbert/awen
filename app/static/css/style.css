@@ -24,13 +24,21 @@ th { background:var(--card); }
 /* Séance guidée */
 main { padding-bottom:6rem; }
 .cta { display:inline-block; padding:.8rem 1.2rem; background:var(--accent); color:#0f1115; border-radius:10px; text-decoration:none; font-weight:700; margin:.5rem 0 1rem; }
-.exo { display:flex; gap:1rem; background:var(--card); border-radius:12px; padding:1rem; margin-bottom:1rem; align-items:flex-start; }
+.exo { display:flex; gap:1rem; background:var(--card); border-radius:12px; padding:1rem; margin-bottom:1rem; align-items:flex-start; border:2px solid transparent; }
 .exo img { width:180px; flex:none; background:#12151c; border-radius:10px; object-fit:cover; }
 .exo.done { opacity:.55; border-left:4px solid var(--accent); }
+.exo.current { border-color:var(--accent); box-shadow:0 0 12px rgba(110,231,183,.25); }
 .exo h3 { margin:.1rem 0 .3rem; }
+.exo.current h3 { color:var(--accent); }
 .exo .target { margin:.2rem 0; font-weight:600; }
-.exo .sets { margin:.3rem 0; padding-left:1.2rem; }
+.exo .status { margin:.2rem 0; }
+.exo .sets { margin:.3rem 0; padding-left:0; list-style:none; }
+.exo .sets li { display:flex; align-items:center; gap:.6rem; }
+.exo .sets .del { background:none; border:none; color:#e26d6d; cursor:pointer; padding:.1rem .4rem; font-size:1rem; }
 .exo .advice { color:var(--accent); font-weight:600; }
+#progress { position:sticky; top:0; z-index:9; display:flex; justify-content:space-between; gap:1rem; background:var(--card); border-bottom:2px solid var(--accent); padding:.6rem .9rem; border-radius:0 0 10px 10px; font-weight:600; }
+#progress-sets { color:var(--accent); white-space:nowrap; }
+.prog input { width:4.2rem; }
 form.finish { flex-direction:column; align-items:stretch; }
 button.danger { background:#e26d6d; }
 #timer { position:fixed; bottom:0; left:0; right:0; background:var(--card); border-top:2px solid var(--accent); display:flex; gap:1rem; align-items:center; justify-content:center; padding:.8rem; font-size:1.3rem; z-index:10; }
