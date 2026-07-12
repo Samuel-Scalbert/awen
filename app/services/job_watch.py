@@ -46,6 +46,50 @@ def parse_report(text, day, dirname):
     }
 
 
+def letters_dir():
+    root = current_app.config.get("JOB_SEARCH_DIR") or ""
+    base = Path(root) / "Lettres de motivation"
+    return base if root and base.is_dir() else None
+
+
+def get_cover_letters():
+    """Lettres de motivation générées par le pipeline, plus récentes d'abord.
+
+    Renvoie None si le dossier n'est pas configuré/trouvé. Les fichiers
+    préfixés par « _ » (templates) sont ignorés.
+    """
+    base = letters_dir()
+    if base is None:
+        return None
+    letters = []
+    for f in base.iterdir():
+        if not f.is_file() or f.name.startswith("_"):
+            continue
+        stat = f.stat()
+        letters.append({
+            "filename": f.name,
+            "title": f.stem,
+            "ext": f.suffix.lstrip(".").lower(),
+            "readable": f.suffix.lower() in (".md", ".txt"),
+            "mtime": datetime.fromtimestamp(stat.st_mtime),
+            "size_kb": max(1, stat.st_size // 1024),
+        })
+    letters.sort(key=lambda x: x["mtime"], reverse=True)
+    return letters
+
+
+def read_cover_letter(filename):
+    """Contenu d'une lettre .md/.txt, ou None si introuvable/interdit."""
+    base = letters_dir()
+    if base is None:
+        return None
+    target = (base / filename).resolve()
+    if (not target.is_file() or target.suffix.lower() not in (".md", ".txt")
+            or not target.is_relative_to(base.resolve())):
+        return None
+    return target.read_text(encoding="utf-8")
+
+
 def get_daily_reports(limit=14):
     """Comptes rendus des derniers jours, du plus récent au plus ancien.
 

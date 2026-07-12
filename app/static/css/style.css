@@ -68,6 +68,12 @@ button.danger { background:#e26d6d; }
 .offer-links a.cta.small { padding:.4rem .7rem; margin:0 .4rem 0 0; font-size:.9rem; }
 .md ul { line-height:1.5; }
 .conclusion { border-top:1px solid #2a2f3a; padding-top:.5rem; }
+ul.letters { list-style:none; padding:0; }
+ul.letters li { display:flex; justify-content:space-between; align-items:center; gap:1rem; background:var(--card); border-radius:10px; padding:.6rem 1rem; margin-bottom:.5rem; flex-wrap:wrap; }
+.letter-name small { display:block; }
+.letter-actions { display:flex; gap:.5rem; }
+.letter-actions .cta.small, a.cta.small { padding:.4rem .7rem; font-size:.9rem; margin:0; }
+article.letter { background:var(--card); border-radius:12px; padding:1.5rem; line-height:1.7; }
 
 /* Liste de courses */
 .batch-form { background:var(--card); border-radius:12px; padding:.8rem 1rem; margin-bottom:1rem; }

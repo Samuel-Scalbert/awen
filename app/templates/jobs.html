@@ -2,6 +2,7 @@
 {% block title %}Jobs — Awen{% endblock %}
 {% block content %}
 <h2>💼 Jobs du jour</h2>
+<p><a href="{{ url_for('jobs.letters') }}">📄 Lettres de motivation</a></p>
 
 {% if reports is none %}
 <p>Le dossier de veille n'est pas configuré. Ajoute dans ton <code>.env</code> :</p>

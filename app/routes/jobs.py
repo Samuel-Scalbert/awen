@@ -1,7 +1,8 @@
 import markdown as md
-from flask import Blueprint, render_template
+from flask import Blueprint, abort, render_template, send_from_directory
 
-from ..services.job_watch import get_daily_reports
+from ..services.job_watch import (get_cover_letters, get_daily_reports,
+                                  letters_dir, read_cover_letter)
 
 bp = Blueprint("jobs", __name__, url_prefix="/jobs")
 
@@ -16,6 +17,29 @@ def _date_fr(d):
 
 def _render_md(text):
     return md.markdown(text, extensions=["tables"])
+
+
+@bp.route("/lettres")
+def letters():
+    return render_template("lettres.html", letters=get_cover_letters())
+
+
+@bp.route("/lettres/lire/<path:filename>")
+def read_letter(filename):
+    text = read_cover_letter(filename)
+    if text is None:
+        abort(404)
+    return render_template("lettre.html", filename=filename,
+                           title=filename.rsplit(".", 1)[0],
+                           content_html=_render_md(text))
+
+
+@bp.route("/lettres/telecharger/<path:filename>")
+def download_letter(filename):
+    base = letters_dir()
+    if base is None:
+        abort(404)
+    return send_from_directory(base, filename, as_attachment=True)
 
 
 @bp.route("/")

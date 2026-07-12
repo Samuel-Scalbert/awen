@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Awen{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('jobs.letters') }}">← Toutes les lettres</a>
+   · <a class="cta small" href="{{ url_for('jobs.download_letter', filename=filename) }}">⬇️ Télécharger</a></p>
+<article class="letter md">
+  {{ content_html|safe }}
+</article>
+{% endblock %}
