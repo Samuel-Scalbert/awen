@@ -1,0 +1,60 @@
+{# Macros de graphiques en SVG inline.
+
+   Traits fins (2 px réels grâce à non-scaling-stroke, quelle que soit la
+   largeur d'écran), grille discrète, extrémités arrondies, survol natif via
+   <title> — aucun script, aucune dépendance, lisible hors ligne.
+   Les valeurs ne sont étiquetées que sur le dernier point (et le maximum de
+   l'axe) : un nombre sur chaque point rendrait le graphique illisible. #}
+
+{% macro line(c, title, unit='') %}
+{% if c %}
+<figure class="chart">
+  <figcaption>{{ title }}</figcaption>
+  <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img"
+       aria-label="{{ title }} — de {{ c.marks[0].text }} à {{ c.marks[-1].text }}"
+>
+    <line class="grid" x1="4" y1="10" x2="{{ c.width - 4 }}" y2="10"/>
+    <line class="grid" x1="4" y1="{{ c.baseline }}" x2="{{ c.width - 4 }}" y2="{{ c.baseline }}"/>
+    <path class="area" d="{{ c.area }}"/>
+    <path class="line" d="{{ c.path }}" vector-effect="non-scaling-stroke"/>
+    {% for m in c.marks %}
+    <circle class="dot" cx="{{ m.x }}" cy="{{ m.y }}" r="3"
+            vector-effect="non-scaling-stroke">
+      <title>{{ m.label }} : {{ m.text }}</title>
+    </circle>
+    {% endfor %}
+  </svg>
+  <div class="chart-axis">
+    <span>{{ c.marks[0].label }}</span>
+    <span class="chart-last">dernier : <strong>{{ c.marks[-1].text }}</strong></span>
+    <span>{{ c.marks[-1].label }}</span>
+  </div>
+  <p class="chart-scale muted">max de l'échelle : {{ c.top_text }}</p>
+</figure>
+{% endif %}
+{% endmacro %}
+
+{% macro bars(c, title) %}
+{% if c %}
+<figure class="chart">
+  <figcaption>{{ title }}</figcaption>
+  <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img"
+       aria-label="{{ title }}">
+    <line class="grid" x1="4" y1="{{ c.baseline }}" x2="{{ c.width - 4 }}" y2="{{ c.baseline }}"/>
+    {% for b in c.bars %}
+    {# style inline et non attribut `fill` : un attribut de présentation est
+       écrasé par la règle CSS .bar, la barre reprendrait la couleur par
+       défaut et ne correspondrait plus à sa légende. #}
+    <rect class="bar" x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}"
+          rx="2"{% if b.color %} style="fill:{{ b.color }}"{% endif %}>
+      <title>{{ b.label }} : {{ b.text }}</title>
+    </rect>
+    {% endfor %}
+  </svg>
+  <div class="chart-axis">
+    {% for b in c.bars %}<span>{{ b.label }}</span>{% endfor %}
+  </div>
+  <p class="chart-scale muted">max de l'échelle : {{ c.top_text }}</p>
+</figure>
+{% endif %}
+{% endmacro %}

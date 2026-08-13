@@ -678,6 +678,24 @@ details[open] > summary::before { transform: rotate(90deg); }
   font-weight: 600;
   font-size: .92rem;
 }
+.note-box { margin-top: .6rem; }
+.note-box summary { font-size: .85rem; color: var(--muted); }
+.note-box summary::before { width: 1rem; height: 1rem; font-size: .9rem; }
+.note-box textarea { width: 100%; margin-top: .4rem; min-height: 3.5rem; font-size: .92rem; }
+.note-flag { color: var(--accent); font-size: 1.1rem; line-height: 0; }
+.note-state { font-size: .78rem; color: var(--accent); }
+.note-state.err { color: var(--danger); }
+.note-read {
+  margin: .5rem 0 0;
+  padding: .5rem .75rem;
+  background: var(--bg-sunken);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  font-size: .9rem;
+  font-style: italic;
+  color: var(--muted-strong);
+}
+
 form.log { gap: var(--s-2); margin: .6rem 0 0; align-items: stretch; }
 form.log input { flex: 1 1 5rem; min-width: 0; }
 form.log button { flex: 1 1 100%; }
@@ -730,6 +748,82 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
 
 .prog input { width: 4rem; min-height: 2.4rem; padding: .35rem .3rem; }
 .prog td { vertical-align: middle; }
+
+/* ---------- Graphiques ---------------------------------------------------- */
+
+.chart-grid {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  margin-bottom: var(--s-5);
+}
+.chart {
+  margin: 0;
+  padding: var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+.chart figcaption {
+  margin-bottom: var(--s-3);
+  font-size: .82rem;
+  font-weight: 650;
+  letter-spacing: .02em;
+  color: var(--text);
+}
+/* height:auto conserve le ratio du viewBox : sans ça le SVG est étiré
+   horizontalement et les points deviennent des ovales. */
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+/* Grille et axes en retrait : ils situent, ils ne racontent pas. */
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .line { fill: none; stroke: var(--accent); stroke-width: 2;
+               stroke-linecap: round; stroke-linejoin: round; }
+.chart .area { fill: var(--accent-soft); stroke: none; }
+.chart .dot { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.chart .dot:hover { fill: var(--text); }
+.chart .bar { fill: var(--accent); }
+.chart .bar:hover { filter: brightness(1.15); }
+.chart-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: .3rem;
+  margin-top: .4rem;
+  font-size: .7rem;
+  color: var(--muted);
+  overflow: hidden;
+}
+.chart-axis span { white-space: nowrap; }
+.chart-last { color: var(--text); }
+.chart-scale { margin: .3rem 0 0; font-size: .7rem; }
+
+/* Jauge de conformité (part des séries dans la fourchette cible) */
+.meter {
+  display: inline-block;
+  vertical-align: middle;
+  width: 3.5rem;
+  height: .4rem;
+  margin-right: .4rem;
+  background: var(--bg-sunken);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.meter > span { display: block; height: 100%; background: var(--accent); }
+.swatch {
+  display: inline-block;
+  width: .7rem;
+  height: .7rem;
+  margin-right: .4rem;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+.note-row {
+  background: var(--bg-sunken);
+  font-style: italic;
+  color: var(--muted-strong);
+  font-size: .88rem;
+}
+.stat-link { margin-left: .3rem; text-decoration: none; font-size: .9rem; }
 
 /* ---------- Calendrier ---------------------------------------------------- */
 

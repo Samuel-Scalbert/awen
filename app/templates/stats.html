@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% import "_charts.html" as chart %}
+{% block title %}Statistiques — Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>📊 Statistiques</h2>
+  <p class="sub">Sur les {{ o.n_sessions }} séance{{ 's' if o.n_sessions > 1 }} terminée{{ 's' if o.n_sessions > 1 }}
+    {% if o.first_date %}entre le {{ o.first_date.strftime('%d/%m/%Y') }} et le
+    {{ o.last_date.strftime('%d/%m/%Y') }}{% endif %}. Une séance en cours n'est pas
+    comptée tant qu'elle n'est pas terminée.</p>
+  <div class="page-links">
+    <a href="{{ url_for('workout.list_workouts') }}">← Séances</a>
+    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
+  </div>
+</div>
+
+{% if not o.n_sessions %}
+<p class="muted">Aucune séance terminée pour l'instant — les statistiques
+  apparaîtront dès la première séance clôturée.</p>
+{% else %}
+
+<h3 class="section-title">Vue d'ensemble</h3>
+<ul class="stats">
+  <li class="stat accent">
+    <span class="stat-label">Volume total</span>
+    <span class="stat-value">{{ kg(o.total_volume) }}</span>
+    <span class="stat-note">soulevé depuis le début · {{ kg(o.avg_volume) }} par séance</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Séances</span>
+    <span class="stat-value">{{ o.n_sessions }}</span>
+    <span class="stat-note">{{ o.per_week }} par semaine en moyenne</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Séries · reps</span>
+    <span class="stat-value">{{ o.total_sets }}<small>séries</small></span>
+    <span class="stat-note">{{ '{:,}'.format(o.total_reps).replace(',', ' ') }} répétitions</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Assiduité</span>
+    <span class="stat-value">{{ o.adherence }}<small>%</small></span>
+    <span class="stat-note">{{ o.n_sessions }} faites sur {{ o.planned }} jours d'entraînement</span>
+  </li>
+</ul>
+
+<ul class="stats">
+  <li class="stat">
+    <span class="stat-label">Écart entre séances</span>
+    <span class="stat-value">{{ o.avg_gap }}<small>j</small></span>
+    <span class="stat-note">le plus long : {{ o.max_gap }} jours</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Dernière séance</span>
+    <span class="stat-value">{{ o.days_since }}<small>j</small></span>
+    <span class="stat-note">{{ o.last_date.strftime('%d/%m/%Y') }}</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Volume / séance</span>
+    <span class="stat-value">{{ kg(o.avg_volume) }}</span>
+    <span class="stat-note">moyenne toutes séances</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Séries / séance</span>
+    <span class="stat-value">{{ (o.total_sets / o.n_sessions)|round(1) }}</span>
+    <span class="stat-note">{{ (o.total_reps / o.total_sets)|round(1) }} reps par série</span>
+  </li>
+</ul>
+
+<h3 class="section-title">Évolution</h3>
+<div class="chart-grid">
+  {{ chart.line(volume_chart, "Volume par séance") }}
+  {{ chart.bars(weekly_chart, "Volume par semaine") }}
+</div>
+
+<h3 class="section-title">Répartition</h3>
+<div class="chart-grid">
+  {{ chart.bars(focus_chart, "Volume par type de séance") }}
+  {{ chart.bars(weekday_chart, "Séances par jour de la semaine") }}
+</div>
+<ul class="legend">
+  {% for f, color in focus_colors.items() %}
+  <li><span class="swatch" style="background:{{ color }}"></span>{{ f }}
+    — {{ o.by_focus[f].sessions }} séance{{ 's' if o.by_focus[f].sessions > 1 }},
+    {{ kg(o.by_focus[f].volume) }}</li>
+  {% endfor %}
+</ul>
+
+<h3 class="section-title">Par exercice</h3>
+<p class="muted">« Dans la fourchette » = part des séries dont les reps tombent
+  dans la cible du programme : trop bas, la charge est trop lourde ; à 100 %
+  constamment, elle est trop légère. Le e1RM est le max théorique à 1 rep
+  (Epley), utile pour comparer des séries de charges et reps différentes.</p>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Exercice</th><th>Séances</th><th>Séries</th><th>Volume</th>
+          <th>Charge</th><th>Record</th><th>e1RM</th><th>Fourchette</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="{{ url_for('stats.exercise_stats', pe_id=r.pe.id) }}">{{ r.pe.name }}</a>
+          <br><small class="muted">{{ r.pe.session_type|upper }}</small></td>
+        <td>{{ r.sessions }}</td>
+        <td>{{ r.n_sets }}</td>
+        <td>{{ kg(r.volume) }}</td>
+        <td>{% if r.first_weight is not none %}
+            {{ '%g'|format(r.first_weight) }} → <strong>{{ '%g'|format(r.pe.weight_kg) }}</strong> kg
+            {% else %}—{% endif %}</td>
+        <td>{% if r.best_weight %}{{ '%g'|format(r.best_weight) }} kg × {{ r.best_reps }}{% else %}—{% endif %}</td>
+        <td>{{ r.best_e1rm ~ ' kg' if r.best_e1rm else '—' }}</td>
+        <td>{% if r.in_range is not none %}
+            <span class="meter"><span style="width:{{ r.in_range }}%"></span></span>
+            {{ r.in_range }} %{% else %}—{% endif %}</td>
+        <td><a class="btn-ghost small" href="{{ url_for('stats.exercise_stats', pe_id=r.pe.id) }}">📈</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h3 class="section-title">Journal des séances</h3>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Date</th><th>Type</th><th>Séries</th><th>Reps</th><th>Volume</th><th>Commentaire</th></tr>
+    </thead>
+    <tbody>
+      {% for s in o.sessions|reverse %}
+      <tr>
+        <td>{{ s.date.strftime('%d/%m/%Y') }}</td>
+        <td><span class="swatch" style="background:{{ focus_colors.get(s.focus, '#888') }}"></span>{{ s.focus }}</td>
+        <td>{{ s.sets }}</td>
+        <td>{{ s.reps }}</td>
+        <td>{{ kg(s.volume) }}</td>
+        <td class="muted">{{ s.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

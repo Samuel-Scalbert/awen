@@ -19,6 +19,7 @@ def create_app(config_class=Config):
     from .routes.calendar import bp as calendar_bp
     from .routes.esp32 import bp as esp32_bp
     from .routes.jobs import bp as jobs_bp
+    from .routes.stats import bp as stats_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(workout_bp)
@@ -26,6 +27,7 @@ def create_app(config_class=Config):
     app.register_blueprint(calendar_bp)
     app.register_blueprint(esp32_bp)
     app.register_blueprint(jobs_bp)
+    app.register_blueprint(stats_bp)
 
     with app.app_context():
         db.create_all()

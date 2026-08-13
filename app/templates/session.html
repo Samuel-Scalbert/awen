@@ -45,13 +45,23 @@
              value="{{ '%g'|format(pe.weight_kg) }}" placeholder="kg">
       <button type="submit">Valider la série</button>
     </form>
+
+    <details class="note-box"{% if notes.get(pe.id) %} open{% endif %}>
+      <summary>💬 Commentaire<span class="note-flag">{{ '•' if notes.get(pe.id) }}</span></summary>
+      <textarea class="exo-note" data-exercise="{{ pe.id }}" rows="2"
+                placeholder="Ressenti, réglage machine, douleur…">{{ notes.get(pe.id, '') }}</textarea>
+      <span class="note-state" aria-live="polite"></span>
+    </details>
   </div>
 </section>
 {% endfor %}
 
 <form method="post" class="finish"
       action="{{ url_for('workout.finish_session', workout_id=workout.id) }}">
-  <textarea name="notes" placeholder="Notes de séance (forme, ressenti, douleurs…)"></textarea>
+  <label class="field field-wide"><span>💬 Commentaire de séance</span>
+    <textarea name="notes" id="session-note" rows="3"
+      placeholder="Forme générale, sommeil, énergie, douleurs…">{{ workout.notes or '' }}</textarea></label>
+  <span class="note-state" id="session-note-state" aria-live="polite"></span>
   <button type="submit">✅ Terminer la séance (applique la progression)</button>
 </form>
 <form method="post" action="{{ url_for('workout.delete_session', workout_id=workout.id) }}"
@@ -269,6 +279,51 @@ document.addEventListener('click', async e => {
   if (res.ok) { li.remove(); refresh(); }
   else alert('Suppression impossible.');
 });
+
+/* ---------- commentaires : sauvegarde automatique ---------- */
+const NOTE_URL = "{{ url_for('workout.save_note', workout_id=workout.id) }}";
+
+async function saveNote(textarea, exerciseId, stateEl) {
+  const body = new FormData();
+  body.append('text', textarea.value);
+  if (exerciseId) body.append('exercise_id', exerciseId);
+  stateEl.textContent = '…';
+  try {
+    const res = await fetch(NOTE_URL, { method: 'POST', body });
+    if (!res.ok) throw new Error();
+    stateEl.textContent = 'enregistré ✓';
+    stateEl.classList.remove('err');
+    const flag = textarea.closest('.note-box')?.querySelector('.note-flag');
+    if (flag) flag.textContent = textarea.value.trim() ? '•' : '';
+    setTimeout(() => { stateEl.textContent = ''; }, 2000);
+  } catch (e) {
+    stateEl.textContent = 'non enregistré — réessaie';
+    stateEl.classList.add('err');
+  }
+}
+
+function autosave(textarea, exerciseId, stateEl) {
+  let timer = null;
+  const run = () => saveNote(textarea, exerciseId, stateEl);
+  // Sauvegarde 1,2 s après la dernière frappe, et sur toute sortie de champ
+  // ou passage en arrière-plan — à la salle on verrouille souvent l'écran
+  // juste après avoir tapé, `blur` seul laisserait filer la note.
+  textarea.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(run, 1200);
+  });
+  textarea.addEventListener('blur', () => { clearTimeout(timer); run(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && textarea.value !== textarea.defaultValue) {
+      clearTimeout(timer); run();
+    }
+  });
+}
+
+document.querySelectorAll('.exo-note').forEach(t =>
+  autosave(t, t.dataset.exercise, t.parentElement.querySelector('.note-state')));
+const sessionNote = document.getElementById('session-note');
+if (sessionNote) autosave(sessionNote, null, document.getElementById('session-note-state'));
 
 /* ---------- démo animée + restauration au retour dans l'appli ---------- */
 setInterval(() => {

@@ -11,6 +11,8 @@ class Workout(db.Model):
     completed = db.Column(db.Boolean, default=False)
     sets = db.relationship("ExerciseSet", backref="workout",
                            cascade="all, delete-orphan")
+    notes_by_exercise = db.relationship("ExerciseNote", backref="workout",
+                                        cascade="all, delete-orphan")
 
 
 class ExerciseSet(db.Model):
@@ -23,6 +25,26 @@ class ExerciseSet(db.Model):
     set_number = db.Column(db.Integer)
     reps = db.Column(db.Integer)
     weight_kg = db.Column(db.Float)
+
+
+class ExerciseNote(db.Model):
+    """Commentaire libre sur un exercice, pour une séance donnée.
+
+    Un seul par (séance, exercice) : on met à jour au lieu d'empiler, pour
+    que la note reste le ressenti final de l'exercice ce jour-là (« épaule
+    droite sensible », « machine réglée au cran 4 »…).
+    """
+    __tablename__ = "exercise_notes"
+    __table_args__ = (db.UniqueConstraint("workout_id", "program_exercise_id",
+                                          name="uq_note_workout_exercise"),)
+    id = db.Column(db.Integer, primary_key=True)
+    workout_id = db.Column(db.Integer, db.ForeignKey("workouts.id"), nullable=False)
+    program_exercise_id = db.Column(db.Integer,
+                                    db.ForeignKey("program_exercises.id"),
+                                    nullable=False)
+    text = db.Column(db.Text, default="")
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
 
 
 class ProgramExercise(db.Model):

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% import "_charts.html" as chart %}
+{% block title %}{{ pe.name }} — Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>📈 {{ pe.name }}</h2>
+  <p class="sub">{{ pe.session_type|upper }} · objectif {{ pe.sets }} × {{ pe.rep_min }}-{{ pe.rep_max }} reps
+    @ {{ '%g'|format(pe.weight_kg) }} kg{% if pe.notes %} — {{ pe.notes }}{% endif %}</p>
+  <div class="page-links">
+    <a href="{{ url_for('stats.dashboard') }}">← Toutes les statistiques</a>
+    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
+  </div>
+</div>
+
+{% if not history %}
+<p class="muted">Cet exercice n'a pas encore été enregistré dans une séance terminée.</p>
+{% else %}
+
+<ul class="stats">
+  <li class="stat accent">
+    <span class="stat-label">Charge de travail</span>
+    <span class="stat-value">{{ '%g'|format(pe.weight_kg) }}<small>kg</small></span>
+    <span class="stat-note">
+      {% if gain > 0 %}+{{ '%g'|format(gain) }} kg (+{{ gain_pct }} %) depuis le début
+      {% elif gain < 0 %}{{ '%g'|format(gain) }} kg depuis le début
+      {% else %}stable depuis le début{% endif %}</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Meilleur e1RM</span>
+    <span class="stat-value">{{ history|map(attribute='best_e1rm')|select|max|default('—') }}<small>kg</small></span>
+    <span class="stat-note">max théorique à 1 rep</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Volume cumulé</span>
+    <span class="stat-value">{{ kg(history|sum(attribute='volume')) }}</span>
+    <span class="stat-note">sur {{ history|length }} séance{{ 's' if history|length > 1 }}</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Reps cumulées</span>
+    <span class="stat-value">{{ history|sum(attribute='reps_total') }}</span>
+    <span class="stat-note">{{ history|sum(attribute='n_sets') }} séries au total</span>
+  </li>
+</ul>
+
+<div class="chart-grid">
+  {{ chart.line(weight_chart, "Charge de travail par séance") }}
+  {{ chart.line(e1rm_chart, "Force estimée (e1RM)") }}
+  {{ chart.bars(volume_chart, "Volume par séance") }}
+</div>
+
+<h3 class="section-title">Historique détaillé</h3>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Date</th><th>Charge</th><th>Séries effectuées</th><th>Volume</th>
+          <th>e1RM</th><th>Cible tenue</th></tr>
+    </thead>
+    <tbody>
+      {% for h in history|reverse %}
+      <tr>
+        <td>{{ h.date.strftime('%d/%m/%Y') }}</td>
+        <td><strong>{{ '%g'|format(h.weight) }} kg</strong></td>
+        <td>{% for s in h.sets %}{{ s.reps }}×{{ '%g'|format(s.weight_kg or 0) }}{{ ' · ' if not loop.last }}{% endfor %}</td>
+        <td>{{ kg(h.volume) }}</td>
+        <td>{{ h.best_e1rm ~ ' kg' if h.best_e1rm else '—' }}</td>
+        <td>{{ '✅' if h.in_range else '—' }}</td>
+      </tr>
+      {% if notes.get(h.workout_id) %}
+      <tr><td colspan="6" class="note-row">💬 {{ notes[h.workout_id] }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="muted">« Cible tenue » = toutes les séries de travail de la séance
+  dans la fourchette {{ pe.rep_min }}-{{ pe.rep_max }} reps.</p>
+{% endif %}
+{% endblock %}

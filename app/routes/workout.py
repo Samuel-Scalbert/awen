@@ -3,7 +3,7 @@ from datetime import datetime
 from flask import (Blueprint, flash, jsonify, redirect, render_template,
                    request, url_for)
 
-from ..models import db, ExerciseSet, ProgramExercise, Workout
+from ..models import db, ExerciseNote, ExerciseSet, ProgramExercise, Workout
 from ..services.progression import apply_progression, next_session_type
 
 bp = Blueprint("workout", __name__, url_prefix="/workouts")
@@ -32,8 +32,12 @@ def list_workouts():
         next_type = current.focus
     else:
         next_type = next_session_type(_last_focus())
+    notes_by_workout = {}
+    for n in ExerciseNote.query.all():
+        notes_by_workout.setdefault(n.workout_id, {})[n.program_exercise_id] = n.text
     return render_template("workouts.html", workouts=workouts,
-                           current=current, next_type=next_type)
+                           current=current, next_type=next_type,
+                           notes_by_workout=notes_by_workout)
 
 
 @bp.route("/programme")
@@ -74,8 +78,35 @@ def session():
                              if s.program_exercise_id == pe.id),
                             key=lambda s: s.set_number or 0)
               for pe in exercises}
+    notes = {n.program_exercise_id: n.text
+             for n in workout.notes_by_exercise}
     return render_template("session.html", workout=workout,
-                           exercises=exercises, logged=logged)
+                           exercises=exercises, logged=logged, notes=notes)
+
+
+@bp.route("/session/<int:workout_id>/note", methods=["POST"])
+def save_note(workout_id):
+    """Commentaire d'un exercice, ou de la séance si exercise_id est absent.
+
+    Sauvegarde au fil de l'eau (appelé en AJAX pendant la séance) : on ne veut
+    pas qu'un ressenti noté entre deux séries se perde si l'app est fermée.
+    """
+    workout = db.get_or_404(Workout, workout_id)
+    text = (request.form.get("text") or "").strip()
+    raw_id = request.form.get("exercise_id")
+
+    if not raw_id:
+        workout.notes = text
+    else:
+        pe = db.get_or_404(ProgramExercise, int(raw_id))
+        note = ExerciseNote.query.filter_by(workout_id=workout.id,
+                                            program_exercise_id=pe.id).first()
+        if note is None:
+            note = ExerciseNote(workout_id=workout.id, program_exercise_id=pe.id)
+            db.session.add(note)
+        note.text = text
+    db.session.commit()
+    return jsonify(ok=True, saved=bool(text))
 
 
 @bp.route("/session/<int:workout_id>/log", methods=["POST"])

@@ -7,6 +7,7 @@
     à la fin de chaque séance.</p>
   <div class="page-links">
     <a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a>
+    <a href="{{ url_for('stats.dashboard') }}">📊 Statistiques</a>
     <a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a>
   </div>
 </div>
@@ -27,13 +28,20 @@
       <summary><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> — {{ w.focus }}
         {% if not w.completed %}<em>(en cours)</em>{% endif %}
         · {{ w.sets|length }} séries</summary>
+      {% set ex_notes = notes_by_workout.get(w.id, {}) %}
       {% for name, items in w.sets|groupby('exercise') %}
-      <p><strong>{{ name }}</strong><br>
+      {% set first = items|first %}
+      <p><strong>{{ name }}</strong>
+        <a class="stat-link" href="{{ url_for('stats.exercise_stats', pe_id=first.program_exercise_id) }}"
+           title="Statistiques de cet exercice">📈</a><br>
         {% for s in items|sort(attribute='set_number') -%}
           {{ s.reps }}×{{ '%g'|format(s.weight_kg or 0) }} kg{{ " · " if not loop.last }}
         {%- endfor %}</p>
+      {% if ex_notes.get(first.program_exercise_id) %}
+      <p class="note-read">💬 {{ ex_notes[first.program_exercise_id] }}</p>
+      {% endif %}
       {% endfor %}
-      {% if w.notes %}<p><em>{{ w.notes }}</em></p>{% endif %}
+      {% if w.notes %}<p class="note-read">💬 <strong>Séance :</strong> {{ w.notes }}</p>{% endif %}
     </details>
   </li>
   {% else %}
