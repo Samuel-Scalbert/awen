@@ -14,6 +14,20 @@ def _current_workout():
             .order_by(Workout.date.desc()).first())
 
 
+def session_exercises(focus):
+    """Exercices d'une séance, bloc pliométrique d'abord.
+
+    L'ordre est un choix d'entraînement, pas d'affichage : les sauts se font
+    sur un système nerveux frais, donc avant le travail avec charges — y
+    compris le jour des jambes.
+    """
+    exercises = (ProgramExercise.query
+                 .filter_by(session_type=focus.lower())
+                 .order_by(ProgramExercise.position).all())
+    return sorted(exercises, key=lambda pe: (0 if pe.block == "plyo" else 1,
+                                             pe.position))
+
+
 def _last_focus(exclude_id=None):
     q = Workout.query.order_by(Workout.date.desc(), Workout.id.desc())
     for w in q:
@@ -42,9 +56,12 @@ def list_workouts():
 
 @bp.route("/programme")
 def programme():
-    groups = [(st, ProgramExercise.query.filter_by(session_type=st)
-               .order_by(ProgramExercise.position).all())
-              for st in ("push", "pull", "legs")]
+    groups = []
+    for st in ("push", "pull", "legs"):
+        exercises = session_exercises(st)
+        groups.append((st,
+                       [pe for pe in exercises if pe.block == "plyo"],
+                       [pe for pe in exercises if pe.block != "plyo"]))
     return render_template("programme.html", groups=groups)
 
 
@@ -71,9 +88,7 @@ def session():
         workout = Workout(focus=focus, date=datetime.now())
         db.session.add(workout)
         db.session.commit()
-    exercises = (ProgramExercise.query
-                 .filter_by(session_type=workout.focus.lower())
-                 .order_by(ProgramExercise.position).all())
+    exercises = session_exercises(workout.focus)
     logged = {pe.id: sorted((s for s in workout.sets
                              if s.program_exercise_id == pe.id),
                             key=lambda s: s.set_number or 0)

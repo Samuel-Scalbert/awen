@@ -57,6 +57,10 @@ class ProgramExercise(db.Model):
     __tablename__ = "program_exercises"
     id = db.Column(db.Integer, primary_key=True)
     session_type = db.Column(db.String(10), nullable=False)  # push/pull/legs
+    # "force" = travail avec charges, "plyo" = bloc pliométrique (saut). Les
+    # deux ne se pilotent pas pareil : la plyo progresse en hauteur et en
+    # qualité d'appui, jamais en kilos ajoutés.
+    block = db.Column(db.String(10), default="force")
     position = db.Column(db.Integer, nullable=False)
     name = db.Column(db.String(120), nullable=False)
     slug = db.Column(db.String(60), nullable=False)  # static/img/exercises/<slug>.svg

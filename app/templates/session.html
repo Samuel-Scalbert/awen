@@ -13,20 +13,29 @@
 </div>
 
 {% for pe in exercises %}
+{% if pe.block == 'plyo' and loop.first %}
+<h3 class="block-title">🏐 Bloc plyométrie — 20 min
+  <small>détente pour le volley · à faire frais, en début de séance</small></h3>
+{% endif %}
+{% if pe.block == 'force' and (loop.first or exercises[loop.index0 - 1].block == 'plyo') %}
+<h3 class="block-title">🏋️ Bloc force — {{ workout.focus }}</h3>
+{% endif %}
 {% set done = logged[pe.id] %}
-<section class="exo" id="exo-{{ pe.id }}"
+<section class="exo{% if pe.block == 'plyo' %} plyo{% endif %}" id="exo-{{ pe.id }}"
          data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
          data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
          data-rest="{{ pe.rest_sec }}" data-name="{{ pe.name }}"
-         data-num="{{ loop.index }}">
+         data-block="{{ pe.block }}" data-num="{{ loop.index }}">
   <img class="demo" alt="{{ pe.name }}" loading="lazy"
        src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
        data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
        onerror="this.style.display='none'">
   <div class="exo-body">
     <h3><span class="exo-chip"></span>{{ loop.index }}/{{ exercises|length }} · {{ pe.name }}</h3>
-    <p class="target">🎯 {{ pe.sets }} séries × <strong>{{ pe.rep_min }}-{{ pe.rep_max }} reps</strong>
-      {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}</p>
+    <p class="target">🎯 {{ pe.sets }} séries ×
+      <strong>{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %} reps</strong>
+      {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}
+      <span class="muted">· repos {{ pe.rest_sec }} s</span></p>
     <p class="status"></p>
     {% if pe.notes %}<p class="muted">{{ pe.notes }}</p>{% endif %}
     <ul class="sets">
@@ -40,9 +49,13 @@
           action="{{ url_for('workout.log_set', workout_id=workout.id) }}">
       <input type="hidden" name="exercise_id" value="{{ pe.id }}">
       <input name="reps" type="number" inputmode="numeric" min="0" max="99"
-             placeholder="{{ pe.rep_min }}-{{ pe.rep_max }} reps" required>
+             placeholder="{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %} reps" required>
+      {# La plyométrie ne se charge pas : pas de champ kilos qui n'aurait
+         aucun sens à remplir entre deux sauts. #}
+      {% if pe.block != 'plyo' %}
       <input name="weight" type="number" inputmode="decimal" step="0.5" min="0"
              value="{{ '%g'|format(pe.weight_kg) }}" placeholder="kg">
+      {% endif %}
       <button type="submit">Valider la série</button>
     </form>
 
@@ -124,6 +137,18 @@ const MSG = {
     " Terminé, passe au suivant 👉",
     " C'est plié pour celui-là ✔️",
   ],
+  // La plyométrie ne se pilote pas en kilos : le critère est la qualité du
+  // saut. Dès que la hauteur baisse, la série ne sert plus à rien.
+  plyoOk: [
+    "🏐 Explosif. Contact au sol le plus court possible sur la prochaine.",
+    "🏐 Bien. Repos complet avant la suivante — la plyo se travaille frais.",
+    "🏐 Nickel. Cherche la hauteur, pas le nombre.",
+  ],
+  plyoDrop: [
+    "⚠️ Tu perds en hauteur : récupère plus longtemps, ou arrête là.",
+    "⚠️ Moins de reps que prévu — la fatigue nerveuse est arrivée, ne force pas.",
+    "⚠️ Qualité en baisse : mieux vaut couper la série que sauter fatigué.",
+  ],
 };
 function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
 function msg(cat, vars) {
@@ -149,8 +174,10 @@ function refresh() {
       status.textContent = `✔️ ${done}/${total} séries faites`;
     } else {
       const left = total - done;
+      const rmin = card.dataset.repmin, rmax = card.dataset.repmax;
+      const target = rmin === rmax ? `${rmin} reps` : `${rmin}-${rmax} reps`;
       status.innerHTML = `<strong>Série ${done + 1}/${total}</strong> — vise `
-        + `<strong>${card.dataset.repmin}-${card.dataset.repmax} reps</strong>`
+        + `<strong>${target}</strong>`
         + ` · encore ${left} série${left > 1 ? 's' : ''}`;
       if (!current) current = card;
     }
@@ -222,7 +249,9 @@ document.querySelectorAll('form.log').forEach(form => {
       const wInput = form.querySelector('[name=weight]');
       const rmin = +d.repmin, rmax = +d.repmax;
       let text;
-      if (inc && j.reps <= rmin - 3) {
+      if (d.block === 'plyo') {
+        text = msg(j.reps >= rmax ? 'plyoOk' : 'plyoDrop', {});
+      } else if (inc && j.reps <= rmin - 3) {
         const nw = Math.max(0, j.weight - inc);
         text = msg('fix', {w: nw, min: rmin, max: rmax});
         wInput.value = nw;

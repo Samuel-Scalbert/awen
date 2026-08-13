@@ -146,7 +146,68 @@ def seed_program():
     for (stype, pos, name, slug, sets, rmin, rmax, weight, inc, notes) in PPL_PROGRAM:
         db.session.add(ProgramExercise(
             session_type=stype, position=pos, name=name, slug=slug,
-            sets=sets, rep_min=rmin, rep_max=rmax, weight_kg=weight,
-            increment_kg=inc, rest_sec=60, notes=notes,
+            block="force", sets=sets, rep_min=rmin, rep_max=rmax,
+            weight_kg=weight, increment_kg=inc, rest_sec=60, notes=notes,
+        ))
+    db.session.commit()
+
+
+# Bloc pliométrique ~20 min, placé en DÉBUT de séance : un saut se travaille
+# nerveux et frais, jamais sur des jambes déjà cuites (qualité d'appui et
+# sécurité). Aucune charge et increment 0 : la plyométrie progresse en hauteur
+# de box, en explosivité et en temps de contact au sol — pas en kilos.
+# (session_type, position, name, slug, sets, reps, rest_sec, notes)
+PLYO_BLOCK = [
+    ("push", 1, "Saut vertical max", "plyo-saut-vertical", 4, 5, 90,
+     "Bras lancés vers le haut, amorti souple. Vise la même hauteur à chaque saut."),
+    ("push", 2, "Approche volley + saut", "plyo-approche", 4, 3, 90,
+     "Course d'élan 3 appuis comme au filet, saut maximal, réception équilibrée."),
+    ("push", 3, "Sauts groupés (tuck jumps)", "plyo-tuck", 3, 8, 60,
+     "Genoux à la poitrine, contact au sol le plus court possible."),
+    ("push", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 30, 60,
+     "Jambes quasi tendues, tout dans la cheville — c'est le ressort du saut."),
+
+    ("pull", 1, "Box jumps", "plyo-box-jump", 4, 5, 90,
+     "Monte sur la box, redescends en marchant. Augmente la hauteur quand 5 sauts passent nets."),
+    ("pull", 2, "Bondissements latéraux", "plyo-lateral", 3, 8, 90,
+     "8 par côté. Stabilité à la réception : utile en défense au volley."),
+    ("pull", 3, "Saut en longueur départ arrêté", "plyo-longueur", 3, 5, 90,
+     "Mesure la distance de temps en temps : c'est ton indicateur de puissance."),
+    ("pull", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 30, 60,
+     "Jambes quasi tendues, tout dans la cheville."),
+
+    ("legs", 1, "Sauts en contrebas (depth jumps)", "plyo-depth", 4, 4, 90,
+     "Box 30-40 cm : descends, touche le sol et renvoie immédiatement. "
+     "Le plus efficace pour la détente — et le plus exigeant, d'où 4 reps."),
+    ("legs", 2, "Squat jumps", "plyo-squat-jump", 3, 5, 90,
+     "Descente à mi-cuisse, extension complète. Avant le squat lourd, jamais après."),
+    ("legs", 3, "Fentes sautées", "plyo-fentes", 3, 6, 90,
+     "6 par jambe, alternées en l'air."),
+    ("legs", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 30, 60,
+     "Jambes quasi tendues, tout dans la cheville."),
+]
+
+
+def ensure_program_block():
+    """Migration douce : ajoute la colonne `block` aux bases existantes."""
+    cols = [row[1] for row in
+            db.session.execute(sqltext("PRAGMA table_info(program_exercises)"))]
+    if "block" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE program_exercises ADD COLUMN block VARCHAR(10)"))
+        db.session.commit()
+    ProgramExercise.query.filter(ProgramExercise.block.is_(None)).update(
+        {"block": "force"}, synchronize_session=False)
+    db.session.commit()
+
+
+def seed_plyo_block():
+    if ProgramExercise.query.filter_by(block="plyo").count() > 0:
+        return
+    for (stype, pos, name, slug, sets, reps, rest, notes) in PLYO_BLOCK:
+        db.session.add(ProgramExercise(
+            session_type=stype, block="plyo", position=pos, name=name,
+            slug=slug, sets=sets, rep_min=reps, rep_max=reps, weight_kg=0,
+            increment_kg=0, rest_sec=rest, notes=notes,
         ))
     db.session.commit()

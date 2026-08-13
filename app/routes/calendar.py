@@ -27,7 +27,7 @@ def view_calendar():
     for w in workouts:
         done_by_day.setdefault(w.date.date(), []).append(w)
 
-    # Planning : rotation continue projetée sur lun/mer/ven/sam.
+    # Planning : rotation continue projetée sur les jours d'entraînement.
     last_focus, last_date = None, None
     for w in reversed(workouts):
         if w.focus in CYCLE:

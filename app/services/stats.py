@@ -93,7 +93,7 @@ def overview():
             by_focus[s["focus"]]["volume"] += s["volume"]
             by_focus[s["focus"]]["sets"] += s["sets"]
 
-    # Fréquence par jour de semaine : est-ce que le planning lun/mer/ven/sam
+    # Fréquence par jour de semaine : est-ce que le planning lun/mer/ven
     # est tenu, ou est-ce que les séances glissent ?
     weekdays = [0] * 7
     for s in sessions:

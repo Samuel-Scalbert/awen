@@ -100,15 +100,24 @@
       {% for r in rows %}
       <tr>
         <td><a href="{{ url_for('stats.exercise_stats', pe_id=r.pe.id) }}">{{ r.pe.name }}</a>
-          <br><small class="muted">{{ r.pe.session_type|upper }}</small></td>
+          <br><small class="muted">{{ r.pe.session_type|upper }}{% if r.pe.block == 'plyo' %} · plyo{% endif %}</small></td>
         <td>{{ r.sessions }}</td>
         <td>{{ r.n_sets }}</td>
+        {# La plyométrie ne se mesure ni en volume ni en kilos : afficher
+           « 0 kg » laisserait croire à un exercice raté. #}
+        {% if r.pe.block == 'plyo' %}
+        <td class="muted">poids du corps</td>
+        <td class="muted">—</td>
+        <td>{% if r.best_reps %}{{ r.best_reps }} reps{% else %}—{% endif %}</td>
+        <td class="muted">—</td>
+        {% else %}
         <td>{{ kg(r.volume) }}</td>
         <td>{% if r.first_weight is not none %}
             {{ '%g'|format(r.first_weight) }} → <strong>{{ '%g'|format(r.pe.weight_kg) }}</strong> kg
             {% else %}—{% endif %}</td>
         <td>{% if r.best_weight %}{{ '%g'|format(r.best_weight) }} kg × {{ r.best_reps }}{% else %}—{% endif %}</td>
         <td>{{ r.best_e1rm ~ ' kg' if r.best_e1rm else '—' }}</td>
+        {% endif %}
         <td>{% if r.in_range is not none %}
             <span class="meter"><span style="width:{{ r.in_range }}%"></span></span>
             {{ r.in_range }} %{% else %}—{% endif %}</td>

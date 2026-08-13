@@ -3,29 +3,43 @@
 {% block content %}
 <div class="page-head">
   <h2>Programme PPL</h2>
-  <p class="sub">4 séances par semaine, rotation continue Push / Pull / Legs.</p>
+  <p class="sub">3 séances par semaine (Push / Pull / Legs), chacune ouverte par
+    20 min de plyométrie pour la détente au volley.</p>
   <div class="page-links">
     <a href="{{ url_for('workout.list_workouts') }}">← Séances</a>
     <a href="{{ url_for('workout.session') }}">▶️ Séance du jour</a>
   </div>
 </div>
 
-<h3 class="section-title">Principe de la rotation</h3>
-<p>Les 3 séances tournent en continu : chaque muscle est travaillé ~1,3×/semaine et le
-cycle se répète toutes les 3 semaines. Jours conseillés : lundi, mercredi, vendredi,
-samedi (jamais plus de 2 jours consécutifs).</p>
+<h3 class="section-title">Principe de la semaine</h3>
+<p>3 séances par semaine : <strong>lundi Push, mercredi Pull, vendredi Legs</strong>.
+Chaque groupe musculaire passe une fois par semaine, avec au moins un jour de repos
+entre deux séances. La rotation reste continue : si une séance saute, la suivante
+reprend là où le cycle s'était arrêté, pour qu'aucun groupe ne soit sacrifié deux
+fois de suite.</p>
 <div class="table-wrap">
   <table>
     <thead>
-      <tr><th>Semaine</th><th>Séance 1</th><th>Séance 2</th><th>Séance 3</th><th>Séance 4</th></tr>
+      <tr><th>Lundi</th><th>Mardi</th><th>Mercredi</th><th>Jeudi</th><th>Vendredi</th><th>Week-end</th></tr>
     </thead>
     <tbody>
-      <tr><td>1</td><td>Push</td><td>Pull</td><td>Legs</td><td>Push</td></tr>
-      <tr><td>2</td><td>Pull</td><td>Legs</td><td>Push</td><td>Pull</td></tr>
-      <tr><td>3</td><td>Legs</td><td>Push</td><td>Pull</td><td>Legs</td></tr>
+      <tr><td>Push</td><td class="muted">repos</td><td>Pull</td><td class="muted">repos</td>
+          <td>Legs</td><td class="muted">repos / volley</td></tr>
     </tbody>
   </table>
 </div>
+
+<h3 class="section-title">Bloc plyométrie — 20 min par séance</h3>
+<p>Chaque séance s'ouvre par 20 minutes de pliométrie orientée <strong>détente
+verticale pour le volley</strong>. Il est placé <strong>en début de séance, avant les
+charges</strong> — y compris le jour des jambes : un saut se travaille sur un système
+nerveux frais. Sur des jambes déjà fatiguées, la hauteur chute, le temps de contact au
+sol s'allonge, et on entraîne exactement l'inverse de ce qu'on cherche (en plus du
+risque de blessure).</p>
+<p>La plyométrie <strong>ne progresse pas en kilos</strong> mais en qualité : hauteur de
+box, explosivité, temps de contact au sol le plus court possible. Le nombre de
+répétitions reste volontairement bas — dès que la hauteur baisse, la série ne sert plus
+à rien, il vaut mieux l'arrêter.</p>
 
 <h3 class="section-title">Progression</h3>
 <p>Haut de la fourchette atteint sur toutes les séries → la charge monte à la fin de la
@@ -37,14 +51,12 @@ Surperformance (max + 3 reps partout) → double palier. Toutes les séries sous
 <p class="muted">Mises à jour automatiquement par la progression — corrige-les à la main
 si besoin (mauvaise saisie, machine différente…).</p>
 
-{% for stype, exercises in groups %}
-<h4>{{ {'push': '💪 PUSH — pectoraux, épaules, triceps',
-        'pull': '🔙 PULL — dos, biceps, avant-bras',
-        'legs': '🦵 LEGS — quadriceps, ischios, mollets'}[stype] }}</h4>
+{% macro prog_table(exercises, plyo=False) %}
 <div class="table-wrap">
   <table class="prog">
     <thead>
-      <tr><th>Exercice</th><th>Séries</th><th>Reps</th><th>Charge (kg)</th><th></th></tr>
+      <tr><th>Exercice</th><th>Séries</th><th>Reps</th>
+          <th>{{ 'Repos (s)' if plyo else 'Charge (kg)' }}</th><th></th></tr>
     </thead>
     <tbody>
       {% for pe in exercises %}
@@ -56,8 +68,9 @@ si besoin (mauvaise saisie, machine différente…).</p>
                    value="{{ pe.rep_min }}" aria-label="Reps min">-<input
                    form="pe{{ pe.id }}" name="rep_max" type="number" min="1" max="99"
                    value="{{ pe.rep_max }}" aria-label="Reps max"></td>
-        <td><input form="pe{{ pe.id }}" name="weight_kg" type="number" step="0.5" min="0"
-                   value="{{ '%g'|format(pe.weight_kg) }}" aria-label="Charge"></td>
+        <td>{% if plyo %}<span class="muted">{{ pe.rest_sec }}</span>
+            {% else %}<input form="pe{{ pe.id }}" name="weight_kg" type="number" step="0.5"
+                   min="0" value="{{ '%g'|format(pe.weight_kg) }}" aria-label="Charge">{% endif %}</td>
         <td><button class="btn-ghost small" form="pe{{ pe.id }}" type="submit"
                     title="Enregistrer">💾</button></td>
       </tr>
@@ -69,8 +82,21 @@ si besoin (mauvaise saisie, machine différente…).</p>
 <form id="pe{{ pe.id }}" method="post" style="display:none"
       action="{{ url_for('workout.update_programme') }}">
   <input type="hidden" name="id" value="{{ pe.id }}">
+  {% if plyo %}<input type="hidden" name="weight_kg" value="0">{% endif %}
 </form>
 {% endfor %}
+{% endmacro %}
+
+{% for stype, plyo_ex, force_ex in groups %}
+<h4>{{ {'push': '💪 PUSH — pectoraux, épaules, triceps',
+        'pull': '🔙 PULL — dos, biceps, avant-bras',
+        'legs': '🦵 LEGS — quadriceps, ischios, mollets'}[stype] }}</h4>
+{% if plyo_ex %}
+<p class="muted"><strong>1. Plyométrie</strong> (20 min, en premier)</p>
+{{ prog_table(plyo_ex, plyo=True) }}
+<p class="muted"><strong>2. Force</strong></p>
+{% endif %}
+{{ prog_table(force_ex) }}
 {% endfor %}
 
 <p><strong>Rappel prise de masse :</strong> le programme ne fonctionne que si les calories

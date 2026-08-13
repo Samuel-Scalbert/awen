@@ -4,7 +4,12 @@ from datetime import timedelta
 from ..models import db
 
 CYCLE = ["Push", "Pull", "Legs"]
-TRAINING_WEEKDAYS = [0, 2, 4, 5]  # lundi, mercredi, vendredi, samedi
+# 3 séances par semaine : lundi, mercredi, vendredi. Avec un cycle de 3 séances,
+# chaque muscle passe une fois par semaine et tombe le même jour d'une semaine
+# sur l'autre. La rotation reste continue (et non figée par jour) : si une
+# séance saute, la suivante reprend là où le cycle s'était arrêté, plutôt que de
+# sacrifier définitivement un groupe musculaire.
+TRAINING_WEEKDAYS = [0, 2, 4]
 
 
 def next_session_type(last_focus):
