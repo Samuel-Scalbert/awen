@@ -205,7 +205,7 @@ main {
   z-index: 20;
   bottom: 0; left: 0; right: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 2px;
   padding: .3rem .3rem calc(.3rem + env(safe-area-inset-bottom));
   background: rgba(26, 30, 38, .93);

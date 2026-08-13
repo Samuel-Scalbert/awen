@@ -21,6 +21,8 @@
       <nav class="nav-desktop">
         <a href="{{ url_for('workout.list_workouts') }}"
            class="{{ 'active' if bp == 'workout' }}">🏋️ Muscu</a>
+        <a href="{{ url_for('stats.dashboard') }}"
+           class="{{ 'active' if bp == 'stats' }}">📊 Stats</a>
         <a href="{{ url_for('meals.list_meals') }}"
            class="{{ 'active' if bp == 'meals' }}">🍚 Repas</a>
         <a href="{{ url_for('calendar.view_calendar') }}"
@@ -47,6 +49,8 @@
       <span class="ico">🏠</span> Accueil</a>
     <a href="{{ url_for('workout.list_workouts') }}" class="{{ 'active' if bp == 'workout' }}">
       <span class="ico">🏋️</span> Muscu</a>
+    <a href="{{ url_for('stats.dashboard') }}" class="{{ 'active' if bp == 'stats' }}">
+      <span class="ico">📊</span> Stats</a>
     <a href="{{ url_for('meals.list_meals') }}" class="{{ 'active' if bp == 'meals' }}">
       <span class="ico">🍚</span> Repas</a>
     <a href="{{ url_for('calendar.view_calendar') }}" class="{{ 'active' if bp == 'calendar' }}">
