@@ -1,5 +1,5 @@
 import calendar as pycal
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, render_template, request
 
@@ -37,6 +37,17 @@ def view_calendar():
     planned = {d: focus for d, focus in plan_upcoming(last_focus, after, count=16)
                if d not in done_by_day}
 
+    # Un seul téléchargement du flux : la grille a besoin du passé du mois
+    # affiché, la liste du bas seulement du futur.
+    all_events, cal_status = fetch_events(limit=None, include_past=True)
+    events_by_day = {}
+    for e in all_events:
+        d = e["start"]
+        events_by_day.setdefault(d.date(), []).append({
+            "title": e["title"],
+            "time": "" if e["all_day"] else "{:02d}h{:02d}".format(d.hour, d.minute),
+        })
+
     weeks = []
     for wk in pycal.Calendar().monthdatescalendar(year, month):
         weeks.append([{
@@ -45,6 +56,7 @@ def view_calendar():
             "is_today": d == today,
             "done": done_by_day.get(d, []),
             "planned": planned.get(d),
+            "events": events_by_day.get(d, []),
         } for d in wk])
 
     prev_y, prev_m = (year - 1, 12) if month == 1 else (year, month - 1)
@@ -52,8 +64,9 @@ def view_calendar():
 
     # Formatage en français ici : strftime('%a') suivrait la locale du
     # système, qui renvoie « Sat » sur cette machine.
-    events, cal_status = fetch_events(limit=10)
-    for e in events:
+    now = datetime.now(timezone.utc)
+    upcoming = [e for e in all_events if e["start"] >= now][:10]
+    for e in upcoming:
         d = e["start"]
         e["label"] = "{} {:02d}/{:02d} à {:02d}h{:02d}".format(
             DAYS_FR[d.weekday()], d.day, d.month, d.hour, d.minute)
@@ -61,5 +74,5 @@ def view_calendar():
         "calendar.html", weeks=weeks, days=DAYS_FR,
         month_label=f"{MONTHS_FR[month]} {year}",
         prev_y=prev_y, prev_m=prev_m, next_y=next_y, next_m=next_m,
-        events=events, cal_status=cal_status,
+        events=upcoming, cal_status=cal_status,
     )

@@ -33,6 +33,15 @@
            title="Séance {{ cell.planned }} prévue — clique pour la démarrer"
           ><i class="badge-ico">🏋️</i>{{ cell.planned }}</a>
       {% endif %}
+      {% for ev in cell.events[:2] %}
+        <span class="badge event" title="{{ ev.time }} {{ ev.title }}"
+          >{% if ev.time %}<i class="ev-time">{{ ev.time }}</i>{% endif %}{{ ev.title }}</span>
+      {% endfor %}
+      {% if cell.events|length > 2 %}
+        <span class="badge event more"
+              title="{{ cell.events|length }} évènements ce jour-là"
+          >+{{ cell.events|length - 2 }}</span>
+      {% endif %}
     </td>
     {% endfor %}
   </tr>
@@ -41,9 +50,10 @@
 </table>
 
 <ul class="legend">
-  <li><span class="badge done">✅</span> séance faite</li>
+  <li><span class="badge done">✅ Push</span> séance faite</li>
   <li><span class="badge done pending">⏳</span> en cours</li>
-  <li><span class="badge plan">🏋️</span> prévue — clique pour la lancer</li>
+  <li><span class="badge plan">🏋️ Pull</span> prévue — clique pour la lancer</li>
+  <li><span class="badge event"><i class="ev-time">9h</i>…</span> évènement agenda</li>
 </ul>
 
 <h3 class="section-title">Prochains évènements</h3>

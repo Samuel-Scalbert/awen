@@ -52,9 +52,14 @@ def normalize_ics_url(url):
             .format(urllib.parse.quote(cal_id, safe="")))
 
 
-def fetch_events(limit=10):
+def fetch_events(limit=10, include_past=False):
     """Renvoie (events, status). status ∈ ok / not_configured / no_lib /
-    unreachable / not_a_calendar / unreadable."""
+    unreachable / not_a_calendar / unreadable.
+
+    include_past=True conserve les évènements déjà passés : la grille
+    mensuelle doit pouvoir remplir les jours du début de mois, alors que la
+    liste « prochains évènements » ne veut que le futur.
+    """
     raw = current_app.config.get("SAMSUNG_CALENDAR_ICS_URL")
     if not raw:
         return [], "not_configured"
@@ -91,16 +96,19 @@ def fetch_events(limit=10):
         start = start_prop.dt
         if isinstance(start, datetime):
             start_dt = start if start.tzinfo else start.replace(tzinfo=timezone.utc)
+            all_day = False
         else:  # évènement sur la journée entière
             start_dt = datetime.combine(start, datetime.min.time(), timezone.utc)
-        if start_dt >= now:
+            all_day = True
+        if include_past or start_dt >= now:
             events.append({
                 "title": str(comp.get("SUMMARY", "(sans titre)")),
                 "start": start_dt,
+                "all_day": all_day,
             })
 
     events.sort(key=lambda e: e["start"])
-    return events[:limit], "ok"
+    return (events if limit is None else events[:limit]), "ok"
 
 
 def get_upcoming_events(limit=10):

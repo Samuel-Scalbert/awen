@@ -875,7 +875,7 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
   font-size: .68rem;
 }
 .cal td {
-  height: 4.75rem;
+  height: 6.25rem;          /* de la place pour la séance + 2 évènements */
   padding: .3rem;
   vertical-align: top;
   border-right: 1px solid var(--border);
@@ -900,14 +900,48 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.badge.done { background: var(--accent); color: var(--on-accent); }
-.badge.done.pending { background: var(--warn); color: var(--on-accent); }
-.badge.plan {
-  border: 1px dashed var(--accent-ring);
-  color: var(--accent);
-  background: rgba(110, 231, 183, .05);
+/* Les séances de muscu dominent la grille : vert plein, texte sombre en gras
+   et une lueur discrète. Les évènements du calendrier restent volontairement
+   en retrait pour ne pas leur voler la vedette. */
+.badge.done {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 800;
+  letter-spacing: .01em;
+  box-shadow: 0 0 0 1px var(--accent), 0 2px 8px -2px var(--accent-ring);
 }
-.badge.plan:hover { background: var(--accent-soft); text-decoration: none; }
+.badge.done.pending {
+  background: var(--warn);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 1px var(--warn);
+}
+.badge.plan {
+  border: 1px dashed var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 700;
+}
+.badge.plan:hover {
+  background: var(--accent);
+  color: var(--on-accent);
+  text-decoration: none;
+}
+/* Évènements du calendrier : gris-bleu discret, jamais vert. */
+.badge.event {
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  color: var(--muted-strong);
+  font-weight: 500;
+}
+.badge.event .ev-time {
+  font-style: normal;
+  margin-right: .25em;
+  color: var(--info);
+  font-weight: 700;
+}
+.badge.event.more { text-align: center; color: var(--muted); }
+/* Un jour d'entraînement se repère d'un coup d'œil, même sans lire */
+.cal td:has(.badge.done) { background: rgba(110, 231, 183, .07); }
 
 .legend {
   display: flex;
@@ -1077,8 +1111,10 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
 @media (max-width: 34rem) {
   .exo { flex-direction: column; gap: var(--s-3); }
   .exo img { width: 100%; aspect-ratio: 16 / 9; }
-  .cal td { height: 4rem; padding: .2rem; }
+  .cal td { height: 5rem; padding: .2rem; }
   .badge { font-size: .62rem; padding: .05rem .25rem; }
+  /* Trop étroit pour un intitulé : on garde l'heure, qui situe la journée. */
+  .cal .badge.event { font-size: .58rem; }
   /* Les cases font ~45px de large : l'emoji volerait la place au nom de la
      séance, qui est la seule information utile en un coup d'œil. */
   .cal .badge-ico { display: none; }
