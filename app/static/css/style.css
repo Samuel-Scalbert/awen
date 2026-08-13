@@ -923,6 +923,14 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
 .legend .badge { display: inline-block; margin: 0; padding: .05rem .3rem; }
 .badge-ico { font-style: normal; margin-right: .2em; }
 
+.cal-error {
+  padding: var(--s-3) var(--s-4);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  border-left-width: 3px;
+  border-radius: var(--r);
+  font-size: .92rem;
+}
 .events { list-style: none; padding: 0; margin: 0; }
 .events li {
   padding: .6rem .9rem;

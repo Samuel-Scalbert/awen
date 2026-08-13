@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from flask import Blueprint, render_template, request
 
 from ..models import Workout
-from ..services.calendar_sync import get_upcoming_events
+from ..services.calendar_sync import fetch_events
 from ..services.progression import CYCLE, plan_upcoming
 
 bp = Blueprint("calendar", __name__, url_prefix="/calendar")
@@ -50,9 +50,16 @@ def view_calendar():
     prev_y, prev_m = (year - 1, 12) if month == 1 else (year, month - 1)
     next_y, next_m = (year + 1, 1) if month == 12 else (year, month + 1)
 
+    # Formatage en français ici : strftime('%a') suivrait la locale du
+    # système, qui renvoie « Sat » sur cette machine.
+    events, cal_status = fetch_events(limit=10)
+    for e in events:
+        d = e["start"]
+        e["label"] = "{} {:02d}/{:02d} à {:02d}h{:02d}".format(
+            DAYS_FR[d.weekday()], d.day, d.month, d.hour, d.minute)
     return render_template(
         "calendar.html", weeks=weeks, days=DAYS_FR,
         month_label=f"{MONTHS_FR[month]} {year}",
         prev_y=prev_y, prev_m=prev_m, next_y=next_y, next_m=next_m,
-        events=get_upcoming_events(limit=10),
+        events=events, cal_status=cal_status,
     )

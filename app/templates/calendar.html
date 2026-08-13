@@ -47,12 +47,33 @@
 </ul>
 
 <h3 class="section-title">Prochains évènements</h3>
+{% if cal_status != 'ok' %}
+<p class="cal-error">
+  {% if cal_status == 'not_configured' %}
+    Aucun calendrier configuré : renseigne <code>SAMSUNG_CALENDAR_ICS_URL</code>
+    dans le <code>.env</code>.
+  {% elif cal_status == 'not_a_calendar' %}
+    ⚠️ L'adresse configurée ne renvoie pas un calendrier mais une page web.
+    Dans Google Agenda : <em>Paramètres → ton agenda → Intégrer l'agenda →
+    « Adresse secrète au format iCal »</em> (elle se termine par
+    <code>basic.ics</code>).
+  {% elif cal_status == 'unreachable' %}
+    ⚠️ Calendrier injoignable (réseau ou adresse invalide). Il sera réessayé
+    au prochain chargement.
+  {% elif cal_status == 'unreadable' %}
+    ⚠️ Le flux a bien été téléchargé mais n'a pas pu être lu.
+  {% elif cal_status == 'no_lib' %}
+    ⚠️ Module <code>icalendar</code> absent : <code>pip install -r requirements.txt</code>.
+  {% endif %}
+</p>
+{% endif %}
 <ul class="events">
   {% for e in events %}
-    <li>{{ e.start }} — {{ e.title }}</li>
+    <li><strong>{{ e.label }}</strong> — {{ e.title }}</li>
   {% else %}
-    <li class="muted">Aucun évènement — configure <code>SAMSUNG_CALENDAR_ICS_URL</code>
-      dans le <code>.env</code> pour synchroniser ton calendrier Samsung.</li>
+    {% if cal_status == 'ok' %}
+    <li class="muted">Calendrier connecté — aucun évènement à venir.</li>
+    {% endif %}
   {% endfor %}
 </ul>
 {% endblock %}
