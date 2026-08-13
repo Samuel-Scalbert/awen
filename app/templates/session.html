@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Séance {{ workout.focus }} — Awen{% endblock %}
 {% block content %}
-<h2>Séance {{ workout.focus }} — {{ workout.date.strftime('%d/%m/%Y') }}</h2>
+<div class="page-head">
+  <h2>Séance {{ workout.focus }}</h2>
+  <p class="sub">{{ workout.date.strftime('%d/%m/%Y') }} — le chrono de repos démarre à
+    chaque série validée, et le coach ajuste la charge pour la suivante.</p>
+</div>
 
 <div id="progress">
   <span id="progress-exo"></span>

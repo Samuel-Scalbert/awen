@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Jobs — Awen{% endblock %}
 {% block content %}
-<h2>💼 Jobs du jour</h2>
-<p><a href="{{ url_for('jobs.letters') }}">📄 Lettres de motivation</a></p>
+<div class="page-head">
+  <h2>💼 Jobs du jour</h2>
+  <p class="sub">Veille écrite chaque matin à 9h par le pipeline Claude cowork —
+    offres retenues en tête, offres écartées dans le compte rendu complet.</p>
+  <div class="page-links">
+    <a href="{{ url_for('jobs.letters') }}">📄 Lettres de motivation</a>
+  </div>
+</div>
 
 {% if reports is none %}
 <p>Le dossier de veille n'est pas configuré. Ajoute dans ton <code>.env</code> :</p>

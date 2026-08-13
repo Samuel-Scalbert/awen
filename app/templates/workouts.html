@@ -1,21 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Muscu — Awen{% endblock %}
 {% block content %}
-<h2>Séances de muscu</h2>
-<p>
-  <a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a> ·
-  <a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a>
-</p>
+<div class="page-head">
+  <h2>Séances de muscu</h2>
+  <p class="sub">Rotation continue Push / Pull / Legs — la charge s'ajuste toute seule
+    à la fin de chaque séance.</p>
+  <div class="page-links">
+    <a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a>
+    <a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a>
+  </div>
+</div>
 
 {% if current %}
 <a class="cta" href="{{ url_for('workout.session') }}">▶️ Reprendre la séance
-  {{ current.focus }} en cours ({{ current.sets|length }} séries faites)</a>
+  {{ current.focus }} ({{ current.sets|length }} séries faites)</a>
 {% else %}
 <a class="cta" href="{{ url_for('workout.session') }}">▶️ Démarrer la séance du jour
   — {{ next_type }}</a>
 {% endif %}
 
-<h3>Historique</h3>
+<h3 class="section-title">Historique</h3>
 <ul class="history">
   {% for w in workouts %}
   <li>

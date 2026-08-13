@@ -1,15 +1,87 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Tableau de bord</h2>
-<p>Bienvenue sur Awen, ton assistant perso pour l'été.</p>
+<div class="page-head">
+  <h2>Tableau de bord</h2>
+  <p class="sub">Ton assistant perso : muscu, meal prep, calendrier et recherche d'emploi,
+    hébergé à la maison.</p>
+</div>
+
+<h3 class="section-title">Aujourd'hui</h3>
 <ul class="cards">
-  <li><a href="{{ url_for('workout.session') }}">▶️ Séance du jour</a></li>
-  <li><a href="{{ url_for('workout.list_workouts') }}">🏋️ Séances de muscu</a></li>
-  <li><a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a></li>
-  <li><a href="{{ url_for('meals.list_meals') }}">🍚 Recettes meal prep</a></li>
-  <li><a href="{{ url_for('meals.nutrition') }}">🎯 Plan nutrition</a></li>
-  <li><a href="{{ url_for('meals.shopping_list') }}">🛒 Liste de courses</a></li>
-  <li><a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a></li>
-  <li><a href="{{ url_for('jobs.daily_jobs') }}">💼 Jobs du jour</a></li>
+  <li>
+    <a class="primary" href="{{ url_for('workout.session') }}">
+      <span class="ico">▶️</span>
+      <span><span class="label">Séance du jour</span>
+        <span class="desc">Coach guidé, série par série</span></span>
+    </a>
+  </li>
+  <li>
+    <a href="{{ url_for('jobs.daily_jobs') }}">
+      <span class="ico">💼</span>
+      <span><span class="label">Jobs du jour</span>
+        <span class="desc">Veille de 9h du pipeline Claude</span></span>
+    </a>
+  </li>
+</ul>
+
+<h3 class="section-title">Muscu</h3>
+<ul class="cards">
+  <li>
+    <a href="{{ url_for('workout.list_workouts') }}">
+      <span class="ico">🏋️</span>
+      <span><span class="label">Séances</span>
+        <span class="desc">Historique et progression</span></span>
+    </a>
+  </li>
+  <li>
+    <a href="{{ url_for('workout.programme') }}">
+      <span class="ico">📋</span>
+      <span><span class="label">Programme PPL</span>
+        <span class="desc">Charges actuelles, modifiables</span></span>
+    </a>
+  </li>
+  <li>
+    <a href="{{ url_for('calendar.view_calendar') }}">
+      <span class="ico">📅</span>
+      <span><span class="label">Calendrier</span>
+        <span class="desc">Séances faites et à venir</span></span>
+    </a>
+  </li>
+</ul>
+
+<h3 class="section-title">Nutrition</h3>
+<ul class="cards">
+  <li>
+    <a href="{{ url_for('meals.list_meals') }}">
+      <span class="ico">🍚</span>
+      <span><span class="label">Recettes meal prep</span>
+        <span class="desc">Ingrédients, macros, préparation</span></span>
+    </a>
+  </li>
+  <li>
+    <a href="{{ url_for('meals.nutrition') }}">
+      <span class="ico">🎯</span>
+      <span><span class="label">Plan nutrition</span>
+        <span class="desc">Objectif 64 → 72 kg</span></span>
+    </a>
+  </li>
+  <li>
+    <a href="{{ url_for('meals.shopping_list') }}">
+      <span class="ico">🛒</span>
+      <span><span class="label">Liste de courses</span>
+        <span class="desc">Générée selon tes portions</span></span>
+    </a>
+  </li>
+</ul>
+
+<h3 class="section-title">Recherche d'emploi</h3>
+<ul class="cards">
+  <li>
+    <a href="{{ url_for('jobs.letters') }}">
+      <span class="ico">📄</span>
+      <span><span class="label">Lettres de motivation</span>
+        <span class="desc">Générées par Claude, à télécharger</span></span>
+    </a>
+  </li>
 </ul>
 {% endblock %}

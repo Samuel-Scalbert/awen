@@ -12,7 +12,8 @@ DAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanch
 
 
 def _date_fr(d):
-    return f"{DAYS_FR[d.weekday()]} {d.day} {MONTHS_FR[d.month]} {d.year}"
+    label = f"{DAYS_FR[d.weekday()]} {d.day} {MONTHS_FR[d.month]} {d.year}"
+    return label[0].upper() + label[1:]
 
 
 def _render_md(text):

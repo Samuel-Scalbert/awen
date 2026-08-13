@@ -1,8 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Lettres de motivation — Awen{% endblock %}
 {% block content %}
-<h2>📄 Lettres de motivation</h2>
-<p><a href="{{ url_for('jobs.daily_jobs') }}">← Jobs du jour</a></p>
+<div class="page-head">
+  <h2>📄 Lettres de motivation</h2>
+  <p class="sub">Générées par Claude — à lire ici ou à télécharger pour postuler
+    depuis le téléphone.</p>
+  <div class="page-links">
+    <a href="{{ url_for('jobs.daily_jobs') }}">← Jobs du jour</a>
+  </div>
+</div>
 
 {% if letters is none %}
 <p class="muted">Dossier introuvable — vérifie <code>JOB_SEARCH_DIR</code> dans le <code>.env</code>

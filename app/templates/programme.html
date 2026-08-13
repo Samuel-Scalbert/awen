@@ -1,43 +1,70 @@
 {% extends "base.html" %}
 {% block title %}Programme PPL — Awen{% endblock %}
 {% block content %}
-<h2>Programme PPL — 4 séances/semaine (rotation continue)</h2>
-<p><a href="{{ url_for('workout.list_workouts') }}">← Retour aux séances</a></p>
+<div class="page-head">
+  <h2>Programme PPL</h2>
+  <p class="sub">4 séances par semaine, rotation continue Push / Pull / Legs.</p>
+  <div class="page-links">
+    <a href="{{ url_for('workout.list_workouts') }}">← Séances</a>
+    <a href="{{ url_for('workout.session') }}">▶️ Séance du jour</a>
+  </div>
+</div>
 
-<h3>Principe de la rotation</h3>
-<p>4 séances/semaine, les 3 séances tournent en continu. Chaque muscle est travaillé ~1,3×/semaine et le cycle se répète toutes les 3 semaines.</p>
-<table>
-  <tr><th>Semaine</th><th>Séance 1</th><th>Séance 2</th><th>Séance 3</th><th>Séance 4</th></tr>
-  <tr><td>1</td><td>Push</td><td>Pull</td><td>Legs</td><td>Push</td></tr>
-  <tr><td>2</td><td>Pull</td><td>Legs</td><td>Push</td><td>Pull</td></tr>
-  <tr><td>3</td><td>Legs</td><td>Push</td><td>Pull</td><td>Legs</td></tr>
-</table>
-<p>Jours conseillés : lundi / mercredi / vendredi / samedi (jamais plus de 2 jours consécutifs).</p>
+<h3 class="section-title">Principe de la rotation</h3>
+<p>Les 3 séances tournent en continu : chaque muscle est travaillé ~1,3×/semaine et le
+cycle se répète toutes les 3 semaines. Jours conseillés : lundi, mercredi, vendredi,
+samedi (jamais plus de 2 jours consécutifs).</p>
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Semaine</th><th>Séance 1</th><th>Séance 2</th><th>Séance 3</th><th>Séance 4</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Push</td><td>Pull</td><td>Legs</td><td>Push</td></tr>
+      <tr><td>2</td><td>Pull</td><td>Legs</td><td>Push</td><td>Pull</td></tr>
+      <tr><td>3</td><td>Legs</td><td>Push</td><td>Pull</td><td>Legs</td></tr>
+    </tbody>
+  </table>
+</div>
 
-<h3>Progression (double progression)</h3>
-<p>Quand tu atteins le haut de la fourchette sur toutes les séries → la charge monte automatiquement à la fin de la séance (+2,5 kg haut du corps, +5 kg jambes) et tu repars au bas de la fourchette. Grosse surperformance (max + 3 reps partout) → double palier. Toutes les séries sous le minimum → deload automatique. Repos ~60 s entre les séries.</p>
+<h3 class="section-title">Progression</h3>
+<p>Haut de la fourchette atteint sur toutes les séries → la charge monte à la fin de la
+séance (+2,5 kg haut du corps, +5 kg jambes) et tu repars au bas de la fourchette.
+Surperformance (max + 3 reps partout) → double palier. Toutes les séries sous le minimum
+→ deload automatique. Repos ~60 s entre les séries.</p>
 
-<p class="muted">Les charges ci-dessous sont <strong>les charges actuelles</strong>, mises à jour
-automatiquement par la progression — tu peux les corriger à la main si besoin (mauvaise saisie,
-machine différente…).</p>
+<h3 class="section-title">Charges actuelles</h3>
+<p class="muted">Mises à jour automatiquement par la progression — corrige-les à la main
+si besoin (mauvaise saisie, machine différente…).</p>
 
 {% for stype, exercises in groups %}
-<h3>{{ {'push': 'PUSH (pectoraux, épaules, triceps)',
-        'pull': 'PULL (dos, biceps, avant-bras)',
-        'legs': 'LEGS (quadriceps, ischios, mollets + rappel)'}[stype] }}</h3>
-<table class="prog">
-  <tr><th>Exercice</th><th>Séries</th><th>Reps</th><th>Charge (kg)</th><th></th></tr>
-  {% for pe in exercises %}
-  <tr>
-    <td>{{ pe.name }}{% if pe.notes %}<br><small class="muted">{{ pe.notes }}</small>{% endif %}</td>
-    <td><input form="pe{{ pe.id }}" name="sets" type="number" min="1" max="10" value="{{ pe.sets }}"></td>
-    <td><input form="pe{{ pe.id }}" name="rep_min" type="number" min="1" max="99" value="{{ pe.rep_min }}">-<input
-           form="pe{{ pe.id }}" name="rep_max" type="number" min="1" max="99" value="{{ pe.rep_max }}"></td>
-    <td><input form="pe{{ pe.id }}" name="weight_kg" type="number" step="0.5" min="0" value="{{ '%g'|format(pe.weight_kg) }}"></td>
-    <td><button form="pe{{ pe.id }}" type="submit" title="Enregistrer">💾</button></td>
-  </tr>
-  {% endfor %}
-</table>
+<h4>{{ {'push': '💪 PUSH — pectoraux, épaules, triceps',
+        'pull': '🔙 PULL — dos, biceps, avant-bras',
+        'legs': '🦵 LEGS — quadriceps, ischios, mollets'}[stype] }}</h4>
+<div class="table-wrap">
+  <table class="prog">
+    <thead>
+      <tr><th>Exercice</th><th>Séries</th><th>Reps</th><th>Charge (kg)</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for pe in exercises %}
+      <tr>
+        <td>{{ pe.name }}{% if pe.notes %}<br><small class="muted">{{ pe.notes }}</small>{% endif %}</td>
+        <td><input form="pe{{ pe.id }}" name="sets" type="number" min="1" max="10"
+                   value="{{ pe.sets }}" aria-label="Séries pour {{ pe.name }}"></td>
+        <td><input form="pe{{ pe.id }}" name="rep_min" type="number" min="1" max="99"
+                   value="{{ pe.rep_min }}" aria-label="Reps min">-<input
+                   form="pe{{ pe.id }}" name="rep_max" type="number" min="1" max="99"
+                   value="{{ pe.rep_max }}" aria-label="Reps max"></td>
+        <td><input form="pe{{ pe.id }}" name="weight_kg" type="number" step="0.5" min="0"
+                   value="{{ '%g'|format(pe.weight_kg) }}" aria-label="Charge"></td>
+        <td><button class="btn-ghost small" form="pe{{ pe.id }}" type="submit"
+                    title="Enregistrer">💾</button></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% for pe in exercises %}
 <form id="pe{{ pe.id }}" method="post" style="display:none"
       action="{{ url_for('workout.update_programme') }}">
@@ -46,6 +73,7 @@ machine différente…).</p>
 {% endfor %}
 {% endfor %}
 
-<p><strong>Rappel prise de masse :</strong> le programme ne fonctionne que si les calories suivent
-(voir <a href="{{ url_for('meals.nutrition') }}">plan nutrition</a>). Pèse-toi 1×/semaine, le matin à jeun.</p>
+<p><strong>Rappel prise de masse :</strong> le programme ne fonctionne que si les calories
+suivent (voir <a href="{{ url_for('meals.nutrition') }}">plan nutrition</a>).
+Pèse-toi 1×/semaine, le matin à jeun.</p>
 {% endblock %}

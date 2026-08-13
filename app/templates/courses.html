@@ -1,9 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Liste de courses — Awen{% endblock %}
 {% block content %}
-<h2>🛒 Liste de courses</h2>
-<p class="muted">Coche ce que tu as <strong>déjà dans le frigo</strong>, puis génère
-la liste finale — elle ne contiendra que ce qu'il te manque.</p>
+<div class="page-head">
+  <h2>🛒 Liste de courses</h2>
+  <p class="sub">Coche ce que tu as <strong>déjà dans le frigo</strong>, puis génère la
+    liste finale — elle ne contiendra que ce qu'il te manque.</p>
+  <div class="page-links">
+    <a href="{{ url_for('meals.list_meals') }}">← Recettes</a>
+    <a href="{{ url_for('meals.nutrition') }}">🎯 Plan nutrition</a>
+  </div>
+</div>
 
 <details class="batch-form">
   <summary>⚙️ Portions voulues cette semaine</summary>
@@ -21,7 +27,7 @@ la liste finale — elle ne contiendra que ce qu'il te manque.</p>
 
 <div id="checklist">
   {% for s in sections %}
-  <h3>{{ s.name }} <small class="muted">— {{ s.portions }} portion{{ 's' if s.portions > 1 }}</small></h3>
+  <h3 class="section-title plain">{{ s.name }} <small class="muted">— {{ s.portions }} portion{{ 's' if s.portions > 1 }}</small></h3>
   <ul class="shop">
     {% for item in s.lines %}
     <li><label><input type="checkbox" class="have"> <span>{{ item }}</span></label></li>
@@ -29,7 +35,7 @@ la liste finale — elle ne contiendra que ce qu'il te manque.</p>
   </ul>
   {% endfor %}
 
-  <h3>Base de la semaine <small>(petits-déjs, soirs, dîners)</small></h3>
+  <h3 class="section-title plain">Base de la semaine <small class="muted">(petits-déjs, soirs, dîners)</small></h3>
   <ul class="shop">
     {% for item in staples %}
     <li><label><input type="checkbox" class="have"> <span>{{ item }}</span></label></li>
@@ -41,7 +47,7 @@ la liste finale — elle ne contiendra que ce qu'il te manque.</p>
   <button type="button" id="gen">📋 Générer la liste finale</button>
 </div>
 <div id="result" hidden>
-  <h3>À acheter</h3>
+  <h3 class="section-title">À acheter</h3>
   <pre id="final"></pre>
   <button type="button" id="copy">📱 Copier pour le téléphone</button>
   <span id="copied" class="muted" hidden>Copié ✅</span>

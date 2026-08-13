@@ -2,20 +2,35 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Awen">
   <title>{% block title %}Awen{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🌀</text></svg>">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-  <header>
-    <h1><a href="{{ url_for('main.index') }}">Awen 🌀</a></h1>
-    <nav>
-      <a href="{{ url_for('workout.list_workouts') }}">Muscu</a>
-      <a href="{{ url_for('meals.list_meals') }}">Meal prep</a>
-      <a href="{{ url_for('calendar.view_calendar') }}">Calendrier</a>
-      <a href="{{ url_for('jobs.daily_jobs') }}">Jobs</a>
-    </nav>
+  {% set bp = request.blueprint %}
+  <header class="app-header">
+    <div class="bar">
+      <a class="brand" href="{{ url_for('main.index') }}">
+        <span class="glyph">🌀</span> Awen
+      </a>
+      <nav class="nav-desktop">
+        <a href="{{ url_for('workout.list_workouts') }}"
+           class="{{ 'active' if bp == 'workout' }}">🏋️ Muscu</a>
+        <a href="{{ url_for('meals.list_meals') }}"
+           class="{{ 'active' if bp == 'meals' }}">🍚 Repas</a>
+        <a href="{{ url_for('calendar.view_calendar') }}"
+           class="{{ 'active' if bp == 'calendar' }}">📅 Calendrier</a>
+        <a href="{{ url_for('jobs.daily_jobs') }}"
+           class="{{ 'active' if bp == 'jobs' }}">💼 Jobs</a>
+      </nav>
+    </div>
   </header>
+
   <main>
     {% with msgs = get_flashed_messages() %}
       {% if msgs %}
@@ -26,5 +41,18 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+
+  <nav class="nav-mobile">
+    <a href="{{ url_for('main.index') }}" class="{{ 'active' if bp == 'main' }}">
+      <span class="ico">🏠</span> Accueil</a>
+    <a href="{{ url_for('workout.list_workouts') }}" class="{{ 'active' if bp == 'workout' }}">
+      <span class="ico">🏋️</span> Muscu</a>
+    <a href="{{ url_for('meals.list_meals') }}" class="{{ 'active' if bp == 'meals' }}">
+      <span class="ico">🍚</span> Repas</a>
+    <a href="{{ url_for('calendar.view_calendar') }}" class="{{ 'active' if bp == 'calendar' }}">
+      <span class="ico">📅</span> Agenda</a>
+    <a href="{{ url_for('jobs.daily_jobs') }}" class="{{ 'active' if bp == 'jobs' }}">
+      <span class="ico">💼</span> Jobs</a>
+  </nav>
 </body>
 </html>

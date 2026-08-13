@@ -1,30 +1,50 @@
 {% extends "base.html" %}
 {% block title %}Meal prep — Awen{% endblock %}
 {% block content %}
-<h2>Recettes meal prep</h2>
-<p>
-  <a href="{{ url_for('meals.nutrition') }}">🎯 Plan nutrition</a> ·
-  <a href="{{ url_for('meals.shopping_list') }}">🛒 Liste de courses</a>
-</p>
-<form method="post" action="{{ url_for('meals.add_recipe') }}">
-  <input name="name" placeholder="Nom de la recette" required>
-  <input name="servings" type="number" min="1" value="1" title="Portions par recette"
-         placeholder="portions">
-  <input name="calories" type="number" placeholder="kcal / portion">
-  <input name="protein_g" type="number" step="0.1" placeholder="Protéines (g)">
-  <input name="carbs_g" type="number" step="0.1" placeholder="Glucides (g)">
-  <input name="fat_g" type="number" step="0.1" placeholder="Lipides (g)">
-  <label><input type="checkbox" name="is_favorite"> Favori</label>
-  <textarea name="ingredients" placeholder="Ingrédients"></textarea>
-  <textarea name="steps" placeholder="Préparation"></textarea>
-  <button type="submit">Ajouter</button>
-</form>
+<div class="page-head">
+  <h2>Recettes meal prep</h2>
+  <p class="sub">Les macros sont par portion — c'est ce qui alimente la liste de courses.</p>
+  <div class="page-links">
+    <a href="{{ url_for('meals.nutrition') }}">🎯 Plan nutrition</a>
+    <a href="{{ url_for('meals.shopping_list') }}">🛒 Liste de courses</a>
+  </div>
+</div>
+
+<details class="batch-form">
+  <summary>➕ Ajouter une recette</summary>
+  <form class="form-grid" method="post" action="{{ url_for('meals.add_recipe') }}">
+    <label class="field field-wide full"><span>Nom de la recette</span>
+      <input name="name" placeholder="Ex : Poulet riz curry" required></label>
+    <label class="field"><span>Portions</span>
+      <input name="servings" type="number" min="1" value="1"></label>
+    <label class="field"><span>kcal / portion</span>
+      <input name="calories" type="number" placeholder="650"></label>
+    <label class="field"><span>Protéines (g)</span>
+      <input name="protein_g" type="number" step="0.1" placeholder="39"></label>
+    <label class="field"><span>Glucides (g)</span>
+      <input name="carbs_g" type="number" step="0.1" placeholder="60"></label>
+    <label class="field"><span>Lipides (g)</span>
+      <input name="fat_g" type="number" step="0.1" placeholder="25"></label>
+    <label class="field full"><span>Ingrédients</span>
+      <textarea name="ingredients" placeholder="Un ingrédient par ligne, ou séparés par des virgules"></textarea></label>
+    <label class="field full"><span>Préparation</span>
+      <textarea name="steps" placeholder="1. …"></textarea></label>
+    <div class="full" style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+      <label class="check-inline"><input type="checkbox" name="is_favorite"> Favori ⭐</label>
+      <button type="submit">Ajouter la recette</button>
+    </div>
+  </form>
+</details>
+
 <ul class="recipes">
   {% for r in recipes %}
     <li>
       <details>
         <summary>{% if r.is_favorite %}⭐ {% endif %}<strong>{{ r.name }}</strong>
-          {% if r.calories %}— {{ r.calories }} kcal, {{ r.protein_g }}g prot, {{ r.carbs_g }}g gluc, {{ r.fat_g }}g lip{% endif %}</summary>
+          {% if r.calories %}<span class="muted">— {{ r.calories }} kcal ·
+            {{ '%g'|format(r.protein_g or 0) }} g prot ·
+            {{ '%g'|format(r.carbs_g or 0) }} g gluc ·
+            {{ '%g'|format(r.fat_g or 0) }} g lip</span>{% endif %}</summary>
         {% if r.notes %}<p class="pre"><em>{{ r.notes }}</em></p>{% endif %}
         {% if r.ingredients %}<p><strong>Ingrédients :</strong></p><p class="pre">{{ r.ingredients }}</p>{% endif %}
         {% if r.steps %}<p><strong>Préparation :</strong></p><p class="pre">{{ r.steps }}</p>{% endif %}
