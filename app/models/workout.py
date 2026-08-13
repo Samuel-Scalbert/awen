@@ -65,6 +65,9 @@ class ProgramExercise(db.Model):
     name = db.Column(db.String(120), nullable=False)
     slug = db.Column(db.String(60), nullable=False)  # static/img/exercises/<slug>.svg
     sets = db.Column(db.Integer, default=4)
+    # "reps" = répétitions comptées, "sec" = série tenue au chrono (rebonds de
+    # chevilles, gainage…). rep_min/rep_max portent alors des secondes.
+    unit = db.Column(db.String(6), default="reps")
     rep_min = db.Column(db.Integer)
     rep_max = db.Column(db.Integer)
     weight_kg = db.Column(db.Float, default=0)

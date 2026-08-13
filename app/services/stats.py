@@ -44,10 +44,16 @@ def overview():
     workouts = _completed_workouts()
     today = date.today()
 
+    # Les séries tenues au chrono stockent des secondes dans `reps` : les
+    # additionner au total de répétitions le gonflerait sans rien vouloir dire.
+    timed_ids = {pe.id for pe in
+                 ProgramExercise.query.filter_by(unit="sec")}
+
     sessions = []
     for w in workouts:
         vol = sum(set_volume(s) for s in w.sets)
-        reps = sum(s.reps or 0 for s in w.sets)
+        reps = sum(s.reps or 0 for s in w.sets
+                   if s.program_exercise_id not in timed_ids)
         sessions.append({
             "id": w.id,
             "date": w.date.date(),

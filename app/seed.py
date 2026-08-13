@@ -164,8 +164,9 @@ PLYO_BLOCK = [
      "Course d'élan 3 appuis comme au filet, saut maximal, réception équilibrée."),
     ("push", 3, "Sauts groupés (tuck jumps)", "plyo-tuck", 3, 8, 60,
      "Genoux à la poitrine, contact au sol le plus court possible."),
-    ("push", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 30, 60,
-     "Jambes quasi tendues, tout dans la cheville — c'est le ressort du saut."),
+    ("push", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 45, 60,
+     "Jambes quasi tendues, tout dans la cheville — c'est le ressort du saut. "
+     "Série tenue au chrono."),
 
     ("pull", 1, "Box jumps", "plyo-box-jump", 4, 5, 90,
      "Monte sur la box, redescends en marchant. Augmente la hauteur quand 5 sauts passent nets."),
@@ -173,8 +174,8 @@ PLYO_BLOCK = [
      "8 par côté. Stabilité à la réception : utile en défense au volley."),
     ("pull", 3, "Saut en longueur départ arrêté", "plyo-longueur", 3, 5, 90,
      "Mesure la distance de temps en temps : c'est ton indicateur de puissance."),
-    ("pull", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 30, 60,
-     "Jambes quasi tendues, tout dans la cheville."),
+    ("pull", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 45, 60,
+     "Jambes quasi tendues, tout dans la cheville. Série tenue au chrono."),
 
     ("legs", 1, "Sauts en contrebas (depth jumps)", "plyo-depth", 4, 4, 90,
      "Box 30-40 cm : descends, touche le sol et renvoie immédiatement. "
@@ -183,21 +184,41 @@ PLYO_BLOCK = [
      "Descente à mi-cuisse, extension complète. Avant le squat lourd, jamais après."),
     ("legs", 3, "Fentes sautées", "plyo-fentes", 3, 6, 90,
      "6 par jambe, alternées en l'air."),
-    ("legs", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 30, 60,
-     "Jambes quasi tendues, tout dans la cheville."),
+    ("legs", 4, "Rebonds chevilles (corde)", "plyo-corde", 3, 45, 60,
+     "Jambes quasi tendues, tout dans la cheville. Série tenue au chrono."),
 ]
 
 
+# Exercices tenus au chrono plutôt que comptés en répétitions. Une seule
+# source de vérité, utilisée par le seed comme par la migration — sinon une
+# base neuve et une base migrée finiraient avec des réglages différents.
+DURATION_SLUGS = {"plyo-corde"}
+
+
 def ensure_program_block():
-    """Migration douce : ajoute la colonne `block` aux bases existantes."""
+    """Migration douce : ajoute les colonnes `block` et `unit` si absentes."""
     cols = [row[1] for row in
             db.session.execute(sqltext("PRAGMA table_info(program_exercises)"))]
     if "block" not in cols:
         db.session.execute(sqltext(
             "ALTER TABLE program_exercises ADD COLUMN block VARCHAR(10)"))
-        db.session.commit()
+    if "unit" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE program_exercises ADD COLUMN unit VARCHAR(6)"))
+    db.session.commit()
     ProgramExercise.query.filter(ProgramExercise.block.is_(None)).update(
         {"block": "force"}, synchronize_session=False)
+    ProgramExercise.query.filter(ProgramExercise.unit.is_(None)).update(
+        {"unit": "reps"}, synchronize_session=False)
+    db.session.commit()
+
+    # Les rebonds de chevilles se tiennent au chrono : compter 30 sauts en
+    # sautant à la corde est impraticable (retour du terrain, 13/08).
+    for pe in ProgramExercise.query.filter(
+            ProgramExercise.slug.in_(DURATION_SLUGS)):
+        if pe.unit != "sec":
+            pe.unit = "sec"
+            pe.rep_min = pe.rep_max = 45
     db.session.commit()
 
 
@@ -209,5 +230,6 @@ def seed_plyo_block():
             session_type=stype, block="plyo", position=pos, name=name,
             slug=slug, sets=sets, rep_min=reps, rep_max=reps, weight_kg=0,
             increment_kg=0, rest_sec=rest, notes=notes,
+            unit="sec" if slug in DURATION_SLUGS else "reps",
         ))
     db.session.commit()

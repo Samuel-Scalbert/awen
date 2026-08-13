@@ -711,6 +711,16 @@ details[open] > summary::before { transform: rotate(90deg); }
   color: var(--muted-strong);
 }
 
+/* Bouton de série tenue au chrono */
+.hold-timer { flex: 1 1 100%; font-variant-numeric: tabular-nums; }
+.hold-timer.running {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.unit-hint { align-self: center; font-size: .85rem; }
+
 form.log { gap: var(--s-2); margin: .6rem 0 0; align-items: stretch; }
 form.log input { flex: 1 1 5rem; min-width: 0; }
 form.log button { flex: 1 1 100%; }

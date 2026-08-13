@@ -25,7 +25,8 @@
          data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
          data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
          data-rest="{{ pe.rest_sec }}" data-name="{{ pe.name }}"
-         data-block="{{ pe.block }}" data-num="{{ loop.index }}">
+         data-block="{{ pe.block }}" data-unit="{{ pe.unit or 'reps' }}"
+         data-num="{{ loop.index }}">
   <img class="demo" alt="{{ pe.name }}" loading="lazy"
        src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
        data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
@@ -33,14 +34,16 @@
   <div class="exo-body">
     <h3><span class="exo-chip"></span>{{ loop.index }}/{{ exercises|length }} · {{ pe.name }}</h3>
     <p class="target">🎯 {{ pe.sets }} séries ×
-      <strong>{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %} reps</strong>
+      <strong>{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %}{{ ' s' if pe.unit == 'sec' else ' reps' }}</strong>
       {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}
       <span class="muted">· repos {{ pe.rest_sec }} s</span></p>
     <p class="status"></p>
     {% if pe.notes %}<p class="muted">{{ pe.notes }}</p>{% endif %}
     <ul class="sets">
       {% for s in done %}
-      <li data-set-id="{{ s.id }}"><span>{{ s.reps }} reps × {{ '%g'|format(s.weight_kg) }} kg</span>
+      <li data-set-id="{{ s.id }}"><span>{% if pe.unit == 'sec' %}{{ s.reps }} s
+        {%- elif pe.block == 'plyo' %}{{ s.reps }} reps
+        {%- else %}{{ s.reps }} reps × {{ '%g'|format(s.weight_kg or 0) }} kg{% endif %}</span>
         <button type="button" class="del" title="Supprimer cette série">✕</button></li>
       {% endfor %}
     </ul>
@@ -48,8 +51,19 @@
     <form class="log" method="post"
           action="{{ url_for('workout.log_set', workout_id=workout.id) }}">
       <input type="hidden" name="exercise_id" value="{{ pe.id }}">
+      {# Exercice tenu au chrono : le champ est pré-rempli avec la durée
+         cible et un bouton décompte à voix d'écran, plutôt que de compter
+         des sauts à la corde en pleine série. #}
+      {% if pe.unit == 'sec' %}
+      <button type="button" class="hold-timer btn-ghost" data-sec="{{ pe.rep_max }}"
+        >▶ Chrono {{ pe.rep_max }} s</button>
+      <input name="reps" type="number" inputmode="numeric" min="0" max="999"
+             value="{{ pe.rep_max }}" aria-label="Durée tenue (secondes)" required>
+      <span class="unit-hint muted">secondes</span>
+      {% else %}
       <input name="reps" type="number" inputmode="numeric" min="0" max="99"
              placeholder="{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %} reps" required>
+      {% endif %}
       {# La plyométrie ne se charge pas : pas de champ kilos qui n'aurait
          aucun sens à remplir entre deux sauts. #}
       {% if pe.block != 'plyo' %}
@@ -175,7 +189,8 @@ function refresh() {
     } else {
       const left = total - done;
       const rmin = card.dataset.repmin, rmax = card.dataset.repmax;
-      const target = rmin === rmax ? `${rmin} reps` : `${rmin}-${rmax} reps`;
+      const suffix = card.dataset.unit === 'sec' ? 's' : 'reps';
+      const target = rmin === rmax ? `${rmin} ${suffix}` : `${rmin}-${rmax} ${suffix}`;
       status.innerHTML = `<strong>Série ${done + 1}/${total}</strong> — vise `
         + `<strong>${target}</strong>`
         + ` · encore ${left} série${left > 1 ? 's' : ''}`;
@@ -237,38 +252,55 @@ document.querySelectorAll('form.log').forEach(form => {
     e.preventDefault();
     const card = form.closest('.exo'), d = card.dataset;
     const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
+
+    // Étape 1 — l'enregistrement. Seul ce bloc peut parler de connexion.
+    let j;
     try {
       const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
-      if (!res.ok) throw new Error();
-      const j = await res.json();
-      addSetLine(card, j.id, j.reps, j.weight);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      j = await res.json();
+    } catch (err) {
+      alert("Impossible d'enregistrer la série — vérifie la connexion.");
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
 
+    // Étape 2 — l'affichage. La série est déjà en base : si quelque chose
+    // casse ici, on le signale en console, mais on n'accuse jamais le réseau
+    // (c'est exactement le bug vécu sur la plyo : un plantage d'affichage
+    // affichait « pas de connexion » alors que la série était bien saisie,
+    // et empêchait le chrono de repos de démarrer).
+    try {
+      addSetLine(card, j.id, j.reps, j.weight);
       const advice = card.querySelector('.advice');
       advice.hidden = false;
       const inc = Math.abs(parseFloat(d.inc)) || 0;
-      const wInput = form.querySelector('[name=weight]');
+      const wInput = form.querySelector('[name=weight]');   // absent en plyo
       const rmin = +d.repmin, rmax = +d.repmax;
+      const setW = v => { if (wInput) wInput.value = v; };
       let text;
       if (d.block === 'plyo') {
         text = msg(j.reps >= rmax ? 'plyoOk' : 'plyoDrop', {});
       } else if (inc && j.reps <= rmin - 3) {
         const nw = Math.max(0, j.weight - inc);
         text = msg('fix', {w: nw, min: rmin, max: rmax});
-        wInput.value = nw;
+        setW(nw);
       } else if (inc && j.reps < rmin) {
         const nw = Math.max(0, j.weight - inc);
         text = msg('low', {w: nw, min: rmin, max: rmax});
-        wInput.value = nw;
+        setW(nw);
       } else if (inc && j.reps >= rmax + 3) {
         const nw = j.weight + inc;
         text = msg('boost', {w: nw, r: j.reps});
-        wInput.value = nw;
+        setW(nw);
       } else if (j.reps >= rmax) {
         text = msg('top', {w: j.weight, max: rmax});
       } else {
         text = msg('ok', {w: j.weight, max: rmax});
       }
-      form.querySelector('[name=reps]').value = '';
+      const repsInput = form.querySelector('[name=reps]');
+      if (repsInput) repsInput.value = d.unit === 'sec' ? d.repmax : '';
 
       const doneCount = card.querySelectorAll('.sets li').length;
       if (doneCount >= j.total_sets) {
@@ -280,23 +312,68 @@ document.querySelectorAll('form.log').forEach(form => {
       advice.textContent = text;
       const st = loadState();
       st.advice = st.advice || {}; st.weights = st.weights || {};
-      st.advice[card.id] = text; st.weights[card.id] = wInput.value;
+      st.advice[card.id] = text;
+      if (wInput) st.weights[card.id] = wInput.value;
       saveState(st);
       refresh();
-      startTimer(+j.rest_sec || 60);
     } catch (err) {
-      alert("Impossible d'enregistrer la série — vérifie la connexion.");
-    } finally {
-      btn.disabled = false;
+      console.error('[séance] affichage après enregistrement :', err);
     }
+
+    // Le chrono démarre dans tous les cas : c'est le repos qui compte, pas
+    // l'affichage. Hors du try pour qu'aucun souci de rendu ne l'empêche.
+    startTimer(+j.rest_sec || 60);
+  });
+});
+
+/* ---------- séries tenues au chrono (rebonds de chevilles…) ---------- */
+// Décompte de la durée cible puis validation automatique : on ne compte pas
+// ses sauts à la corde, et on ne veut pas lâcher la corde pour toucher
+// l'écran. Un appui pendant le décompte l'arrête et enregistre le temps
+// réellement tenu.
+document.querySelectorAll('.hold-timer').forEach(btn => {
+  const form = btn.closest('form.log');
+  const input = form.querySelector('[name=reps]');
+  const target = +btn.dataset.sec;
+  let iv = null, endAt = 0;
+
+  const stop = (elapsed) => {
+    clearInterval(iv); iv = null;
+    btn.textContent = `▶ Chrono ${target} s`;
+    btn.classList.remove('running');
+    input.value = Math.max(0, Math.round(elapsed));
+  };
+
+  btn.addEventListener('click', () => {
+    if (iv) {                       // arrêt anticipé : on garde le temps tenu
+      stop(target - (endAt - Date.now()) / 1000);
+      return;
+    }
+    endAt = Date.now() + target * 1000;
+    btn.classList.add('running');
+    iv = setInterval(() => {
+      const left = Math.max(0, (endAt - Date.now()) / 1000);
+      btn.textContent = `⏹ ${Math.ceil(left)} s`;
+      if (left <= 0) {
+        stop(target);
+        beep();
+        form.requestSubmit();       // série validée sans toucher l'écran
+      }
+    }, 100);
   });
 });
 
 /* ---------- suppression d'une série mal saisie ---------- */
 function addSetLine(card, id, reps, weight) {
+  // Même format que le rendu serveur : secondes au chrono, reps seules en
+  // plyométrie (sans charge), reps × kg partout ailleurs.
+  const d = card.dataset;
+  const label = d.unit === 'sec' ? `${reps} s`
+              : d.block === 'plyo' ? `${reps} reps`
+              : `${reps} reps × ${weight} kg`;
   const li = document.createElement('li');
   li.dataset.setId = id;
-  li.innerHTML = `<span>${reps} reps × ${weight} kg</span>`
+  li.innerHTML = `<span>${label}</span>`
     + `<button type="button" class="del" title="Supprimer cette série">✕</button>`;
   card.querySelector('.sets').appendChild(li);
 }
@@ -376,7 +453,8 @@ function restore() {
   }
   for (const [cardId, w] of Object.entries(st.weights || {})) {
     const card = document.getElementById(cardId);
-    if (card && w) card.querySelector('[name=weight]').value = w;
+    const input = card && card.querySelector('[name=weight]');  // absent en plyo
+    if (input && w) input.value = w;
   }
   if (st.deadline && st.deadline > Date.now()) {
     deadline = st.deadline;
