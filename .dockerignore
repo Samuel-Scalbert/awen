@@ -1,0 +1,14 @@
+# L'image ne doit contenir que le code : ni environnement local, ni base,
+# ni secrets (le .env est injecté au démarrage par docker compose).
+.git
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+data/
+.env
+*.log
+docs/
+.vscode/
+.idea/

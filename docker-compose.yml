@@ -1,0 +1,21 @@
+services:
+  awen:
+    build: .
+    image: awen:latest
+    container_name: awen
+    restart: unless-stopped          # repart tout seul après une coupure de courant
+    ports:
+      - "5000:5000"
+    env_file: .env
+    environment:
+      # Chemin DANS le conteneur : le volume data est monté ici.
+      DATABASE_URL: sqlite:////app/data/awen.db
+      TZ: Europe/Paris
+    volumes:
+      # La base et les données persistent hors du conteneur : une image
+      # reconstruite ne doit jamais emporter l'historique d'entraînement.
+      - ./data:/app/data
+      # Veille emploi du pipeline Claude cowork. En lecture seule : Awen n'a
+      # aucune raison d'écrire dedans. Décommente une fois le dossier
+      # accessible sur le serveur (voir README, section Déploiement).
+      # - /srv/recherche-cdi:/srv/recherche-cdi:ro

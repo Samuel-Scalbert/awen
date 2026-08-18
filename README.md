@@ -99,6 +99,36 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 
 Le firmware de l'afficheur (squelette Arduino dans [esp32/](esp32/)) vit dans son propre dépôt : [esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display).
 
+## Déploiement serveur (Docker)
+
+Sur le serveur Debian, une fois Docker installé :
+
+```bash
+git clone https://github.com/Samuel-Scalbert/awen.git
+cd awen
+cp .env.example .env && nano .env      # SECRET_KEY et ESP32_API_KEY réels
+mkdir -p data
+docker compose up -d --build
+```
+
+L'app écoute sur le port 5000. `docker compose logs -f` pour suivre,
+`docker compose up -d --build` après un `git pull` pour mettre à jour.
+
+Points à connaître :
+
+- **La base vit dans `./data`**, monté en volume : reconstruire l'image ne
+  touche pas à l'historique d'entraînement. Pour reprendre une base existante,
+  copie `awen.db` dans ce dossier avant le premier démarrage.
+- **`DATABASE_URL` est imposé par compose** (`/app/data/awen.db`) et prime sur
+  le `.env` — le laisser commenté dans le `.env` est le bon réflexe.
+- **Servi par gunicorn**, un seul worker et plusieurs threads : SQLite supporte
+  mal plusieurs processus écrivains.
+- **`JOB_SEARCH_DIR`** pointe vers le dossier du pipeline Claude cowork. S'il
+  reste sur une autre machine, il faut le rendre visible au serveur (Syncthing,
+  partage réseau…) puis décommenter le montage correspondant dans
+  `docker-compose.yml`. Sans lui, la page Jobs affiche simplement qu'aucun
+  dossier n'est configuré : le reste de l'app fonctionne normalement.
+
 ## Dépannage
 
 **`python` ne se lance pas / erreur `No pyvenv.cfg file`**
