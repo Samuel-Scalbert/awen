@@ -1,10 +1,34 @@
 #!/usr/bin/env bash
-# Auto-update Awen sur le serveur (PC gamer) à chaque push.
-# À appeler via un webhook Git ou un cron/systemd timer.
+# Met à jour Awen sur le serveur depuis GitHub, puis reconstruit le conteneur.
+#
+# Appelé par awen-update.timer (voir install-updater.sh) ou à la main.
+# On interroge GitHub au lieu de recevoir un webhook : le serveur reste
+# totalement injoignable depuis Internet. Ouvrir un port sur la box — ou
+# monter un tunnel — pour un dépôt qui bouge quelques fois par jour serait
+# payer cher une poignée de minutes de latence.
 set -euo pipefail
+
 cd "$(dirname "$0")/.."
-git pull --ff-only
-source venv/bin/activate 2>/dev/null || true
-pip install -q -r requirements.txt
-# Redémarre le service (adapter selon systemd / pm2 / screen)
-sudo systemctl restart awen || echo "Configure un service 'awen' pour le redémarrage auto."
+
+git fetch --quiet origin main
+local_rev=$(git rev-parse HEAD)
+remote_rev=$(git rev-parse origin/main)
+
+if [ "$local_rev" = "$remote_rev" ]; then
+    exit 0          # rien de neuf : on ne reconstruit pas pour rien
+fi
+
+echo "Mise à jour ${local_rev:0:7} -> ${remote_rev:0:7}"
+
+# --ff-only : si quelqu'un a modifié un fichier directement sur le serveur,
+# la mise à jour échoue franchement au lieu de fabriquer un conflit silencieux.
+git pull --ff-only origin main
+
+# Si la construction échoue, compose laisse le conteneur actuel en place :
+# le serveur continue de répondre avec la version précédente.
+docker compose up -d --build
+
+# Sans ça, chaque reconstruction laisse une image orpheline sur le disque.
+docker image prune -f --filter "dangling=true"
+
+echo "Awen à jour."

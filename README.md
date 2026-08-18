@@ -114,6 +114,29 @@ docker compose up -d --build
 L'app écoute sur le port 5000. `docker compose logs -f` pour suivre,
 `docker compose up -d --build` après un `git pull` pour mettre à jour.
 
+### Mise à jour automatique
+
+```bash
+chmod +x scripts/*.sh
+./scripts/install-updater.sh
+```
+
+Un timer systemd interroge GitHub toutes les 5 minutes et ne reconstruit que
+si `origin/main` a bougé. Le serveur n'expose donc rien sur Internet : pas de
+webhook, pas de port ouvert sur la box.
+
+```bash
+systemctl list-timers awen-update.timer     # prochain passage
+journalctl -u awen-update.service -f        # journal des déploiements
+./scripts/deploy.sh                         # déployer tout de suite
+```
+
+Depuis le poste de développement, pour ne pas attendre le prochain cycle :
+
+```powershell
+ssh awen "cd awen && ./scripts/deploy.sh"
+```
+
 Points à connaître :
 
 - **La base vit dans `./data`**, monté en volume : reconstruire l'image ne
