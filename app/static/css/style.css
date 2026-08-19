@@ -1168,3 +1168,51 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
   main { max-width: none; padding: 0; }
   article.letter { border: none; box-shadow: none; padding: 0; }
 }
+
+/* ---------- Exercices repliables (séance) -------------------------------- */
+
+/* La carte devient un <details> : l'exercice terminé se replie et on ne fait
+   plus défiler toute la séance entre deux séries. */
+.exo { display: block; padding: 0; }
+.exo > .exo-head {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: var(--s-3) var(--s-4);
+  font-weight: 650;
+}
+.exo > .exo-head::before { flex: none; }
+.exo-title { flex: 1; min-width: 0; }
+.exo-mini {
+  flex: none;
+  padding: .1rem .5rem;
+  border-radius: var(--r-pill);
+  background: var(--bg-sunken);
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.exo[open] > .exo-head { border-bottom: 1px solid var(--border); }
+.exo .exo-inner {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+  padding: var(--s-4);
+}
+.exo.current > .exo-head { color: var(--accent); }
+.exo.done > .exo-head .exo-mini { background: var(--accent-soft); color: var(--accent); }
+
+.order-cell { white-space: nowrap; }
+.order-cell form { display: inline; margin: 0; }
+.order-cell button { min-height: 2rem; padding: .2rem .5rem; }
+
+@media (max-width: 34rem) {
+  .exo .exo-inner { flex-direction: column; gap: var(--s-3); }
+}
+
+/* La colonne « Ordre » a resserré le tableau : sans ça les deux champs de
+   reps passent à la ligne l'un sous l'autre. */
+.prog input { width: 3.4rem; }
+.prog td { white-space: nowrap; }
+.prog td:nth-child(2) { white-space: normal; }

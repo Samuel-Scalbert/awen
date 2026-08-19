@@ -3,11 +3,12 @@
 {% block content %}
 <div class="page-head">
   <h2>Programme PPL</h2>
-  <p class="sub">3 séances par semaine (Push / Pull / Legs), chacune ouverte par
-    20 min de plyométrie pour la détente au volley.</p>
+  <p class="sub">3 séances par semaine : Push, Pull, Legs. La plyométrie est
+    un bonus, sur sa propre page.</p>
   <div class="page-links">
     <a href="{{ url_for('workout.list_workouts') }}">← Séances</a>
     <a href="{{ url_for('workout.session') }}">▶️ Séance du jour</a>
+    <a href="{{ url_for('workout.plyo') }}">🏐 Plyométrie</a>
   </div>
 </div>
 
@@ -29,13 +30,13 @@ fois de suite.</p>
   </table>
 </div>
 
-<h3 class="section-title">Bloc plyométrie — 20 min par séance</h3>
-<p>Chaque séance s'ouvre par 20 minutes de pliométrie orientée <strong>détente
-verticale pour le volley</strong>. Il est placé <strong>en début de séance, avant les
-charges</strong> — y compris le jour des jambes : un saut se travaille sur un système
-nerveux frais. Sur des jambes déjà fatiguées, la hauteur chute, le temps de contact au
-sol s'allonge, et on entraîne exactement l'inverse de ce qu'on cherche (en plus du
-risque de blessure).</p>
+<h3 class="section-title">Bloc plyométrie — en bonus</h3>
+<p>La pliométrie orientée <strong>détente verticale pour le volley</strong> a
+sa <a href="{{ url_for('workout.plyo') }}">propre page</a> : elle ne fait plus partie
+de la séance de force. Fais-la <strong>quand tu es frais</strong>, idéalement avant les
+charges ou un jour sans séance. Sur des jambes déjà fatiguées, la hauteur chute, le
+temps de contact au sol s'allonge, et on entraîne l'inverse de ce qu'on cherche
+(en plus du risque de blessure).</p>
 <p>La plyométrie <strong>ne progresse pas en kilos</strong> mais en qualité : hauteur de
 box, explosivité, temps de contact au sol le plus court possible. Le nombre de
 répétitions reste volontairement bas — dès que la hauteur baisse, la série ne sert plus
@@ -49,18 +50,34 @@ Surperformance (max + 3 reps partout) → double palier. Toutes les séries sous
 
 <h3 class="section-title">Charges actuelles</h3>
 <p class="muted">Mises à jour automatiquement par la progression — corrige-les à la main
-si besoin (mauvaise saisie, machine différente…).</p>
+si besoin (mauvaise saisie, machine différente…). Les flèches ↑↓ fixent l'ordre
+dans lequel la séance te présentera les exercices.</p>
+<form method="post" action="{{ url_for('workout.recompute_weights') }}"
+      onsubmit="return confirm('Recaler les charges du programme sur la dernière séance enregistrée de chaque exercice ?')">
+  <button class="btn-ghost" type="submit">🔄 Recaler les charges depuis l'historique</button>
+</form>
+<p class="muted"><small>Reprend, pour chaque exercice, la charge réellement utilisée
+lors de sa dernière séance terminée. Utile après une saisie erronée ou un
+changement de machine.</small></p>
 
 {% macro prog_table(exercises, plyo=False) %}
 <div class="table-wrap">
   <table class="prog">
     <thead>
-      <tr><th>Exercice</th><th>Séries</th><th>Reps</th>
+      <tr><th>Ordre</th><th>Exercice</th><th>Séries</th><th>Reps</th>
           <th>{{ 'Repos (s)' if plyo else 'Charge (kg)' }}</th><th></th></tr>
     </thead>
     <tbody>
       {% for pe in exercises %}
       <tr>
+        <td class="order-cell">
+          <form method="post" action="{{ url_for('workout.move_exercise', pe_id=pe.id, direction='up') }}">
+            <button class="btn-ghost small" type="submit" title="Monter"
+                    {{ 'disabled' if loop.first }}>↑</button></form>
+          <form method="post" action="{{ url_for('workout.move_exercise', pe_id=pe.id, direction='down') }}">
+            <button class="btn-ghost small" type="submit" title="Descendre"
+                    {{ 'disabled' if loop.last }}>↓</button></form>
+        </td>
         <td>{{ pe.name }}{% if pe.notes %}<br><small class="muted">{{ pe.notes }}</small>{% endif %}</td>
         <td><input form="pe{{ pe.id }}" name="sets" type="number" min="1" max="10"
                    value="{{ pe.sets }}" aria-label="Séries pour {{ pe.name }}"></td>
@@ -88,13 +105,13 @@ si besoin (mauvaise saisie, machine différente…).</p>
 {% endmacro %}
 
 {% for stype, plyo_ex, force_ex in groups %}
-<h4>{{ {'push': '💪 PUSH — pectoraux, épaules, triceps',
+<h4 id="{{ stype }}">{{ {'push': '💪 PUSH — pectoraux, épaules, triceps',
         'pull': '🔙 PULL — dos, biceps, avant-bras',
         'legs': '🦵 LEGS — quadriceps, ischios, mollets'}[stype] }}</h4>
 {% if plyo_ex %}
-<p class="muted"><strong>1. Plyométrie</strong> (20 min, en premier)</p>
+<p class="muted"><strong>Plyométrie</strong> — sur sa page dédiée, repos 60 s</p>
 {{ prog_table(plyo_ex, plyo=True) }}
-<p class="muted"><strong>2. Force</strong></p>
+<p class="muted"><strong>Force</strong> — c'est ce que contient la séance</p>
 {% endif %}
 {{ prog_table(force_ex) }}
 {% endfor %}

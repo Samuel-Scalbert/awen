@@ -73,5 +73,9 @@ class ProgramExercise(db.Model):
     weight_kg = db.Column(db.Float, default=0)
     increment_kg = db.Column(db.Float, default=2.5)
     rest_sec = db.Column(db.Integer, default=60)
+    # Un exercice retiré du programme n'est pas supprimé : ses séries passées
+    # restent rattachées et continuent d'alimenter les statistiques. Il
+    # disparaît simplement des séances et de la page Programme.
+    active = db.Column(db.Boolean, default=True)
     notes = db.Column(db.String(200))
     sets_logged = db.relationship("ExerciseSet", backref="program_exercise")

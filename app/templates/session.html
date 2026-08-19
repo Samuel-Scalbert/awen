@@ -1,10 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Séance {{ workout.focus }} — Awen{% endblock %}
+{% set plyo_mode = mode == 'plyo' %}
+{% block title %}{{ 'Plyométrie' if mode == 'plyo' else 'Séance ' ~ workout.focus }} — Awen{% endblock %}
 {% block content %}
 <div class="page-head">
+  {% if plyo_mode %}
+  <h2>🏐 Bloc plyométrie</h2>
+  <p class="sub">Détente verticale pour le volley — en bonus, quand tu veux.
+    À faire frais : dès que la hauteur baisse, la série ne sert plus à rien.</p>
+  <div class="page-links">
+    <a href="{{ url_for('workout.session') }}">← Séance {{ workout.focus }}</a>
+  </div>
+  {% else %}
   <h2>Séance {{ workout.focus }}</h2>
   <p class="sub">{{ workout.date.strftime('%d/%m/%Y') }} — le chrono de repos démarre à
     chaque série validée, et le coach ajuste la charge pour la suivante.</p>
+  <div class="page-links">
+    <a href="{{ url_for('workout.plyo') }}">🏐 Bloc plyométrie</a>
+    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
+  </div>
+  {% endif %}
 </div>
 
 <div id="progress">
@@ -13,26 +27,29 @@
 </div>
 
 {% for pe in exercises %}
-{% if pe.block == 'plyo' and loop.first %}
-<h3 class="block-title">🏐 Bloc plyométrie — 20 min
-  <small>détente pour le volley · à faire frais, en début de séance</small></h3>
-{% endif %}
-{% if pe.block == 'force' and (loop.first or exercises[loop.index0 - 1].block == 'plyo') %}
-<h3 class="block-title">🏋️ Bloc force — {{ workout.focus }}</h3>
-{% endif %}
 {% set done = logged[pe.id] %}
-<section class="exo{% if pe.block == 'plyo' %} plyo{% endif %}" id="exo-{{ pe.id }}"
+{# Chaque exercice est un menu déroulant : replié une fois terminé, pour
+   ne pas avoir à faire défiler toute la séance entre deux séries. L'état
+   n'est fixé qu'ici, au rendu — le JS n'ouvre ni ne ferme rien tout seul,
+   sinon la page bougerait sous les doigts. #}
+<details class="exo{% if pe.block == 'plyo' %} plyo{% endif %}" id="exo-{{ pe.id }}"
+         {% if done|length < pe.sets %}open{% endif %}
          data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
          data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
          data-rest="{{ pe.rest_sec }}" data-name="{{ pe.name }}"
          data-block="{{ pe.block }}" data-unit="{{ pe.unit or 'reps' }}"
          data-num="{{ loop.index }}">
+  <summary class="exo-head">
+    <span class="exo-chip"></span>
+    <span class="exo-title">{{ loop.index }}/{{ exercises|length }} · {{ pe.name }}</span>
+    <span class="exo-mini"></span>
+  </summary>
+  <div class="exo-inner">
   <img class="demo" alt="{{ pe.name }}" loading="lazy"
        src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
        data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
        onerror="this.style.display='none'">
   <div class="exo-body">
-    <h3><span class="exo-chip"></span>{{ loop.index }}/{{ exercises|length }} · {{ pe.name }}</h3>
     <p class="target">🎯 {{ pe.sets }} séries ×
       <strong>{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %}{{ ' s' if pe.unit == 'sec' else ' reps' }}</strong>
       {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}
@@ -80,9 +97,11 @@
       <span class="note-state" aria-live="polite"></span>
     </details>
   </div>
-</section>
+  </div>
+</details>
 {% endfor %}
 
+{% if not plyo_mode %}
 <form method="post" class="finish"
       action="{{ url_for('workout.finish_session', workout_id=workout.id) }}">
   <label class="field field-wide"><span>💬 Commentaire de séance</span>
@@ -95,6 +114,7 @@
       onsubmit="return confirm('Supprimer cette séance et ses séries ?')">
   <button type="submit" class="danger">Annuler la séance</button>
 </form>
+{% endif %}
 
 <div id="timer" hidden>
   <span>⏱️ Repos</span>
@@ -181,9 +201,17 @@ function refresh() {
     totalDone += Math.min(done, total); totalPlanned += total;
     const status = card.querySelector('.status');
     const chip = card.querySelector('.exo-chip');
+    const mini = card.querySelector('.exo-mini');
     card.classList.toggle('done', done >= total);
     card.classList.remove('current');
     chip.textContent = '';
+    // Résumé visible quand l'exercice est replié
+    if (mini) {
+      const unit = card.dataset.unit === 'sec' ? 's' : 'reps';
+      const w = card.dataset.block === 'plyo' ? ''
+              : ' · ' + (card.querySelector('[name=weight]')?.value || '') + ' kg';
+      mini.textContent = `${done}/${total} séries${w}`;
+    }
     if (done >= total) {
       status.textContent = `✔️ ${done}/${total} séries faites`;
     } else {
@@ -305,9 +333,8 @@ document.querySelectorAll('form.log').forEach(form => {
       const doneCount = card.querySelectorAll('.sets li').length;
       if (doneCount >= j.total_sets) {
         text += pick(MSG.done);
-        const next = document.querySelector('.exo:not(.done)');
-        if (next && next !== card)
-          setTimeout(() => next.scrollIntoView({ behavior: 'smooth' }), 500);
+        // Volontairement aucun défilement automatique : la page qui saute
+        // au moment où on repose son téléphone est plus gênante qu'utile.
       }
       advice.textContent = text;
       const st = loadState();
@@ -462,8 +489,7 @@ function restore() {
     clearInterval(iv); iv = setInterval(tick, 250); tick();
   }
   refresh();
-  const current = document.querySelector('.exo.current');
-  if (current) current.scrollIntoView({ block: 'center' });
+  // Pas de recentrage automatique au retour dans l'appli non plus.
 }
 window.addEventListener('pageshow', restore);
 document.querySelector('form.finish').addEventListener('submit',

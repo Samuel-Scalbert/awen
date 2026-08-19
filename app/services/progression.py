@@ -95,3 +95,45 @@ def apply_progression(workout):
             changes.append(f"{pe.name} : {old:g} → {pe.weight_kg:g} kg{suffix}")
     db.session.commit()
     return changes
+
+
+def recompute_from_history():
+    """Recale la charge de chaque exercice sur ce qui a réellement été soulevé.
+
+    Utile quand le programme et la réalité ont divergé : saisie erronée,
+    machine changée, ou charge modifiée à la main en salle sans que la
+    progression ait suivi. On repart de la dernière séance terminée où
+    l'exercice apparaît, et on retient la charge médiane de ses séries de
+    travail — insensible à une série d'essai ou d'échauffement isolée.
+
+    La plyométrie et les exercices au poids du corps sont ignorés : ils n'ont
+    pas de charge à recaler.
+    """
+    from ..models import ExerciseSet, ProgramExercise, Workout
+
+    completed = {w.id: w.date for w in Workout.query.filter_by(completed=True)}
+    changes = []
+
+    for pe in ProgramExercise.query.filter(ProgramExercise.active.is_(True)):
+        if pe.block == "plyo" or not pe.increment_kg:
+            continue
+
+        sets = [s for s in ExerciseSet.query
+                .filter_by(program_exercise_id=pe.id).order_by(ExerciseSet.id)
+                if s.workout_id in completed]
+        if not sets:
+            continue
+
+        last_id = max(sets, key=lambda s: completed[s.workout_id]).workout_id
+        last_sets = [s for s in sets if s.workout_id == last_id]
+        weights = sorted((s.weight_kg or 0) for s in working_sets(last_sets, pe.sets))
+        if not weights:
+            continue
+
+        actual = weights[len(weights) // 2]
+        if actual and actual != pe.weight_kg:
+            changes.append("{} : {:g} → {:g} kg".format(pe.name, pe.weight_kg, actual))
+            pe.weight_kg = actual
+
+    db.session.commit()
+    return changes

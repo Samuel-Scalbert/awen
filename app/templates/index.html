@@ -1,10 +1,38 @@
 {% extends "base.html" %}
+{% import "_charts.html" as chart %}
 {% block content %}
 <div class="page-head">
   <h2>Tableau de bord</h2>
   <p class="sub">Ton assistant perso : muscu, meal prep, calendrier et recherche d'emploi,
     hébergé à la maison.</p>
 </div>
+
+{% if o.n_sessions %}
+<h3 class="section-title">Ta progression</h3>
+<ul class="stats">
+  <li class="stat accent">
+    <span class="stat-label">Volume total</span>
+    <span class="stat-value">{{ '%.1f'|format(o.total_volume / 1000) | replace('.', ',') }}<small>t</small></span>
+    <span class="stat-note">{{ o.total_sets }} séries · {{ o.n_sessions }} séances</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Rythme</span>
+    <span class="stat-value">{{ o.per_week }}<small>/sem</small></span>
+    <span class="stat-note">assiduité {{ o.adherence }} %</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Dernière séance</span>
+    <span class="stat-value">{{ o.days_since }}<small>j</small></span>
+    <span class="stat-note">{{ o.last_date.strftime('%d/%m') }} · écart moyen {{ o.avg_gap }} j</span>
+  </li>
+</ul>
+{% if volume_chart %}
+<div class="chart-grid">
+  {{ chart.line(volume_chart, "Volume par séance") }}
+</div>
+{% endif %}
+<p><a href="{{ url_for('stats.dashboard') }}">📊 Toutes les statistiques →</a></p>
+{% endif %}
 
 <h3 class="section-title">Aujourd'hui</h3>
 <ul class="cards">

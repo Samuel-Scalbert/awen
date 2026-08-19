@@ -196,7 +196,7 @@ DURATION_SLUGS = {"plyo-corde"}
 
 
 def ensure_program_block():
-    """Migration douce : ajoute les colonnes `block` et `unit` si absentes."""
+    """Migration douce : ajoute les colonnes `block`, `unit` et `active`."""
     cols = [row[1] for row in
             db.session.execute(sqltext("PRAGMA table_info(program_exercises)"))]
     if "block" not in cols:
@@ -205,11 +205,16 @@ def ensure_program_block():
     if "unit" not in cols:
         db.session.execute(sqltext(
             "ALTER TABLE program_exercises ADD COLUMN unit VARCHAR(6)"))
+    if "active" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE program_exercises ADD COLUMN active BOOLEAN"))
     db.session.commit()
     ProgramExercise.query.filter(ProgramExercise.block.is_(None)).update(
         {"block": "force"}, synchronize_session=False)
     ProgramExercise.query.filter(ProgramExercise.unit.is_(None)).update(
         {"unit": "reps"}, synchronize_session=False)
+    ProgramExercise.query.filter(ProgramExercise.active.is_(None)).update(
+        {"active": True}, synchronize_session=False)
     db.session.commit()
 
     # Les rebonds de chevilles se tiennent au chrono : compter 30 sauts en
@@ -232,4 +237,73 @@ def seed_plyo_block():
             increment_kg=0, rest_sec=rest, notes=notes,
             unit="sec" if slug in DURATION_SLUGS else "reps",
         ))
+    db.session.commit()
+
+
+def apply_pull_feedback():
+    """Ajustements de la séance Pull, issus des commentaires du 17/08.
+
+    Idempotent : chaque changement n'est appliqué que s'il ne l'est pas déjà,
+    la fonction peut donc tourner à chaque démarrage sans rien casser.
+
+    Le principe pour les remplacements : « seated row » est le même mouvement
+    que l'ancien « low row », on renomme donc l'exercice existant pour qu'il
+    garde son historique et sa charge. Le « pec fly rear delt » est un
+    mouvement nouveau : il reçoit une fiche neuve, et le tirage qu'il remplace
+    est désactivé plutôt que supprimé — ses séries passées restent dans les
+    statistiques.
+    """
+    # « Remplace par seated row donc réutilise les stats du low row »
+    low = ProgramExercise.query.filter_by(slug="low-row").first()
+    if low and low.name != "Seated row":
+        low.name = "Seated row"
+        low.notes = ("Anciennement « low row » : même mouvement, l'historique "
+                     "et la charge sont conservés.")
+        low.position = 2
+
+    # « Remplace par un pec fly rear delt, c'est le premier exercice que je fais »
+    tirage = ProgramExercise.query.filter_by(slug="tirage-rapproche").first()
+    if tirage and tirage.active:
+        tirage.active = False
+    if not ProgramExercise.query.filter_by(slug="pec-fly-rear-delt").first():
+        db.session.add(ProgramExercise(
+            session_type="pull", block="force", position=1,
+            name="Pec fly / rear delt", slug="pec-fly-rear-delt",
+            sets=4, rep_min=10, rep_max=15, weight_kg=0, increment_kg=2.5,
+            rest_sec=60, unit="reps", active=True,
+            notes="Premier exercice de la séance. Charge à régler à la première "
+                  "séance, la progression prendra le relais ensuite.",
+        ))
+
+    # « Passe à 4 sets et écris bien que c'est au dependant curl »
+    marteau = ProgramExercise.query.filter_by(slug="curl-marteau").first()
+    if marteau and marteau.sets != 4:
+        marteau.sets = 4
+        marteau.notes = "Machine dependant arm curl."
+
+    # « Les curl sont à la poulie »
+    inverse = ProgramExercise.query.filter_by(slug="curl-inverse").first()
+    if inverse and "poulie" not in (inverse.notes or ""):
+        inverse.name = "Curl inversé (poulie)"
+        inverse.notes = "À la poulie, pas à la barre."
+
+    # « 60 sec pour la plyo repos »
+    ProgramExercise.query.filter_by(block="plyo").update(
+        {"rest_sec": 60}, synchronize_session=False)
+
+    db.session.flush()
+
+    # Renumérotation : les remplacements ci-dessus laissent deux exercices sur
+    # la même position, ce qui rendrait les flèches ↑↓ de la page Programme
+    # imprévisibles. On repart de 1 pour chaque bloc, en conservant l'ordre
+    # actuellement affiché.
+    for stype in ("push", "pull", "legs"):
+        for block in ("force", "plyo"):
+            rows = (ProgramExercise.query
+                    .filter_by(session_type=stype, block=block)
+                    .filter(ProgramExercise.active.is_(True))
+                    .order_by(ProgramExercise.position, ProgramExercise.id).all())
+            for i, pe in enumerate(rows, 1):
+                pe.position = i
+
     db.session.commit()

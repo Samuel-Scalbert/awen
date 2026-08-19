@@ -31,8 +31,9 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        from .seed import (ensure_program_block, ensure_recipe_servings,
-                           seed_default_recipes, seed_plyo_block, seed_program)
+        from .seed import (apply_pull_feedback, ensure_program_block,
+                           ensure_recipe_servings, seed_default_recipes,
+                           seed_plyo_block, seed_program)
         # Les migrations de schéma d'abord : les fonctions de seed passent par
         # l'ORM, qui sélectionne toutes les colonnes du modèle — une colonne
         # encore absente de la base ferait échouer le simple comptage.
@@ -41,5 +42,6 @@ def create_app(config_class=Config):
         seed_default_recipes()
         seed_program()
         seed_plyo_block()
+        apply_pull_feedback()
 
     return app

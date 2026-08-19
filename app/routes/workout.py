@@ -4,7 +4,8 @@ from flask import (Blueprint, flash, jsonify, redirect, render_template,
                    request, url_for)
 
 from ..models import db, ExerciseNote, ExerciseSet, ProgramExercise, Workout
-from ..services.progression import apply_progression, next_session_type
+from ..services.progression import (apply_progression, next_session_type,
+                                    recompute_from_history)
 
 bp = Blueprint("workout", __name__, url_prefix="/workouts")
 
@@ -14,18 +15,16 @@ def _current_workout():
             .order_by(Workout.date.desc()).first())
 
 
-def session_exercises(focus):
-    """Exercices d'une séance, bloc pliométrique d'abord.
+def session_exercises(focus, block="force"):
+    """Exercices actifs d'une séance, dans l'ordre choisi sur la page Programme.
 
-    L'ordre est un choix d'entraînement, pas d'affichage : les sauts se font
-    sur un système nerveux frais, donc avant le travail avec charges — y
-    compris le jour des jambes.
+    La plyométrie a sa propre page : la séance ne contient plus que la force.
+    Les exercices désactivés disparaissent d'ici mais gardent leur historique.
     """
-    exercises = (ProgramExercise.query
-                 .filter_by(session_type=focus.lower())
-                 .order_by(ProgramExercise.position).all())
-    return sorted(exercises, key=lambda pe: (0 if pe.block == "plyo" else 1,
-                                             pe.position))
+    return (ProgramExercise.query
+            .filter_by(session_type=focus.lower(), block=block)
+            .filter(ProgramExercise.active.is_(True))
+            .order_by(ProgramExercise.position, ProgramExercise.id).all())
 
 
 def _last_focus(exclude_id=None):
@@ -56,13 +55,45 @@ def list_workouts():
 
 @bp.route("/programme")
 def programme():
-    groups = []
-    for st in ("push", "pull", "legs"):
-        exercises = session_exercises(st)
-        groups.append((st,
-                       [pe for pe in exercises if pe.block == "plyo"],
-                       [pe for pe in exercises if pe.block != "plyo"]))
+    groups = [(st, session_exercises(st, "plyo"), session_exercises(st, "force"))
+              for st in ("push", "pull", "legs")]
     return render_template("programme.html", groups=groups)
+
+
+@bp.route("/programme/move/<int:pe_id>/<direction>", methods=["POST"])
+def move_exercise(pe_id, direction):
+    """Monte ou descend un exercice dans sa séance.
+
+    On échange les positions avec le voisin plutôt que de renuméroter tout le
+    bloc : c'est suffisant et ça ne touche à rien d'autre.
+    """
+    pe = db.get_or_404(ProgramExercise, pe_id)
+    siblings = session_exercises(pe.session_type, pe.block)
+    idx = next(i for i, x in enumerate(siblings) if x.id == pe.id)
+    swap = idx - 1 if direction == "up" else idx + 1
+    if 0 <= swap < len(siblings):
+        other = siblings[swap]
+        pe.position, other.position = other.position, pe.position
+        # Deux exercices peuvent partager une position après d'anciennes
+        # migrations : on renumérote proprement pour que l'échange soit visible.
+        for i, x in enumerate(session_exercises(pe.session_type, pe.block), 1):
+            x.position = i
+        db.session.commit()
+    return redirect(url_for("workout.programme") + "#" + pe.session_type)
+
+
+@bp.route("/programme/recompute", methods=["POST"])
+def recompute_weights():
+    """Recale les charges du programme sur ce qui a vraiment été soulevé."""
+    changes = recompute_from_history()
+    if changes:
+        flash("Charges recalculées depuis l'historique :")
+        for c in changes:
+            flash(c)
+    else:
+        flash("Aucune charge à recaler : le programme correspond déjà à "
+              "l'historique.")
+    return redirect(url_for("workout.programme"))
 
 
 @bp.route("/programme/update", methods=["POST"])
@@ -95,7 +126,32 @@ def session():
               for pe in exercises}
     notes = {n.program_exercise_id: n.text
              for n in workout.notes_by_exercise}
-    return render_template("session.html", workout=workout,
+    return render_template("session.html", workout=workout, mode="force",
+                           exercises=exercises, logged=logged, notes=notes)
+
+
+@bp.route("/plyo")
+def plyo():
+    """Bloc pliométrique, sur sa propre page.
+
+    Il ne fait plus partie de la séance de force : c'est un bonus qu'on fait
+    quand on est frais. Les séries sont rattachées à la séance en cours pour
+    rester dans les statistiques, donc une séance doit être ouverte — le même
+    gabarit sert les deux pages, seul le mode change.
+    """
+    workout = _current_workout()
+    if workout is None:
+        focus = next_session_type(_last_focus())
+        workout = Workout(focus=focus, date=datetime.now())
+        db.session.add(workout)
+        db.session.commit()
+    exercises = session_exercises(workout.focus, "plyo")
+    logged = {pe.id: sorted((s for s in workout.sets
+                             if s.program_exercise_id == pe.id),
+                            key=lambda s: s.set_number or 0)
+              for pe in exercises}
+    notes = {n.program_exercise_id: n.text for n in workout.notes_by_exercise}
+    return render_template("session.html", workout=workout, mode="plyo",
                            exercises=exercises, logged=logged, notes=notes)
 
 
