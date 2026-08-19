@@ -8,17 +8,17 @@
 
 ## Principe de la semaine
 
-3 séances par semaine : **lundi Push, mercredi Pull, vendredi Legs**. Chaque groupe musculaire passe une fois par semaine, avec au moins un jour de repos entre deux séances (le week-end reste libre pour le volley).
+3 séances par semaine : **lundi Pull, mercredi Push, vendredi Legs**. Chaque groupe musculaire passe une fois par semaine, avec au moins un jour de repos entre deux séances (le week-end reste libre pour le volley).
 
 | Lundi | Mardi | Mercredi | Jeudi | Vendredi | Week-end |
 |---|---|---|---|---|---|
-| Push | repos | Pull | repos | Legs | repos / volley |
+| Pull | repos | Push | repos | Legs | repos / volley |
 
 La rotation reste **continue** : si une séance saute, la suivante reprend là où le cycle s'était arrêté, pour qu'aucun groupe ne soit sacrifié deux fois de suite.
 
-## Bloc plyométrie — 20 min par séance
+## Bloc plyométrie — en bonus, sur sa propre page
 
-Chaque séance s'ouvre par 20 minutes de pliométrie orientée **détente verticale pour le volley**, **avant le travail avec charges** — y compris le jour des jambes. Un saut se travaille sur un système nerveux frais : sur des jambes déjà fatiguées, la hauteur chute, le temps de contact au sol s'allonge, et on entraîne l'inverse de ce qu'on cherche (sans compter le risque de blessure).
+La pliométrie orientée **détente verticale pour le volley** a sa propre page dans l'app : elle ne fait plus partie de la séance de force. À faire **quand tu es frais**, idéalement avant les charges ou un jour sans séance. Sur des jambes déjà fatiguées, la hauteur chute, le temps de contact au sol s'allonge, et on entraîne l'inverse de ce qu'on cherche (sans compter le risque de blessure).
 
 | Séance | Bloc plyométrie |
 |---|---|
@@ -26,7 +26,7 @@ Chaque séance s'ouvre par 20 minutes de pliométrie orientée **détente vertic
 | Pull | Box jumps 4×5 · Bondissements latéraux 3×8 · Saut en longueur 3×5 · Rebonds chevilles 3×30 |
 | Legs | Sauts en contrebas 4×4 · Squat jumps 3×5 · Fentes sautées 3×6 · Rebonds chevilles 3×30 |
 
-Repos 90 s entre les séries explosives (60 s sur les rebonds de chevilles). La plyométrie **ne progresse pas en kilos** mais en qualité : hauteur de box, explosivité, temps de contact au sol. Dès que la hauteur baisse, la série ne sert plus à rien — mieux vaut l'arrêter.
+Repos 60 s entre les séries. La plyométrie **ne progresse pas en kilos** mais en qualité : hauteur de box, explosivité, temps de contact au sol. Dès que la hauteur baisse, la série ne sert plus à rien — mieux vaut l'arrêter.
 
 ## Progression (double progression, appliquée automatiquement)
 

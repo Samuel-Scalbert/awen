@@ -28,3 +28,6 @@ Thumbs.db
 # ESP32 build
 esp32/build/
 esp32/.pio/
+
+# Sauvegardes locales de la base
+data/backups/

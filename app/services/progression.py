@@ -3,7 +3,10 @@ from datetime import timedelta
 
 from ..models import db
 
-CYCLE = ["Push", "Pull", "Legs"]
+# L'ordre du cycle fixe le jour de chaque séance : avec 3 séances par
+# semaine sur lun/mer/ven, Pull tombe le lundi, Push le mercredi, Legs le
+# vendredi — tant qu'aucune séance n'est sautée.
+CYCLE = ["Pull", "Push", "Legs"]
 # 3 séances par semaine : lundi, mercredi, vendredi. Avec un cycle de 3 séances,
 # chaque muscle passe une fois par semaine et tombe le même jour d'une semaine
 # sur l'autre. La rotation reste continue (et non figée par jour) : si une

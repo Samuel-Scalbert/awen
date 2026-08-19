@@ -137,6 +137,27 @@ Depuis le poste de développement, pour ne pas attendre le prochain cycle :
 ssh awen "cd awen && ./scripts/deploy.sh"
 ```
 
+### Sauvegarde automatique
+
+```bash
+./scripts/install-backup.sh
+```
+
+Sauvegarde quotidienne à 4h, les **7 dernières conservées** dans
+`data/backups/`. La copie passe par `sqlite3 .backup`, qui reste cohérente
+même si l'app écrit au même moment — contrairement à un `cp`. Le timer est
+`Persistent` : si le serveur est éteint à 4h, la sauvegarde est rattrapée au
+démarrage suivant.
+
+```bash
+ls -lt data/backups/                     # les sauvegardes
+./scripts/backup.sh                      # sauvegarder maintenant
+# restaurer :
+docker compose down
+cp data/backups/awen-2026-08-19-0400.db data/awen.db
+docker compose up -d
+```
+
 Points à connaître :
 
 - **La base vit dans `./data`**, monté en volume : reconstruire l'image ne
