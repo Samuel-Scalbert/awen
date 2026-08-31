@@ -33,6 +33,14 @@ from array import array
 import os
 
 
+def _dim(c565):
+    """Assombrit une couleur RGB565 de moitie, canal par canal."""
+    r = ((c565 >> 11) & 0x1F) >> 1
+    g = ((c565 >> 5) & 0x3F) >> 1
+    b = (c565 & 0x1F) >> 1
+    return (r << 11) | (g << 5) | b
+
+
 def _readable(path, size):
     """Le fichier existe-t-il et fait-il exactement la taille attendue ?
 
@@ -52,7 +60,6 @@ YOFF = (CH - GLYPH) // 2
 N = COLS * ROWS
 
 _SPACE = 32
-BIG_PAD = 2      # respiration au-dessus du texte agrandi
 
 
 class Grid:
@@ -200,6 +207,9 @@ class Grid:
     def big(self, col, row, s, scale=2, fg=None):
         self._queue.append(("big", (col, row, s, scale, fg)))
 
+    def dots(self, row, colors, active):
+        self._queue.append(("dots", (row, colors, active)))
+
     def image(self, col, row, src, size, tag):
         """Image RGB565 déjà inversée pour ce panneau.
 
@@ -236,6 +246,8 @@ class Grid:
                 self._draw_frame(*args)
             elif kind == "bar":
                 self._draw_bar(*args)
+            elif kind == "dots":
+                self._draw_dots(*args)
             elif kind == "image":
                 self._draw_image(*args)
             elif kind == "imagefile":
@@ -252,6 +264,8 @@ class Grid:
             rows, key = range(row, row + h), ("frame", col, row, w, h)
         elif kind == "bar":
             rows, key = (args[1],), ("bar", args[0], args[1], args[2])
+        elif kind == "dots":
+            rows, key = (args[0],), ("dots", args[0])
         elif kind in ("image", "imagefile"):
             col, row, size = args[0], args[1], args[3]
             span = max(1, size // CH)
@@ -335,6 +349,28 @@ class Grid:
 
         self._gfx[key] = (filled, c)
 
+    def _draw_dots(self, row, colors, active):
+        """Une pastille par ecran, celle en cours pleine, les autres eteintes.
+
+        C'est le meme code couleur que la LED : on sait ou l'on est sans
+        lire, et on sait combien d'ecrans restent avant de revenir.
+        """
+        key = ("dots", row)
+        if self._gfx.get(key) == (active, len(colors)):
+            return
+        self._gfx[key] = (active, len(colors))
+        cy = row * CH + 7
+        for i, c in enumerate(colors):
+            cx = 4 + i * 2 * CW
+            self.d.fill_rect(cx - 4, cy - 4, 9, 9, self.p.BG)
+            if i == active:
+                self.d.fill_ellipse(cx, cy, 4, 4, c)
+            else:
+                # Un cerne plutot qu'un disque terne : a cette taille un
+                # disque assombri se confond avec le fond.
+                self.d.fill_ellipse(cx, cy, 3, 3, _dim(c))
+                self.d.fill_ellipse(cx, cy, 1, 1, self.p.BG)
+
     def _draw_image_file(self, col, row, path, size, tag):
         """Fait défiler un fichier RGB565 vers l'écran, sans le charger.
 
@@ -401,9 +437,12 @@ class Grid:
         if prev == (s, c, scale):
             return
 
-        # Deux pixels de respiration : sans eux, un texte agrandi placé
-        # juste sous un filet le touche, et l'écran semble tassé.
-        x, y = col * CW, row * CH + BIG_PAD
+        # Pas de marge ajoutee ici, et c'est deliberе : un glyphe en echelle
+        # 4 fait 32 px dans une case de 32 px, il n'y a rien a prendre. Le
+        # decaler ne ferait que le faire deborder sur la ligne suivante. La
+        # respiration se gagne en laissant une ligne vide dans la mise en
+        # page, ce que font Home et Spotify.
+        x, y = col * CW, row * CH
         gw = GLYPH * scale
         if prev is not None and len(prev[0]) > len(s):
             # Le texte a raccourci ou disparu : on efface l'ancienne emprise,

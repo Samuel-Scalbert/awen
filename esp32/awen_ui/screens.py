@@ -23,12 +23,14 @@ l'écran affiche vers où tourner. C'est App qui arbitre (voir app.py), les
 
 Texte en ASCII majuscule sans accents : voir grid.py.
 """
+import time
+
 from grid import COLS, ROWS
 from input import BTN_A, BTN_B, BTN_C, POT, SHORT, LONG, REPEAT
 import theme
 
 
-def _header(g, title, st):
+def _header(g, title, st, app):
     """Barre haute : la marque, l'écran, le curseur, l'heure.
 
     « AWEN » figure partout — c'est le nom de la machine, et un afficheur qui
@@ -45,7 +47,18 @@ def _header(g, title, st):
     g.text(5, 0, title, g.p.HI)
     g.cursor(5 + len(title) + 1, 0, st.get("blink", True))
     g.right(0, st.get("time", ""), g.p.DIM)
+    _dots(g, app)
     g.rule(1)
+
+
+def _dots(g, app):
+    """Les pastilles de navigation, ligne 1, aux couleurs des ecrans.
+
+    Meme code couleur que la LED : on sait ou l'on est sans lire, et combien
+    d'ecrans restent avant de revenir au debut.
+    """
+    g.dots(1, [theme.rgb565(c) for c in theme.SCREEN_RGB[:len(app.screens)]],
+           app.index)
 
 
 def _statusbar(g, left, right):
@@ -159,91 +172,104 @@ class Home(Screen):
 
         g.text(0, 0, "AWEN", g.p.FG)
         g.text(5, 0, jour.get("long", st.get("date", ""))[:17], g.p.HI)
-        g.cursor(5 + len(jour.get("long", "")[:17]) + 1, 0,
-                 st.get("blink", True))
         g.right(0, "S{}".format(jour.get("semaine", "")), g.p.DIM)
+        _dots(g, app)
         g.rule(1)
 
-        # 5 caractères en 32x32 (echelle 4) : 160 px, centrés sur 240.
-        g.big(5, 2, st.get("time", "--:--"), scale=4)
+        # Ligne 2 laissee VIDE, et c'est la seule facon d'aerer : un glyphe
+        # en echelle 4 fait exactement 32 px dans deux lignes de 16, il n'y a
+        # aucune marge a prendre dans le trace lui-meme.
+        g.big(5, 3, st.get("time", "--:--"), scale=4)
         saint = jour.get("saint", "")
-        g.center(4, ("- saint " + saint + " -") if saint else "", g.p.DIM)
-        g.rule(5)
+        g.center(5, ("- saint " + saint + " -") if saint else "", g.p.DIM)
+        g.rule(6)
 
-        # --- meteo : la question du matin, avant toutes les autres --------
+        # --- meteo --------------------------------------------------------
         #
-        # La police est ASCII, donc pas d'emoji. La couleur fait le travail a
-        # leur place : un marqueur colore par section, la valeur en clair,
-        # l'etiquette en sourdine. Cinq couleurs suffisent a hierarchiser ce
-        # qu'un jeu de pictogrammes ferait ailleurs.
+        # La police est ASCII, donc pas d'emoji : la couleur fait le travail a
+        # leur place, avec un marqueur colore par section.
         m = st.get("meteo", {})
         if m.get("ok"):
-            g.text(0, 6, m.get("icon", " "), g.p.HI)
-            g.big(2, 6, "{}C".format(m.get("now_c", 0))[:6], 2)
-            g.right(6, m.get("label", "")[:16], g.p.FG)
-            g.text(1, 7, "min {:>3}   max {:>3}".format(
-                m.get("min_c", 0), m.get("max_c", 0)), g.p.DIM)
+            g.text(0, 7, m.get("icon", " "), g.p.HI)
+            g.text(2, 7, m.get("label", "")[:16], g.p.FG)
             rain = m.get("rain_pct", 0)
             g.right(7, "pluie {:>3}%".format(rain),
                     g.p.ALERT if rain >= 60 else g.p.DIM)
+            # Le gros chiffre sous du texte normal, jamais sous un filet :
+            # un filet occupe le dernier pixel de sa ligne et le toucherait.
+            g.big(1, 8, "{}C".format(m.get("now_c", 0))[:6], 2)
+            g.right(8, "min {:>3}  max {:>3}".format(
+                m.get("min_c", 0), m.get("max_c", 0)), g.p.DIM)
         else:
-            g.text(1, 6, "METEO INDISPONIBLE", g.p.DIM)
-        g.rule(8)
+            g.text(1, 7, "METEO INDISPONIBLE", g.p.DIM)
 
-        # --- serveur : ce qui doit tourner tourne-t-il ? ------------------
+        # --- la piece, juste sous le dehors -------------------------------
+        #
+        # Les deux cote a cote, c'est tout l'interet : l'API donne la ville,
+        # le capteur donne un metre autour de toi, et l'ecart entre les deux
+        # est ce qui dit s'il faut ouvrir la fenetre.
+        ti, hi = app.sensor.reading(time.ticks_ms())
+        g.text(0, 9, "#", g.p.DIM)
+        g.text(2, 9, "CHAMBRE", g.p.DIM)
+        if ti is None:
+            g.right(9, "pas de capteur", g.p.DIM)
+        else:
+            ecart = ti - (m.get("now_c", ti) if m.get("ok") else ti)
+            g.right(9, "{:>2}C  {:>2}%  {:+d}".format(ti, hi, ecart),
+                    g.p.HI)
+        g.rule(10)
+
+        # --- serveur ------------------------------------------------------
         srv = st.get("serveur", {})
         total = srv.get("total", 0)
         ok = srv.get("ok")
-        g.text(0, 9, "+" if ok and total else "!",
+        g.text(0, 11, "+" if ok and total else "!",
                g.p.FG if ok and total else g.p.ALERT)
-        g.text(2, 9, "SERVEUR", g.p.DIM)
+        g.text(2, 11, "SERVEUR", g.p.DIM)
         if not total:
-            g.right(9, "PAS DE RELEVE", g.p.ALERT)
+            g.right(11, "PAS DE RELEVE", g.p.ALERT)
         else:
-            g.right(9, "{}/{} SERVICES".format(srv.get("up", 0), total),
+            g.right(11, "{}/{} SERVICES".format(srv.get("up", 0), total),
                     g.p.FG if ok else g.p.ALERT)
             if not ok:
-                g.text(2, 10, ("! " + ", ".join(srv.get("down", [])))[:26],
+                g.text(2, 12, ("! " + ", ".join(srv.get("down", [])))[:26],
                        g.p.ALERT)
             else:
-                g.text(2, 10, "disque {}%  ram {}%  {}".format(
+                g.text(2, 12, "disque {}%  ram {}%  {}".format(
                     srv.get("disk_pct", 0), srv.get("mem_pct", 0),
                     srv.get("uptime", ""))[:27], g.p.DIM)
 
         # --- ce qui attend une action de ta part -------------------------
         n = st.get("jobs", {}).get("n", 0)
-        g.text(0, 11, ">" if n else " ", g.p.HI if n else g.p.DIM)
-        g.text(2, 11, "OFFRES DU JOUR", g.p.DIM)
-        g.right(11, str(n), g.p.HI if n else g.p.DIM)
+        g.text(0, 13, ">" if n else " ", g.p.HI if n else g.p.DIM)
+        g.text(2, 13, "OFFRES DU JOUR", g.p.DIM)
+        g.right(13, str(n), g.p.HI if n else g.p.DIM)
 
         c = st.get("coach", {})
         alert = c.get("level") == "alert"
-        g.text(0, 12, c.get("icon") or " ",
-               g.p.ALERT if alert else g.p.FG)
-        g.text(2, 12, "COACH", g.p.DIM)
-        g.right(12, (c.get("text") or "rien a signaler")[:20],
+        g.text(0, 14, c.get("icon") or " ", g.p.ALERT if alert else g.p.FG)
+        g.text(2, 14, "COACH", g.p.DIM)
+        g.right(14, (c.get("text") or "rien a signaler")[:20],
                 g.p.ALERT if alert else g.p.FG)
 
-        # --- ce qui joue --------------------------------------------------
         sp = st.get("spotify", {})
         playing = sp.get("playing")
-        g.text(0, 13, ">" if playing else "|", g.p.FG if playing else g.p.DIM)
-        g.text(2, 13, "ECOUTE", g.p.DIM)
+        g.text(0, 15, ">" if playing else "|", g.p.FG if playing else g.p.DIM)
+        g.text(2, 15, "ECOUTE", g.p.DIM)
         if sp.get("device"):
-            g.right(13, "{} - {}".format(sp.get("artist", ""),
+            g.right(15, "{} - {}".format(sp.get("artist", ""),
                                          sp.get("title", ""))[:20], g.p.FG)
         else:
-            g.right(13, "rien", g.p.DIM)
+            g.right(15, "rien", g.p.DIM)
+        g.rule(16)
 
-        g.rule(14)
-
-        # --- l'etat de la liaison, en bas : c'est le moins urgent ---------
+        # --- la liaison, en bas : c'est le moins urgent -------------------
         rssi = app.wifi_rssi()
-        g.text(0, 15, "*" if online else "!",
+        g.text(0, 17, "*" if online else "!",
                g.p.FG if online else g.p.ALERT)
-        g.text(2, 15, "WIFI", g.p.DIM)
+        g.text(2, 17, "WIFI", g.p.DIM)
         if rssi is None:
-            g.right(15, "EN LIGNE" if online else "HORS LIGNE",
+            g.right(17, "EN LIGNE" if online else "HORS LIGNE",
                     g.p.FG if online else g.p.ALERT)
         else:
             # Un dBm ne parle a personne : on le traduit, et on garde le
@@ -256,11 +282,7 @@ class Home(Screen):
                 mot, col = "FAIBLE", g.p.HI
             else:
                 mot, col = "TRES FAIBLE", g.p.ALERT
-            g.right(15, "{} {} dBm".format(mot, rssi), col)
-        g.text(2, 16, st.get("ip", ""), g.p.DIM)
-
-        # Pas de « [OK] MENU » : B ne fait rien ici, et annoncer une action
-        # inexistante est pire que de n'en annoncer aucune.
+            g.right(17, "{} {} dBm".format(mot, rssi), col)
         _statusbar(g, "A/C : ecrans", "B tenu: accueil")
 
 
@@ -297,7 +319,7 @@ class Gym(Screen):
     def draw(self, g, st, app):
         gym = st.get("gym", {})
         rows = self._rows(st)
-        _header(g, "SEANCE {}".format(gym.get("session_no", "--")), st)
+        _header(g, "SEANCE {}".format(gym.get("session_no", "--")), st, app)
 
         focus = (gym.get("focus") or "REPOS").upper()
         g.big(1, 3, focus[:8], 2)
@@ -337,7 +359,7 @@ class Coach(Screen):
 
     def draw(self, g, st, app):
         c = st.get("coach", {})
-        _header(g, "COACH", st)
+        _header(g, "COACH", st, app)
 
         if not c.get("text"):
             g.text(1, 8, "RIEN A SIGNALER", g.p.DIM)
@@ -415,7 +437,7 @@ class Jobs(Screen):
     def draw(self, g, st, app):
         jobs = st.get("jobs", {})
         offers = self._offers(st)
-        _header(g, "VEILLE EMPLOI", st)
+        _header(g, "VEILLE EMPLOI", st, app)
 
         n = jobs.get("n", len(offers))
         g.text(1, 3, str(n), g.p.HI)
@@ -462,7 +484,7 @@ class Spotify(Screen):
 
     def draw(self, g, st, app):
         sp = st.get("spotify", {})
-        _header(g, "> SPOTIFY", st)
+        _header(g, "> SPOTIFY", st, app)
 
         if not sp.get("device"):
             g.text(1, 8, "AUCUN APPAREIL", g.p.DIM)
@@ -553,7 +575,7 @@ class Settings(Screen):
         app.dirty = True
 
     def draw(self, g, st, app):
-        _header(g, "PARAMETRES", st)
+        _header(g, "PARAMETRES", st, app)
         for i, name in enumerate(self.KEYS):
             r = 4 + i * 3
             focused = i == self.sel
@@ -615,7 +637,7 @@ class Theme(Screen):
             self.saved = False
 
     def draw(self, g, st, app):
-        _header(g, "THEME", st)
+        _header(g, "THEME", st, app)
 
         cur = self._index(app)
         g.big(1, 3, g.p.name[:10], 2)

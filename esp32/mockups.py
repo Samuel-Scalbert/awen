@@ -57,8 +57,9 @@ PALETTE_NAMES = ("AMBRE", "VERT", "BLEU", "VIOLET", "RUBIS", "PAPIER")
 class Screen:
     """Un ecran 240x320 compose sur la grille 30x20."""
 
-    def __init__(self, pal):
+    def __init__(self, pal, active=0):
         self.p = pal
+        self.active = active
         self.img = Image.new("RGB", (W, H), pal["bg"])
         self.d = ImageDraw.Draw(self.img)
         # Taille calee sur la police 8x8 de la carte, pas sur ce qui est
@@ -145,6 +146,22 @@ class Screen:
         tmp = tmp.resize((GLYPH * len(s) * scale, GLYPH * scale), Image.NEAREST)
         self.img.paste(tmp, (col * CW, row * CH))
 
+    # Couleurs d'identite des ecrans : identiques a theme.SCREEN_RGB.
+    SCREEN_RGB = ((255, 120, 0), (0, 110, 255), (0, 220, 90), (255, 40, 40),
+                  (190, 90, 255), (0, 210, 220), (240, 240, 240))
+
+    def dots(self, row, active):
+        """Pastilles de navigation, aux couleurs des ecrans."""
+        cy = row * CH + 7
+        for i, c in enumerate(self.SCREEN_RGB):
+            cx = 4 + i * 2 * CW
+            if i == active:
+                self.d.ellipse((cx - 4, cy - 4, cx + 4, cy + 4), fill=c)
+            else:
+                dim = tuple(v // 2 for v in c)
+                self.d.ellipse((cx - 3, cy - 3, cx + 3, cy + 3),
+                               outline=dim, width=2)
+
     def cursor(self, col, row, color="hi"):
         self.d.rectangle([col * CW, row * CH + 2,
                           col * CW + CW - 1, row * CH + CH - 1],
@@ -158,6 +175,7 @@ class Screen:
         self.text(5, 0, title, "hi", bold=True)
         self.cursor(5 + len(title) + 1, 0)
         self.right(0, clock, "dim")
+        self.dots(1, self.active)
         self.rule(1)
 
     def statusbar(self, left, right_txt, color="dim"):
@@ -195,49 +213,56 @@ def s_boot(p):
 def s_home(p):
     """Le tableau de bord. Dense a dessein.
 
-    La police est ASCII, donc pas d'emoji : la couleur fait le travail a leur
-    place, avec un marqueur colore par section.
+    La ligne 2 est laissee VIDE : un glyphe en echelle 4 fait exactement
+    32 px dans deux lignes de 16, il n'y a aucune marge a prendre dans le
+    trace. La respiration se gagne dans la mise en page.
     """
-    s = Screen(p)
+    s = Screen(p, active=0)
     s.text(0, 0, "AWEN", "fg")
     s.text(5, 0, "Lundi 31 aout", "hi", bold=True)
     s.cursor(19, 0)
     s.right(0, "S36", "dim")
+    s.dots(1, 0)
     s.rule(1)
 
-    s.big(5, 2, "19:01", scale=4)
-    s.center(4, "- saint Aristide -", "dim")
-    s.rule(5)
+    s.big(5, 3, "22:29", scale=4)
+    s.center(5, "- saint Aristide -", "dim")
+    s.rule(6)
 
-    s.text(0, 6, "=", "hi")
-    s.big(2, 6, "22C", scale=2)
-    s.right(6, "COUVERT", "fg")
-    s.text(1, 7, "min  18   max  23", "dim")
+    s.text(0, 7, "=", "hi")
+    s.text(2, 7, "COUVERT", "fg")
     s.right(7, "pluie  15%", "dim")
-    s.rule(8)
+    s.big(1, 8, "20C", scale=2)
+    s.right(8, "min  18  max  23", "dim")
 
-    s.text(0, 9, "+", "fg")
-    s.text(2, 9, "SERVEUR", "dim")
-    s.right(9, "2/2 SERVICES", "fg")
-    s.text(2, 10, "disque 2%  ram 13%  4j 2h", "dim")
+    # La piece juste sous le dehors : l'ecart entre les deux est ce qui dit
+    # s'il faut ouvrir la fenetre.
+    s.text(0, 9, "#", "dim")
+    s.text(2, 9, "CHAMBRE", "dim")
+    s.right(9, "23C  48%  +3", "hi", bold=True)
+    s.rule(10)
 
-    s.text(0, 11, ">", "hi")
-    s.text(2, 11, "OFFRES DU JOUR", "dim")
-    s.right(11, "2", "hi", bold=True)
+    s.text(0, 11, "+", "fg")
+    s.text(2, 11, "SERVEUR", "dim")
+    s.right(11, "2/2 SERVICES", "fg")
+    s.text(2, 12, "disque 2%  ram 13%  4j 4h", "dim")
 
-    s.text(0, 12, "!", "alert")
-    s.text(2, 12, "COACH", "dim")
-    s.right(12, "14 jours sans seance", "alert")
+    s.text(0, 13, ">", "hi")
+    s.text(2, 13, "OFFRES DU JOUR", "dim")
+    s.right(13, "2", "hi", bold=True)
 
-    s.text(0, 13, ">", "fg")
-    s.text(2, 13, "ECOUTE", "dim")
-    s.right(13, "M83 - Midnight City", "fg")
-    s.rule(14)
+    s.text(0, 14, "!", "alert")
+    s.text(2, 14, "COACH", "dim")
+    s.right(14, "14 jours sans seance", "alert")
 
-    s.text(0, 15, "*", "fg")
-    s.text(2, 15, "WIFI", "dim")
-    s.right(15, "BON -64 dBm", "fg")
-    s.text(2, 16, "192.168.1.47", "dim")
+    s.text(0, 15, ">", "fg")
+    s.text(2, 15, "ECOUTE", "dim")
+    s.right(15, "EFFXCT - INTIKAM", "fg")
+    s.rule(16)
+
+    s.text(0, 17, "*", "fg")
+    s.text(2, 17, "WIFI", "dim")
+    s.right(17, "EXCELLENT -60 dBm", "fg")
 
     s.statusbar("A/C : ecrans", "B tenu: accueil")
     return s
@@ -248,7 +273,7 @@ def s_gym(p):
 
     En lecture seule : l'afficheur est sur un bureau, pas dans la salle.
     """
-    s = Screen(p)
+    s = Screen(p, active=1)
     s.header("SEANCE 09", "21:47")
 
     s.big(1, 3, "PULL", scale=2)
@@ -279,7 +304,7 @@ def s_gym(p):
 
 def s_coach(p):
     """Le conseil du moteur de regles, avec le ton sec de TARS."""
-    s = Screen(p)
+    s = Screen(p, active=3)
     s.header("COACH", "21:47")
 
     s.text(1, 3, "! CHARGE INADAPTEE", "alert", bold=True)
@@ -304,7 +329,7 @@ def s_coach(p):
 
 def s_settings(p):
     """L'ecran iconique de TARS : des reglages en pourcentage, assumes."""
-    s = Screen(p)
+    s = Screen(p, active=5)
     s.header("PARAMETRES", "21:47")
 
     params = [
@@ -328,7 +353,7 @@ def s_settings(p):
 
 def s_jobs(p):
     """Veille emploi : trois titres, pas plus. 30 colonnes, il faut trancher."""
-    s = Screen(p)
+    s = Screen(p, active=4)
     s.header("VEILLE EMPLOI", "21:47")
 
     s.text(1, 3, "3", "hi", bold=True)
@@ -361,7 +386,7 @@ def s_spotify(p):
     Le volume est l'usage le plus naturel d'un potentiometre de tout le
     firmware : il a une position absolue, exactement comme le curseur.
     """
-    s = Screen(p)
+    s = Screen(p, active=2)
     s.header("> SPOTIFY", "21:47")
 
     # Faute de vraie pochette ici, on montre son emprise exacte : 160 px de
@@ -390,7 +415,7 @@ def s_spotify(p):
 def s_theme(p):
     """Choix de la palette, avec un apercu des cinq roles."""
     current = PALETTE_NAMES.index(p["name"])
-    s = Screen(p)
+    s = Screen(p, active=6)
     s.header("THEME", "21:47")
 
     s.big(1, 3, PALETTE_NAMES[current], scale=2)

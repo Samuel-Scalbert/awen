@@ -95,3 +95,28 @@ def save(palette):
         return True
     except OSError:
         return False
+
+
+# --------------------------------------------------------------------------
+# Couleur d'identite des ecrans
+#
+# Elles ne dependent PAS de la palette choisie : c'est un reperage, pas une
+# decoration. Si le theme change, l'ecran Spotify reste vert — sinon la LED
+# et les pastilles cesseraient de vouloir dire quelque chose.
+#
+# En RVB 0-255 pour la LED ; grid.dots() les convertit lui-meme pour l'ecran.
+
+SCREEN_RGB = (
+    (255, 120, 0),      # accueil    orange
+    (0, 110, 255),      # seance     bleu
+    (0, 220, 90),       # spotify    vert
+    (255, 40, 40),      # coach      rouge
+    (190, 90, 255),     # jobs       violet
+    (0, 210, 220),      # parametres cyan
+    (240, 240, 240),    # theme      blanc
+)
+
+
+def rgb565(c):
+    """Triplet 0-255 vers RGB565, pour l'affichage des pastilles."""
+    return rgb(c[0], c[1], c[2])

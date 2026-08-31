@@ -32,7 +32,9 @@ import urequests
 
 from grid import Grid
 from input import BTN_A, BTN_B, BTN_C, Input, LONG, POT, REPEAT, SHORT
+import led as led_mod
 import screens
+import sensor as sensor_mod
 import theme
 
 POLL_MS = 30000          # rafraîchissement des données serveur
@@ -81,6 +83,8 @@ class App:
     def __init__(self, display, config):
         self.g = Grid(display, theme.load())
         self.io = Input(**config.get("pins", {}))
+        self.led = led_mod.make(**config.get("led", {}))
+        self.sensor = sensor_mod.make(**config.get("sensor", {}))
         self.cfg = config
 
         self.screens = [cls() for cls in screens.CAROUSEL]
@@ -378,6 +382,21 @@ class App:
         elif kind == BTN_C and arg in (SHORT, REPEAT):
             self.go(1)
 
+    def _update_led(self):
+        """La LED prend la couleur de l'ecran, et clignote s'il y a alerte.
+
+        Une couleur fixe dit ou l'on est ; le clignotement dit qu'il y a
+        quelque chose a regarder. Melanger les deux — une couleur d'alerte
+        qui remplacerait celle de l'ecran — ferait perdre le reperage au
+        moment ou il sert le plus.
+        """
+        color = theme.SCREEN_RGB[self.index % len(theme.SCREEN_RGB)]
+        alert = (self.state.get("coach", {}).get("level") == "alert"
+                 or not self.state.get("online", True))
+        if alert and not self.state.get("blink", True):
+            color = None            # une demi-periode eteinte : ca clignote
+        self.led.show(color)
+
     def _update_pot_arming(self):
         """Le potard reprend la main dès qu'il traverse la valeur courante."""
         screen = self.current()
@@ -477,7 +496,13 @@ class App:
         for ev in self.io.poll():
             self.handle(ev)
 
+        # Le capteur se lit toutes les dix secondes, pas a chaque image : sa
+        # lecture bloque une vingtaine de millisecondes.
+        if self.sensor.poll(now):
+            self.dirty = True
+
         self._update_pot_arming()
+        self._update_led()
         self._flush_volume(now)
 
         if time.ticks_diff(now, self.t_blink) >= BLINK_MS:

@@ -25,8 +25,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Files = @('theme.py', 'grid.py', 'input.py', 'screens.py', 'app.py',
-           'main.py', 'awen_config.py')
+$Files = @('theme.py', 'grid.py', 'input.py', 'led.py', 'sensor.py',
+           'screens.py', 'app.py', 'main.py', 'awen_config.py')
 $Required = @('st7789_min.py', 'tft_setup.py', 'wifi.py', 'wifi_config.py')
 
 # --- trouver mpremote -------------------------------------------------------

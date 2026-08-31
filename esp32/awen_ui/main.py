@@ -6,7 +6,9 @@ broches » — le dupliquer ici garantirait qu'un jour les deux divergent.
 
     Ecran   CS 5, DC 17, RST 21, retroeclairage 22, SCK 18, MOSI 23
     Boutons gauche 26, selection 27, droite 14   (buttons.py)
-    Potard  34                                   (a cabler)
+    Potard  34    (ADC1 obligatoire)
+    LED     13    (WS2812 : DIN)
+    DHT11   25    (DATA)
 
 À copier sur la carte, à côté de st7789_min.py, tft_setup.py et wifi.py.
 Copie awen_config.example.py en awen_config.py et renseigne-le : il contient
@@ -44,7 +46,22 @@ POT = 34
 # ADC2 n'entre pas en jeu) sauf sur celles déjà prises par l'écran ou les
 # boutons. Son propre bouton-poussoir se câble comme les trois autres.
 
+# LED d'etat WS2812 : DIN ici, plus +5 V et masse.
+#
+# PAS SUR GPIO 12. C'est une broche de strapping (MTDI) : si elle est tiree
+# au niveau haut au demarrage, l'ESP32 regle sa tension de flash a 1,8 V et
+# refuse de demarrer. Une LED branchee la peut suffire a briquer un
+# demarrage sur deux, avec un symptome qui n'a rien a voir avec la LED.
+LED_PIN = 13
+
+# DHT11 : broche DATA ici, plus VCC (3V3 ou 5V selon ton module) et masse.
+# La plupart des modules a trois broches ont deja leur resistance de tirage ;
+# un composant nu sans module en demande une de 10 kOhm entre DATA et VCC.
+DHT_PIN = 25
+
 app = App(tft, {
+    "led": {"kind": "ws2812", "pin": LED_PIN},
+    "sensor": {"kind": "dht11", "pin": DHT_PIN},
     "ssid": SSID,
     "password": PASSWORD,
     "base_url": awen_config.AWEN_URL,
