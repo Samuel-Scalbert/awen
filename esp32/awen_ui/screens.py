@@ -25,6 +25,7 @@ Texte en ASCII majuscule sans accents : voir grid.py.
 """
 from grid import COLS, ROWS
 from input import BTN_A, BTN_B, BTN_C, POT, SHORT, LONG, REPEAT
+import theme
 
 
 def _header(g, title, clock):
@@ -435,7 +436,7 @@ class Settings(Screen):
             g.bar(1, r + 1, 28, self.values[i],
                   g.p.FG if focused else g.p.DIM)
         _pot_hint(g, 17, app)
-        _statusbar(g, "[B] LIGNE SUIV", "POTARD : VALEUR")
+        _statusbar(g, "[B] LIGNE", "POTARD : VALEUR")
 
     def on_input(self, ev, app):
         kind, arg = ev
@@ -447,5 +448,75 @@ class Settings(Screen):
         return False
 
 
+class Theme(Screen):
+    """Choix de la palette, avec aperçu immédiat.
+
+    Le potard parcourt les teintes et l'écran se repeint à chaque cran : on
+    juge une couleur en la voyant, pas en lisant son nom. B enregistre, et
+    le choix survit à une coupure de courant.
+
+    Le rattrapage du potard est neutralisé ici — il n'y a pas de valeur
+    existante à écraser par accident, seulement une liste à parcourir, et
+    devoir « rattraper » la teinte courante avant de pouvoir en essayer une
+    autre serait absurde.
+    """
+
+    NAME = "theme"
+
+    def __init__(self):
+        self.saved = False
+
+    def _index(self, app):
+        for i, p in enumerate(theme.PALETTES):
+            if p.name == app.g.p.name:
+                return i
+        return 0
+
+    def pot_target(self, st):
+        return None                  # pas de rattrapage : voir le docstring
+
+    def on_pot(self, pct, app):
+        n = len(theme.PALETTES)
+        idx = min(n - 1, (pct * n) // 100)
+        if theme.PALETTES[idx].name != app.g.p.name:
+            app.set_palette(theme.PALETTES[idx])
+            self.saved = False
+
+    def draw(self, g, st, app):
+        _header(g, "THEME", st.get("time", ""))
+
+        cur = self._index(app)
+        g.text(1, 3, g.p.name, g.p.HI)
+        g.right(3, "{}/{}".format(cur + 1, len(theme.PALETTES)), g.p.DIM)
+
+        for i, p in enumerate(theme.PALETTES):
+            r = 5 + i
+            mark = ">" if i == cur else " "
+            g.text(0, r, mark, g.p.FG)
+            g.text(2, r, p.name, g.p.HI if i == cur else g.p.DIM)
+
+        # Un echantillon des cinq roles, pour juger la palette sur piece
+        # plutot que sur son nom.
+        g.rule(12)
+        g.text(1, 13, "APERCU", g.p.DIM)
+        g.text(1, 14, "valeur", g.p.HI)
+        g.text(9, 14, "donnee", g.p.FG)
+        g.text(17, 14, "etiquette", g.p.DIM)
+        g.text(1, 15, "alerte", g.p.ALERT)
+        g.bar(9, 15, 20, 64)
+
+        g.text(1, 17, "enregistre" if self.saved else "non enregistre",
+               g.p.DIM)
+        _statusbar(g, "[B] GARDER", "POTARD : TEINTE")
+
+    def on_input(self, ev, app):
+        kind, arg = ev
+        if kind == BTN_B and arg == SHORT:
+            self.saved = theme.save(app.g.p)
+            app.dirty = True
+            return True
+        return False
+
+
 # L'ordre du carrousel. Boot n'y figure pas : il ne se voit qu'au démarrage.
-CAROUSEL = (Home, Gym, Spotify, Coach, Jobs, Settings)
+CAROUSEL = (Home, Gym, Spotify, Coach, Jobs, Settings, Theme)

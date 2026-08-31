@@ -31,14 +31,24 @@ FONT_BOLD = r"C:\Windows\Fonts\consolab.ttf"
 
 # Trois ambiances. TARS a l'ecran, c'est de l'ambre chaud sur noir absolu :
 # le contraste vient du noir d'un ecran eteint, pas de la luminosite du texte.
+# Doivent rester identiques a celles de esp32/awen_ui/theme.py : ces maquettes
+# ne valent que si elles montrent les couleurs que la carte affichera.
 PALETTES = {
-    "amber":    {"bg": (0, 0, 0), "fg": (255, 176, 0), "dim": (128, 88, 0),
+    "amber":    {"name": "AMBRE", "bg": (0, 0, 0), "fg": (255, 176, 0), "dim": (128, 88, 0),
                  "hi": (255, 232, 180), "alert": (255, 64, 32)},
-    "phosphor": {"bg": (0, 0, 0), "fg": (0, 255, 128), "dim": (0, 112, 56),
+    "phosphor": {"name": "VERT", "bg": (0, 0, 0), "fg": (0, 255, 128), "dim": (0, 112, 56),
                  "hi": (200, 255, 224), "alert": (255, 96, 0)},
-    "ice":      {"bg": (2, 6, 10), "fg": (180, 230, 255), "dim": (60, 92, 112),
-                 "hi": (255, 255, 255), "alert": (255, 96, 96)},
+    "ice":      {"name": "BLEU", "bg": (2, 6, 10), "fg": (120, 200, 255), "dim": (40, 78, 104),
+                 "hi": (230, 245, 255), "alert": (255, 96, 96)},
+    "violet":   {"name": "VIOLET", "bg": (4, 0, 8), "fg": (198, 130, 255), "dim": (88, 52, 120),
+                 "hi": (238, 220, 255), "alert": (255, 96, 128)},
+    "rubis":    {"name": "RUBIS", "bg": (6, 0, 0), "fg": (255, 96, 96), "dim": (120, 40, 40),
+                 "hi": (255, 214, 214), "alert": (255, 176, 0)},
+    "papier":   {"name": "PAPIER", "bg": (0, 0, 0), "fg": (226, 226, 222), "dim": (104, 106, 104),
+                 "hi": (255, 255, 255), "alert": (255, 96, 64)},
 }
+
+PALETTE_NAMES = ("AMBRE", "VERT", "BLEU", "VIOLET", "RUBIS", "PAPIER")
 
 # Le curseur clignotant est le seul aplat trace en dur : tout le reste passe
 # par des rectangles, comme sur la machine.
@@ -198,7 +208,7 @@ def s_home(p):
     s.text(1, 14, "DERNIERE", "dim")
     s.right(14, "Legs ven 28/08", "fg")
 
-    s.statusbar("AWEN", "[OK] MENU")
+    s.statusbar("AWEN", "A/C : ecrans")
     return s
 
 
@@ -253,7 +263,7 @@ def s_coach(p):
     s.text(1, 15, "RIR moyen 3.2 : il te", "dim")
     s.text(1, 16, "reste trop de reserve.", "dim")
 
-    s.statusbar("[A] APPLIQUER", "[B] IGNORER")
+    s.statusbar("[B] APPLIQUER", "sinon : ignore")
     return s
 
 
@@ -272,7 +282,7 @@ def s_settings(p):
         s.right(r, "{:>3}%".format(val), "hi", bold=True)
         s.bar(1, r + 1, 28, val)
 
-    s.statusbar("[OK] CHOISIR", "POTARD REGLE")
+    s.statusbar("[B] LIGNE", "POTARD : VALEUR")
     return s
 
 
@@ -326,10 +336,37 @@ def s_spotify(p):
     return s
 
 
+def s_theme(p):
+    """Choix de la palette, avec un apercu des cinq roles."""
+    current = PALETTE_NAMES.index(p["name"])
+    s = Screen(p)
+    s.header("THEME", "21:47")
+
+    s.text(1, 3, PALETTE_NAMES[current], "hi", bold=True)
+    s.right(3, "{}/{}".format(current + 1, len(PALETTE_NAMES)), "dim")
+
+    for i, name in enumerate(PALETTE_NAMES):
+        r = 5 + i
+        s.text(0, r, ">" if i == current else " ", "fg")
+        s.text(2, r, name, "hi" if i == current else "dim")
+
+    s.rule(12)
+    s.text(1, 13, "APERCU", "dim")
+    s.text(1, 14, "valeur", "hi", bold=True)
+    s.text(9, 14, "donnee", "fg")
+    s.text(17, 14, "etiquette", "dim")
+    s.text(1, 15, "alerte", "alert")
+    s.bar(9, 15, 20, 64)
+
+    s.text(1, 17, "non enregistre", "dim")
+    s.statusbar("[B] GARDER", "POTARD : TEINTE")
+    return s
+
+
 SCREENS = {
     "01-boot": s_boot, "02-home": s_home, "03-gym": s_gym,
     "04-spotify": s_spotify, "05-coach": s_coach,
-    "06-jobs": s_jobs, "07-settings": s_settings,
+    "06-jobs": s_jobs, "07-settings": s_settings, "08-theme": s_theme,
 }
 
 

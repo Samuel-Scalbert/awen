@@ -96,8 +96,8 @@ Une seule règle, valable partout, sans exception :
 **A et C naviguent toujours.** C'est ce qui garantit qu'aucun écran ne peut
 te piéger. **B agit**, et maintenu il ramène à l'accueil depuis n'importe où.
 
-Le carrousel : **Accueil → Séance → Spotify → Coach → Jobs → Paramètres**,
-puis retour au début.
+Le carrousel : **Accueil → Séance → Spotify → Coach → Jobs → Paramètres →
+Thème**, puis retour au début.
 
 ### Ce que fait B, écran par écran
 
@@ -109,6 +109,11 @@ puis retour au début.
 | **Coach** | applique le conseil | — |
 | **Jobs** | — | fait défiler les offres |
 | **Paramètres** | ligne suivante | la valeur de la ligne |
+| **Thème** | enregistre la teinte | **la teinte**, en direct |
+
+B est inactif sur trois écrans, et c'est assumé : y coller une action pour
+qu'il « serve » créerait des gestes qu'on déclenche par erreur. Un bouton
+inerte se remarque moins qu'un bouton qui fait quelque chose d'inattendu.
 
 Deux gestes en plus, uniquement sur Spotify :
 
@@ -127,7 +132,46 @@ suivant *est* l'ignorer. Un bouton qui ne fait rien de plus que partir laisse
 surtout se demander ce qu'il a fait.
 
 **Les boutons trient, le potard règle.** C'est ce partage qui rend trois
-boutons suffisants pour six écrans.
+boutons suffisants pour sept écrans.
+
+## Thèmes
+
+Six palettes : **ambre** (la teinte de TARS), **vert**, **bleu**, **violet**,
+**rubis**, **papier**. L'écran Thème les fait défiler au potentiomètre et
+repeint tout à chaque cran — on juge une couleur en la voyant, pas en lisant
+son nom. B enregistre le choix dans un fichier sur la carte, qui survit donc à
+une coupure de courant.
+
+Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
+valeur mise en avant, alerte. `DIM` est toujours la teinte principale
+assombrie, jamais un gris — un gris casserait l'unité et donnerait l'air d'un
+défaut d'affichage.
+
+Le rattrapage du potard est désactivé sur cet écran : il n'y a pas de valeur
+à écraser par accident, seulement une liste à parcourir.
+
+## Animations
+
+Deux règles de rythme, dans `app.py` :
+
+```python
+BOOT_STEP_MS = 300   # apparition d'une ligne d'amorcage
+SWEEP_MS     = 14    # une ligne du balayage de transition
+```
+
+**L'amorçage** révèle ses lignes une par une, à cadence fixe. La version
+précédente n'animait que pendant l'attente du wifi : connexion déjà établie,
+les cinq lignes apparaissaient d'un coup et l'écran semblait figé. Le rythme
+ne doit rien devoir au réseau — c'est une animation, pas une barre de
+progression.
+
+**Le changement d'écran** balaye une ligne lumineuse du haut vers le bas.
+Repeindre les 240×320 d'un coup produit un flash noir qui se lit comme un gel
+de l'affichage : rien ne bouge, puis tout a changé. Le balayage prend le même
+temps mais raconte ce qui se passe.
+
+Si le rythme ne te convient pas, ces deux constantes sont les seules à
+toucher. Monter `SWEEP_MS` à 25 donne une transition nettement plus posée.
 
 ## Le rattrapage du potentiomètre
 

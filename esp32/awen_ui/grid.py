@@ -240,16 +240,52 @@ class Grid:
             self.d.fill_rect(x, y, len(prev[0]) * gw, gw, self.p.BG)
         self.d.text(s, x, y, color=c, bg=self.p.BG, scale=scale)
 
-    def wipe(self):
-        """Efface physiquement l'écran et invalide tout.
-
-        À appeler au changement d'écran : sans ça, les cellules de l'écran
-        précédent qui se trouvent identiques ne seraient jamais repeintes.
-        """
-        self.d.fill_rect(0, 0, COLS * CW, ROWS * CH, self.p.BG)
+    def _invalidate(self):
+        """Oublie ce qui est à l'écran : le prochain flush repeindra tout."""
         for i in range(N):
             self.sch[i] = 0xFF
             self.sfg[i] = 0
             self.sbg[i] = 0
         self._gfx.clear()
         self.clear()
+
+    def wipe(self):
+        """Efface physiquement l'écran et invalide tout, sans transition."""
+        self.d.fill_rect(0, 0, COLS * CW, ROWS * CH, self.p.BG)
+        self._invalidate()
+
+    def sweep(self, delay_ms=14):
+        """Balaye l'écran d'une ligne lumineuse, du haut vers le bas.
+
+        Remplace l'effacement instantané au changement d'écran. Repeindre les
+        240x320 d'un coup produit un flash noir qui se lit comme un gel de
+        l'affichage : rien ne bouge, puis tout a change. Une ligne qui
+        descend prend le meme temps mais raconte ce qui se passe, et c'est le
+        genre de transition que fait une machine, pas une application.
+
+        L'attente est ici plutot que dans la boucle principale parce qu'un
+        balayage doit rester regulier : le decouper en images le rendrait
+        dependant de la charge du reste du firmware.
+        """
+        from time import sleep_ms
+        w = COLS * CW
+        for row in range(ROWS):
+            y = row * CH
+            self.d.fill_rect(0, y, w, CH, self.p.BG)
+            if row + 1 < ROWS:
+                self.d.fill_rect(0, y + CH, w, 2, self.p.FG)
+            sleep_ms(delay_ms)
+        self.d.fill_rect(0, (ROWS - 1) * CH + CH - 2, w, 2, self.p.BG)
+        self._invalidate()
+
+    def set_palette(self, palette):
+        """Change de palette à chaud, en repeignant tout.
+
+        Les couleurs sont recopiées dans les tampons : sans ça, les cellules
+        inchangées garderaient l'ancienne teinte et l'écran finirait bicolore.
+        """
+        self.p = palette
+        for i in range(N):
+            self.fg[i] = palette.FG
+            self.bg[i] = palette.BG
+        self.wipe()

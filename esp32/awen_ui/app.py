@@ -33,7 +33,7 @@ import urequests
 from grid import Grid
 from input import BTN_A, BTN_B, BTN_C, Input, LONG, POT, REPEAT, SHORT
 import screens
-from theme import AMBER as PAL
+import theme
 
 POLL_MS = 30000          # rafraîchissement des données serveur
 POLL_SPOTIFY_MS = 5000   # une piste change trop souvent pour attendre 30 s
@@ -42,10 +42,17 @@ BLINK_MS = 530           # demi-période du curseur
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
 POT_TOLERANCE = 3        # % d'écart sous lequel le potard reprend la main
 
+# Rythme des animations. Ces valeurs se lisent, elles ne s'expédient pas :
+# une ligne d'amorçage qui apparaît en 120 ms n'est pas une animation, c'est
+# un clignotement. 300 ms laisse le temps de suivre la liste qui se remplit.
+BOOT_STEP_MS = 300       # apparition d'une ligne d'amorçage
+BOOT_HOLD_MS = 900       # pause finale, pour lire l'écran complet
+SWEEP_MS = 14            # une ligne du balayage de transition
+
 
 class App:
     def __init__(self, display, config):
-        self.g = Grid(display, PAL)
+        self.g = Grid(display, theme.load())
         self.io = Input(**config.get("pins", {}))
         self.cfg = config
 
@@ -63,22 +70,23 @@ class App:
         self.pot_raw = self.io.pot.value() if self.io.pot else 0
         self.pot_target = None
         self.pot_armed = False
+        self.wlan = None
 
     # ------------------------------------------------------------ réseau
 
     def connect(self):
-        wlan = network.WLAN(network.STA_IF)
-        wlan.active(True)
-        if not wlan.isconnected():
-            wlan.connect(self.cfg["ssid"], self.cfg["password"])
-            deadline = time.ticks_add(time.ticks_ms(), 20000)
-            while not wlan.isconnected():
-                if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
-                    return False
-                self._boot_tick()
-                time.sleep_ms(120)
-        self.state["ip"] = wlan.ifconfig()[0]
-        return True
+        """Lance la connexion sans attendre : l'amorçage l'anime par-dessus."""
+        self.wlan = network.WLAN(network.STA_IF)
+        self.wlan.active(True)
+        if not self.wlan.isconnected():
+            self.wlan.connect(self.cfg["ssid"], self.cfg["password"])
+        return self.wlan
+
+    def _wifi_ok(self):
+        if self.wlan is not None and self.wlan.isconnected():
+            self.state["ip"] = self.wlan.ifconfig()[0]
+            return True
+        return False
 
     def _url(self, path):
         return "{}{}?key={}".format(self.cfg["base_url"], path,
@@ -158,10 +166,15 @@ class App:
         """Oblige le potard à retraverser la valeur avant de reprendre la main."""
         self.pot_armed = False
 
+    def set_palette(self, palette):
+        """Change de teinte à chaud, depuis l'écran Theme."""
+        self.g.set_palette(palette)
+        self.dirty = True
+
     def go(self, step):
         self.index = (self.index + step) % len(self.screens)
         self.rearm_pot()
-        self.g.wipe()
+        self.g.sweep(SWEEP_MS)       # au lieu d'un flash noir
         self.dirty = True
 
     def handle(self, ev):
@@ -184,7 +197,7 @@ class App:
         if kind == BTN_B and arg == LONG:
             self.index = 0           # retour à l'accueil
             self.rearm_pot()
-            self.g.wipe()
+            self.g.sweep(SWEEP_MS)
             self.dirty = True
         elif kind == BTN_A and arg in (SHORT, REPEAT):
             self.go(-1)
@@ -206,27 +219,51 @@ class App:
 
     # ------------------------------------------------------------ boucle
 
-    def _boot_tick(self):
-        """Fait avancer l'amorçage pendant que le wifi se connecte."""
-        self.boot.step = min(self.boot.step + 1, len(self.boot.CHECKS))
+    def _boot_draw(self):
         self.g.clear()
         self.boot.draw(self.g, self.state, self)
         self.g.flush()
+
+    def _boot_sequence(self):
+        """Révèle les lignes d'amorçage une par une, à cadence fixe.
+
+        La version précédente n'animait que pendant l'attente du wifi : quand
+        la connexion était déjà établie, les cinq lignes apparaissaient d'un
+        seul coup et l'écran semblait figé. Le rythme ne doit rien devoir au
+        réseau — c'est une animation, pas une barre de progression.
+
+        La connexion se poursuit pendant ce temps ; on la relève à la fin.
+        """
+        self.connect()
+        deadline = time.ticks_add(time.ticks_ms(), 20000)
+
+        for step in range(len(self.boot.CHECKS) + 1):
+            self.boot.step = step
+            self._boot_draw()
+            time.sleep_ms(BOOT_STEP_MS)
+
+        # Toutes les lignes sont affichées : on laisse au wifi le temps qui
+        # lui reste, sans figer l'ecran — le curseur continue de clignoter.
+        while not self._wifi_ok():
+            if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
+                return False
+            self.state["blink"] = not self.state.get("blink", True)
+            self._boot_draw()
+            time.sleep_ms(BLINK_MS)
+        return True
 
     def _poll_interval(self):
         return POLL_SPOTIFY_MS if self.current().NAME == "spotify" else POLL_MS
 
     def run(self):
         self.g.wipe()
-        online = self.connect()
-        self.boot.step = len(self.boot.CHECKS)
-        self._boot_tick()
+        online = self._boot_sequence()
         if online:
             self.fetch()
-        time.sleep_ms(700)              # laisser lire l'écran d'amorçage
+        time.sleep_ms(BOOT_HOLD_MS)     # laisser lire l'écran complet
 
         self.in_boot = False
-        self.g.wipe()
+        self.g.sweep(SWEEP_MS)          # on entre dans l'interface
 
         while True:
             now = time.ticks_ms()
