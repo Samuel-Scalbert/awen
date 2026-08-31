@@ -116,43 +116,47 @@ ils viennent d'esp32-desk-display et ne sont pas dupliqués ici.
 le `.gitignore`, ne le versionne jamais. `ESP32_API_KEY` doit correspondre
 exactement au `.env` du serveur.
 
-## Ce qui marche aujourd'hui, et ce qui attend le serveur
+## Ce qui marche aujourd'hui
 
-Le firmware lit `/api/esp32/summary`. Cet endpoint existe mais ne renvoie pas
-encore tout ce que les écrans savent afficher. **Rien ne plante** — chaque
-champ absent retombe sur une valeur neutre — mais trois écrans restent
-partiellement vides.
+Le firmware lit `/api/esp32/summary`, qui renvoie tout **pré-découpé aux
+dimensions de l'écran** : titres repliés sur 28 colonnes, accents retirés,
+emoji remplacés par un marqueur ASCII. Le serveur connaît la largeur de
+l'afficheur, autant qu'il fasse la découpe — c'est du travail en moins pour un
+interpréteur MicroPython.
 
 | Écran | État |
 | --- | --- |
-| Amorçage, Accueil | ✅ complet |
-| Coach | ✅ le conseil s'affiche ; manque la proposition chiffrée |
-| Jobs | ⚠️ le nombre s'affiche ; manquent les titres |
-| Séance | ⚠️ vide : il manque tout le bloc `gym.exercise` |
-| Spotify | ⚠️ vide : il manque le bloc `spotify` |
+| Amorçage, Accueil | ✅ |
+| Séance | ✅ aperçu des exercices et charges programmées |
+| Coach | ✅ conseil, motif, proposition chiffrée, boutons |
+| Jobs | ✅ titres des offres du jour |
+| Paramètres | ✅ local à l'afficheur |
+| Spotify | ⚠️ vide : le bloc `spotify` reste à écrire côté serveur |
 
-Champs à ajouter côté serveur dans `app/routes/esp32.py` :
+### La séance est en lecture seule, et c'est voulu
 
-```
-gym.session_no, gym.done_pct, gym.left
-gym.exercise{ name, index, count, set, sets, weight_kg, reps, target }
-jobs.offers[]{ title, org }
-coach.subject, coach.from_kg, coach.to_kg, coach.why, coach.pe_id
-spotify{ title, artist, album, position_s, duration_s, volume,
-         playing, device }
-rest_s, rest_pct
-```
+L'afficheur est posé sur un bureau, pas dans la salle. Quand tu soulèves, ton
+téléphone est en main — une série saisie ici n'aurait aucun sens. Ce que tu
+veux en rentrant, c'est savoir ce qui t'attend et à quelle charge.
 
-Les actions appellent `POST /api/esp32/weight`, `/set`, `/advice` et
-`/spotify`, **qui n'existent pas encore**. En leur absence la requête échoue
-proprement et l'écran ne se rafraîchit pas : aucune donnée n'est perdue, mais
-le bouton semble sans effet.
+C'est pourquoi `POST /weight` et `/set` n'existent pas. Seul `/advice` est
+exposé : trancher un conseil du coach depuis son bureau, ça, c'est naturel.
 
-**Spotify : garde le jeton sur le serveur.** L'ESP32 ne doit pas parler
-directement à l'API Spotify — il faudrait y stocker un jeton de
-rafraîchissement et gérer sa rotation sur un appareil sans stockage sûr. Le
-serveur détient le jeton et expose `/api/esp32/spotify` ; l'afficheur n'est
-qu'une télécommande.
+Et il n'envoie qu'une **intention**, jamais une charge : le serveur relit le
+conseil courant et applique sa propre valeur. Un chiffre qui voyagerait sur le
+réseau pourrait arriver périmé, et c'est le genre de nombre qu'on ne veut pas
+laisser décider ailleurs que dans le moteur de règles.
+
+### Spotify, ce qui reste
+
+Il faut un bloc `spotify{ title, artist, album, position_s, duration_s,
+volume, playing, device }` dans le résumé, et un `POST /api/esp32/spotify`
+pour lecture / pause / piste / volume.
+
+**Garde le jeton sur le serveur.** Ton `spotify_screen.py` actuel embarque
+`CLIENT_ID`, `CLIENT_SECRET` et `REFRESH_TOKEN` sur la carte — c'est
+exactement ce qui a fuité par les `.pyc`. Le serveur détient le jeton, gère sa
+rotation, et l'afficheur n'est plus qu'une télécommande sans secret.
 
 ## Pourquoi le redessin partiel
 

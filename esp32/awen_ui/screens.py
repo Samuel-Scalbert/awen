@@ -156,77 +156,70 @@ class Home(Screen):
 
 
 class Gym(Screen):
-    """Séance en cours. Une seule information compte : la série à faire.
+    """Aperçu de la séance à venir, avec les charges décidées par le coach.
 
-    Le potard couvre un écart de -10 à +10 kg autour de la charge programmée,
-    par pas de 2,5 kg — le plus petit disque de la plupart des salles. Neuf
-    positions sur toute la course, donc chaque cran est franc et se retrouve
-    au doigt sans regarder.
+    Volontairement en lecture seule. L'afficheur est posé sur un bureau, pas
+    dans la salle : quand tu soulèves, ton téléphone est en main, et une
+    série saisie ici n'aurait aucun sens. Ce que tu veux en rentrant, c'est
+    savoir ce qui t'attend et à quelle charge.
+
+    Le potard fait défiler la liste — cinq exercices tiennent à l'écran.
     """
 
     NAME = "gym"
-    STEP_KG = 2.5
-    STEPS = 8                        # 8 intervalles, 9 positions
+    VISIBLE = 5
 
     def __init__(self):
-        self.adjust = 0.0            # écart appliqué à la charge programmée
+        self.top = 0
+
+    def _rows(self, st):
+        return st.get("gym", {}).get("exercises") or []
 
     def pot_target(self, st):
-        half = self.STEPS // 2
-        idx = int(self.adjust / self.STEP_KG) + half
-        return (idx * 100) // self.STEPS
+        extra = max(0, len(self._rows(st)) - self.VISIBLE)
+        return (self.top * 100) // extra if extra else None
 
     def on_pot(self, pct, app):
-        half = self.STEPS // 2
-        idx = (pct * self.STEPS + 50) // 100
-        self.adjust = (idx - half) * self.STEP_KG
-        app.dirty = True
+        extra = max(0, len(self._rows(app.state)) - self.VISIBLE)
+        if extra:
+            self.top = (pct * extra + 50) // 100
+            app.dirty = True
 
     def draw(self, g, st, app):
         gym = st.get("gym", {})
-        ex = gym.get("exercise", {})
-        _header(g, "{} . SEANCE {}".format(
-            (gym.get("today") or "REPOS").upper(),
-            gym.get("session_no", "--")), st.get("time", ""))
+        rows = self._rows(st)
+        _header(g, "SEANCE {}".format(gym.get("session_no", "--")),
+                st.get("time", ""))
 
-        g.text(1, 3, ex.get("name", "AUCUN EXERCICE")[:28].upper(), g.p.HI)
-        g.text(1, 4, "exercice {} / {}".format(
-            ex.get("index", 0), ex.get("count", 0)), g.p.DIM)
+        focus = (gym.get("focus") or "REPOS").upper()
+        g.text(1, 3, focus, g.p.HI)
+        when = gym.get("today") and "AUJOURD HUI" or gym.get("next", "")
+        g.right(3, when, g.p.FG)
 
-        g.frame(0, 6, COLS, 5)
-        g.text(2, 7, "SERIE {} / {}".format(
-            ex.get("set", 0), ex.get("sets", 0)), g.p.DIM)
+        if not rows:
+            g.text(1, 6, "AUCUN EXERCICE PROGRAMME", g.p.DIM)
+            _statusbar(g, "< PREC", "SUIV >")
+            return
 
-        kg = ex.get("weight_kg", 0) + self.adjust
-        g.text(2, 8, "{:.1f} KG".format(kg),
-               g.p.FG if self.adjust else g.p.HI)
-        g.text(COLS - 8, 8, "x {:<3}".format(ex.get("reps", 0)), g.p.FG)
-        g.text(2, 9, "cible {} reps".format(ex.get("target", "8-12")), g.p.DIM)
+        for i in range(self.VISIBLE):
+            j = self.top + i
+            r = 5 + i * 2
+            if j >= len(rows):
+                break
+            ex = rows[j]
+            g.text(0, r, ">", g.p.DIM)
+            g.text(2, r, ex.get("name", "").upper(), g.p.HI)
+            g.right(r, ex.get("detail", ""), g.p.FG)
 
-        g.text(1, 11, "REPOS", g.p.DIM)
-        rest = st.get("rest_s", 0)
-        g.text(1, 12, "{:02d}:{:02d}".format(rest // 60, rest % 60), g.p.HI)
-        g.bar(8, 12, 20, st.get("rest_pct", 0))
-
-        g.text(1, 14, "FAIT", g.p.DIM)
-        g.bar(8, 14, 20, gym.get("done_pct", 0))
-        g.right(15, "{} series restantes".format(gym.get("left", 0)), g.p.DIM)
+        missed = gym.get("missed", 0)
+        if missed:
+            g.text(1, 16, "{} SEANCE(S) RATEE(S)".format(missed), g.p.ALERT)
+        else:
+            g.text(1, 16, "dernier : {}".format(gym.get("last", "")), g.p.DIM)
 
         _pot_hint(g, 17, app)
-        _statusbar(g, "< PREC",
-                   "[OK] GARDER" if self.adjust else "SUIV >")
-
-    def on_input(self, ev, app):
-        kind, arg = ev
-        if kind == BTN_B and arg == SHORT:
-            if self.adjust:
-                app.commit_weight(self.adjust)
-                self.adjust = 0.0
-            else:
-                app.log_set()
-            app.dirty = True
-            return True
-        return False
+        _statusbar(g, "< PREC", "{}/{}".format(
+            self.top + 1, max(1, len(rows) - self.VISIBLE + 1)))
 
 
 class Coach(Screen):
@@ -253,20 +246,20 @@ class Coach(Screen):
         g.text(1, 5, subject[:28].upper(), g.p.HI)
         g.text(1, 6, subject[28:56].upper(), g.p.HI)
 
-        for i, line in enumerate(_wrap(c.get("detail", ""), COLS - 2)[:2]):
+        # Le serveur envoie deja le motif replie sur deux lignes de 28 : il
+        # connait la largeur de l'ecran, autant qu'il fasse la decoupe.
+        for i, line in enumerate((c.get("detail") or [])[:2]):
             g.text(1, 8 + i, line, g.p.DIM)
 
         g.rule(11)
         if c.get("to_kg") is not None:
-            g.text(1, 12, "PROPOSITION", g.p.DIM)
-            g.text(1, 13, "{:.1f} KG".format(c.get("from_kg", 0)), g.p.HI)
-            g.text(9, 13, "->", g.p.DIM)
-            g.text(12, 13, "{:.1f} KG".format(c["to_kg"]), g.p.FG)
+            g.text(1, 13, "PROPOSITION", g.p.DIM)
+            g.text(1, 15, "{:g} KG".format(c.get("from_kg", 0)), g.p.HI)
+            g.text(9, 15, "->", g.p.DIM)
+            g.text(12, 15, "{:g} KG".format(c["to_kg"]), g.p.FG)
             # Pas de jauge de « confiance » : le moteur de règles n'en calcule
             # aucune, et un pourcentage inventé donnerait à une décoration
             # l'autorité d'une mesure.
-            for i, line in enumerate(_wrap(c.get("why", ""), COLS - 2)[:2]):
-                g.text(1, 15 + i, line, g.p.DIM)
             _statusbar(g, "[A] APPLIQUER", "[B] IGNORER")
         else:
             _statusbar(g, "< PREC", "SUIV >")
@@ -324,14 +317,13 @@ class Jobs(Screen):
             r = 5 + i * 4
             if j >= len(offers):
                 continue
-            o = offers[j]
+            # Le serveur envoie le titre deja replie sur trois lignes de 28.
+            # Aucun score de correspondance : la veille n'en calcule pas, et
+            # une jauge inventee donnerait a une decoration l'autorite d'une
+            # mesure.
             g.text(0, r, ">", g.p.DIM)
-            title = o.get("title", "")
-            g.text(2, r, title[:26].upper(), g.p.HI)
-            g.text(2, r + 1, title[26:52].upper(), g.p.HI)
-            # La veille ne note pas les offres : on affiche l'organisme quand
-            # le pipeline le fournit, et rien quand il ne le fournit pas.
-            g.text(2, r + 2, o.get("org", "")[:28], g.p.DIM)
+            for k, line in enumerate((offers[j].get("title") or [])[:3]):
+                g.text(2, r + k, line.upper(), g.p.HI if k == 0 else g.p.DIM)
 
         _pot_hint(g, 17, app)
         _statusbar(g, "PIPELINE 09:00",

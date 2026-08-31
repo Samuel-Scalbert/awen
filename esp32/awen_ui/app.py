@@ -130,15 +130,6 @@ class App:
 
     # ------------------------------------------------- actions des écrans
 
-    def commit_weight(self, delta):
-        """Le potard a bougé puis B a validé : on remonte l'écart au serveur."""
-        if self._post("/api/esp32/weight", {"delta_kg": delta}):
-            self.t_poll = 0          # force un rafraîchissement immédiat
-
-    def log_set(self):
-        if self._post("/api/esp32/set", {"done": True}):
-            self.t_poll = 0
-
     def apply_advice(self, accept):
         if self._post("/api/esp32/advice", {"accept": accept}):
             self.t_poll = 0
