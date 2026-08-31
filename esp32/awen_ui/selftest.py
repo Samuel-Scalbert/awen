@@ -97,6 +97,36 @@ def probe_data_line():
     return "instable", libre, tire
 
 
+def scan_free_pins():
+    """Etat au repos de GPIO 25 compare a des broches libres.
+
+    Quand une broche reste basse malgre le tirage interne, la question
+    devient : est-ce ce qui y est branche, ou la broche elle-meme ? Une
+    broche libre lue avec tirage doit remonter a 1. Si 25 est la seule a
+    rester a 0, le probleme la suit ; si plusieurs y restent, il faut
+    chercher du cote de la platine ou d'un fil de masse qui traine.
+    """
+    line("=== Broches libres, pour comparaison ===")
+    line("  (avec tirage interne : une broche saine et libre lit 1)")
+    for gp in (DHT_PIN, 4, 16, 19):
+        try:
+            p = Pin(gp, Pin.IN, Pin.PULL_UP)
+            time.sleep_ms(5)
+            v = sum(p.value() for _ in range(20))
+            note = ""
+            if gp == DHT_PIN:
+                note = "   <- le DHT est ici"
+            elif v < 18:
+                note = "   <- anormal pour une broche libre"
+            line("  GPIO {:>2} : {}/20 a 1{}".format(gp, v, note))
+        except Exception as e:
+            line("  GPIO {:>2} : illisible — {}".format(gp, e))
+    line("  -> GPIO {} a 0 et les autres a 20 : le defaut suit ce qui est".format(DHT_PIN))
+    line("     branche la, pas la carte. Debranche les TROIS fils du module")
+    line("     et relance : si GPIO {} remonte a 20, le module est mort.".format(DHT_PIN))
+    line()
+
+
 def test_dht():
     line("=== DHT11 (GPIO {}) ===".format(DHT_PIN))
     etat, libre, tire = probe_data_line()
@@ -193,6 +223,7 @@ def main():
     line("memoire libre : {}".format(gc.mem_free()))
     line()
     test_led()
+    scan_free_pins()
     test_dht()
     test_pot()
     test_buttons()
