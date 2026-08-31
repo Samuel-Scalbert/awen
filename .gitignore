@@ -34,3 +34,6 @@ data/backups/
 
 # Maquettes ecran ESP32 : 1 Mo regenerable en une commande.
 esp32/mockups/
+
+# Secrets du firmware ESP32 (wifi + cle API)
+esp32/awen_ui/awen_config.py
