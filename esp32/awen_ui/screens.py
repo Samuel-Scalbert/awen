@@ -384,14 +384,18 @@ class Spotify(Screen):
 
         # Le titre en 16x16 : 14 caracteres par ligne, deux lignes. Au-dela
         # on tronque — un titre de chanson se reconnait a son debut.
+        # La pochette occupe 8 colonnes sur 4 lignes ; le texte prend les 20
+        # colonnes restantes, soit 10 caracteres par ligne en 16x16.
+        g.image(1, 3, app.cover, app.COVER, sp.get("cover", ""))
+
         # Les deux emplacements sont toujours ecrits, quitte a l'etre a vide :
         # un titre passe de deux lignes a une laisserait sinon la seconde en
         # place, puisque le texte agrandi echappe au suivi de la grille.
-        lines = (_wrap(sp.get("title", "").upper(), 14) + ["", ""])[:2]
+        lines = (_wrap(sp.get("title", "").upper(), 10) + ["", ""])[:2]
         for i, line in enumerate(lines):
-            g.big(1, 3 + i, line, 2)
-        g.text(1, 6, sp.get("artist", "")[:28], g.p.FG)
-        g.text(1, 7, sp.get("album", "")[:28], g.p.DIM)
+            g.big(10, 3 + i, line, 2)
+        g.text(10, 5, sp.get("artist", "")[:20], g.p.FG)
+        g.text(10, 6, sp.get("album", "")[:20], g.p.DIM)
 
         pos = sp.get("position_s", 0)
         dur = sp.get("duration_s", 0)

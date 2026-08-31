@@ -12,7 +12,7 @@ boutons, parce que trancher un conseil depuis son bureau, ça, c'est naturel.
 """
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, abort, current_app, jsonify, request
+from flask import (Blueprint, Response, abort, current_app, jsonify, request)
 
 from ..models import ProgramExercise, Workout, db
 from ..services.coach import analyse, apply_advice
@@ -142,6 +142,10 @@ def _spotify_block():
     sp = spotify_svc.now_playing()
     if sp is None:
         return {"device": ""}          # non configuré : l'écran le dira
+    # Un identifiant court de pochette plutôt que l'URL : l'ESP32 s'en sert
+    # uniquement pour savoir si l'image a changé, et une URL Spotify fait
+    # 64 caractères qu'il transporterait toutes les cinq secondes pour rien.
+    art = sp.get("art_url") or ""
     return {
         "title": _ascii(sp["title"])[:56],
         "artist": _ascii(sp["artist"])[:28],
@@ -151,7 +155,25 @@ def _spotify_block():
         "volume": sp["volume"],
         "playing": sp["playing"],
         "device": _ascii(sp["device"])[:12],
+        "cover": art.rsplit("/", 1)[-1][:16] if art else "",
     }
+
+
+@bp.route("/cover")
+def spotify_cover():
+    """La pochette en cours, en pixels bruts pour blit_buffer().
+
+    Servie en octets plutôt qu'en JPEG : l'ESP32 ne sait pas décoder une
+    image, et le redimensionnement se fait ici où il coûte quelques
+    millisecondes au lieu de plusieurs secondes là-bas.
+    """
+    _check_key()
+    sp = spotify_svc.now_playing()
+    data = spotify_svc.cover_rgb565((sp or {}).get("art_url", ""))
+    if data is None:
+        abort(404)
+    return Response(data, mimetype="application/octet-stream",
+                    headers={"X-Cover-Size": str(spotify_svc.COVER_SIZE)})
 
 
 @bp.route("/summary")

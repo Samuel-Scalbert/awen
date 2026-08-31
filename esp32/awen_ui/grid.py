@@ -185,6 +185,16 @@ class Grid:
     def big(self, col, row, s, scale=2, fg=None):
         self._queue.append(("big", (col, row, s, scale, fg)))
 
+    def image(self, col, row, buf, size, tag):
+        """Image en pixels bruts RGB565, déjà inversés pour ce panneau.
+
+        `tag` identifie le contenu : tant qu'il ne change pas, on ne renvoie
+        pas les 8 Ko sur le bus SPI. Une pochette d'album reste affichée
+        plusieurs minutes ; la retracer à chaque image serait le plus gros
+        gaspillage du firmware.
+        """
+        self._queue.append(("image", (col, row, buf, size, tag)))
+
     _SPAN = {"rule": 1, "frame": None, "bar": 1, "big": None}
 
     def _run_queue(self, touched):
@@ -207,6 +217,8 @@ class Grid:
                 self._draw_frame(*args)
             elif kind == "bar":
                 self._draw_bar(*args)
+            elif kind == "image":
+                self._draw_image(*args)
             else:
                 self._draw_big(*args)
         self._queue = []
@@ -219,6 +231,10 @@ class Grid:
             rows, key = range(row, row + h), ("frame", col, row, w, h)
         elif kind == "bar":
             rows, key = (args[1],), ("bar", args[0], args[1], args[2])
+        elif kind == "image":
+            col, row, size = args[0], args[1], args[3]
+            span = max(1, size // CH)
+            rows, key = range(row, row + span), ("image", col, row)
         else:
             col, row, scale = args[0], args[1], args[3]
             span = max(1, (GLYPH * scale) // CH)
@@ -297,6 +313,16 @@ class Grid:
             _empty(x + filled, prev - filled)
 
         self._gfx[key] = (filled, c)
+
+    def _draw_image(self, col, row, buf, size, tag):
+        key = ("image", col, row)
+        if self._gfx.get(key) == tag:
+            return
+        self._gfx[key] = tag
+        if buf is None:
+            self.d.fill_rect(col * CW, row * CH, size, size, self.p.BG)
+            return
+        self.d.blit_buffer(buf, col * CW, row * CH, size, size)
 
     def _draw_big(self, col, row, s, scale=2, fg=None):
         """Texte agrandi : le pilote multiplie le glyphe 8x8 par `scale`.

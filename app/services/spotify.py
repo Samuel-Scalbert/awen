@@ -27,10 +27,24 @@ Un jeton créé pour une intégration en lecture seule renverra 403 sur les
 commandes, avec un message peu parlant.
 """
 import base64
+import io
 import time
 
 import requests
 from flask import current_app
+
+# La pochette est réduite ici et envoyée en pixels bruts. L'ESP32 ne sait pas
+# décoder un JPEG, et lui faire faire le redimensionnement d'une image de
+# 300 px prendrait des secondes pour un résultat pire.
+COVER_SIZE = 64                 # 64 x 64 x 2 octets = 8 Ko, tenable en RAM
+
+# Le panneau tourne avec _INVERT_COLORS = True dans st7789_min.py : le pilote
+# inverse chaque couleur avant de l'envoyer, SAUF pour les images, dont il
+# attend qu'elles arrivent déjà inversées. Sans ce XOR, la pochette sortirait
+# en négatif — et le pilote n'a aucun moyen de deviner l'oubli.
+_INVERT = True
+
+_cover = {"url": None, "data": None}
 
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 API = "https://api.spotify.com/v1"
@@ -101,6 +115,11 @@ def now_playing():
     device = d.get("device") or {}
     artists = ", ".join(a["name"] for a in item.get("artists", []))
 
+    # La plus petite image proposée par Spotify : on la réduit encore, autant
+    # partir de 64 px que de 640.
+    images = album.get("images") or []
+    art = images[-1]["url"] if images else ""
+
     return {
         "title": item.get("name", ""),
         "artist": artists,
@@ -110,7 +129,49 @@ def now_playing():
         "volume": device.get("volume_percent") or 0,
         "playing": bool(d.get("is_playing")),
         "device": device.get("name", ""),
+        "art_url": art,
     }
+
+
+def cover_rgb565(url):
+    """La pochette réduite en pixels bruts, prête pour blit_buffer().
+
+    Renvoie COVER_SIZE x COVER_SIZE pixels en RGB565 gros-boutiste, déjà
+    inversés pour ce panneau. None si l'image est introuvable.
+
+    Le résultat est gardé en mémoire tant que l'URL ne change pas : l'ESP32
+    interroge le serveur toutes les cinq secondes sur cet écran, et
+    retélécharger puis redimensionner la même pochette à chaque fois serait
+    absurde.
+    """
+    if not url:
+        return None
+    if _cover["url"] == url and _cover["data"] is not None:
+        return _cover["data"]
+
+    try:
+        from PIL import Image
+        r = requests.get(url, timeout=TIMEOUT)
+        r.raise_for_status()
+        img = Image.open(io.BytesIO(r.content)).convert("RGB")
+        img = img.resize((COVER_SIZE, COVER_SIZE), Image.LANCZOS)
+    except Exception as e:
+        current_app.logger.warning("spotify cover: %s", e)
+        return None
+
+    out = bytearray(COVER_SIZE * COVER_SIZE * 2)
+    i = 0
+    for (red, green, blue) in img.getdata():
+        px = ((red & 0xF8) << 8) | ((green & 0xFC) << 3) | (blue >> 3)
+        if _INVERT:
+            px ^= 0xFFFF
+        out[i] = px >> 8
+        out[i + 1] = px & 0xFF
+        i += 2
+
+    _cover["url"] = url
+    _cover["data"] = bytes(out)
+    return _cover["data"]
 
 
 def command(action, value=None):

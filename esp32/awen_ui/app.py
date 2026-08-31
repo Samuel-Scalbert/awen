@@ -41,6 +41,7 @@ FRAME_MS = 16            # lecture des entrées
 BLINK_MS = 530           # demi-période du curseur
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
 POT_TOLERANCE = 3        # % d'écart sous lequel le potard reprend la main
+COVER = 64               # côté de la pochette, doit égaler COVER_SIZE serveur
 
 # Rythme des animations. Ces valeurs se lisent, elles ne s'expédient pas :
 # une ligne d'amorçage qui apparaît en 120 ms n'est pas une animation, c'est
@@ -58,6 +59,8 @@ VOLUME_SETTLE_MS = 250
 
 
 class App:
+    COVER = COVER
+
     def __init__(self, display, config):
         self.g = Grid(display, theme.load())
         self.io = Input(**config.get("pins", {}))
@@ -82,6 +85,8 @@ class App:
         self._vol_at = 0
         self._vol_local = 0
         self._vol_hold = 0          # jusqu'à quand la valeur locale prime
+        self.cover = None           # pochette en RGB565 brut
+        self._cover_tag = None
 
     # ------------------------------------------------------------ réseau
 
@@ -162,6 +167,38 @@ class App:
     def apply_advice(self, accept):
         if self._post("/api/esp32/advice", {"accept": accept}):
             self.t_poll = 0
+
+    def fetch_cover(self, tag):
+        """Récupère la pochette réduite, seulement quand elle a changé.
+
+        Le serveur la renvoie déjà en 64x64 RGB565 inversé : l'ESP32 n'a plus
+        qu'à la pousser sur le bus SPI. Décoder un JPEG ici serait hors de
+        portée, et redemander 8 Ko toutes les cinq secondes pour la même
+        image serait du gaspillage pur.
+        """
+        if tag == self._cover_tag:
+            return
+        self._cover_tag = tag
+        if not tag:
+            self.cover = None
+            return
+        r = None
+        try:
+            r = urequests.get(self._url("/api/esp32/cover"), timeout=NET_TIMEOUT)
+            if r.status_code != 200:
+                raise OSError(r.status_code)
+            data = r.content
+        except Exception as e:
+            print("cover:", e)
+            self.cover = None
+            self._cover_tag = None      # on retentera au prochain passage
+            return
+        finally:
+            if r is not None:
+                r.close()
+        self.cover = data if len(data) == self.COVER * self.COVER * 2 else None
+        self.dirty = True
+        gc.collect()
 
     def spotify(self, action):
         """Lecture, pause, piste suivante — le serveur détient le jeton.

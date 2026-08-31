@@ -326,17 +326,28 @@ def s_jobs(p):
 
 
 def s_spotify(p):
-    """Ce qui joue, et le volume au potard.
+    """Ce qui joue, pochette comprise, et le volume au potard.
 
-    C'est l'usage le plus naturel d'un potentiometre de tout le firmware : un
-    volume a une position absolue, exactement comme le curseur.
+    La pochette est reduite a 64x64 par le serveur et envoyee en pixels
+    bruts : un ESP32 ne sait pas decoder un JPEG. Elle occupe 8 colonnes sur
+    4 lignes, le texte prend les 20 colonnes restantes.
+
+    Le volume est l'usage le plus naturel d'un potentiometre de tout le
+    firmware : il a une position absolue, exactement comme le curseur.
     """
     s = Screen(p)
     s.header("> SPOTIFY", "21:47")
 
-    s.big(1, 3, "MIDNIGHT CITY", scale=2)
-    s.text(1, 6, "M83", "fg")
-    s.text(1, 7, "Hurry Up, We're Dreaming", "dim")
+    # Faute de vraie pochette ici, on montre son emprise exacte : c'est cette
+    # place-la qu'il faut juger, pas une image d'illustration.
+    s.frame(1, 3, 8, 4)
+    s.text(3, 4, "POCH", "dim")
+    s.text(3, 5, "ETTE", "dim")
+
+    s.big(10, 3, "MIDNIGHT", scale=2)
+    s.big(10, 4, "CITY", scale=2)
+    s.text(10, 5, "M83", "fg")
+    s.text(10, 6, "Hurry Up, We're", "dim")
 
     s.text(1, 10, "1:47", "dim")
     s.right(10, "4:03", "dim")
