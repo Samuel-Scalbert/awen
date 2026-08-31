@@ -94,28 +94,61 @@ class Pot:
          de pourcentage, sinon le lissage tremblerait plus lentement, mais
          il tremblerait quand même.
 
-    Les extrémités de l'échelle sont volontairement rognées. Le convertisseur
-    de l'ESP32 est non linéaire près de 0 V et sature avant 3,3 V : sans ça,
-    tu ne pourrais jamais atteindre ni 0 % ni 100 %.
+    L'ÉCHELLE SE CALIBRE TOUTE SEULE
+
+    Une borne écrite en dur ne peut pas savoir jusqu'où TON potard va. Le
+    convertisseur de l'ESP32 est non linéaire près de 0 V et sature avant
+    3,3 V, à une valeur qui dépend de la puce, de l'alimentation et des
+    tolérances de la piste résistive. Fixer le maximum à 4000 alors que le
+    tien plafonne à 3600, c'est un potard qui ne monte jamais au-delà de
+    90 % — sans que rien ne l'indique.
+
+    On mémorise donc les extrêmes réellement vus et on tend l'échelle
+    dessus. Le premier balayage complet suffit à calibrer ; avant ça, une
+    plage par défaut évite les valeurs absurdes.
+
+    Les 2 % de chaque bout sont collés à 0 et 100. Sans cette marge, la
+    dernière fraction de course serait injoignable dès que le bruit dépasse
+    d'un point ce qui a été observé.
     """
 
-    RAW_MIN, RAW_MAX = 120, 4000   # plage réellement exploitable
+    RAW_MIN, RAW_MAX = 120, 4000   # plage supposée tant que rien n'est vu
     ALPHA_NUM, ALPHA_DEN = 1, 4    # lissage : 1/4 de la nouvelle mesure
     DEADBAND = 1                   # en pourcents
+    EDGE = 2                       # % collés aux extrêmes
+    MIN_SPAN = 300                 # en deçà, on n'a pas vu assez de course
 
     def __init__(self, pin_no):
         self.adc = ADC(Pin(pin_no))
         self.adc.atten(ADC.ATTN_11DB)   # pleine échelle 0-3,3 V
         self.ema = self.adc.read()
+        # Bornes impossibles : la première mesure les remplace toutes deux.
+        self.lo, self.hi = 4095, 0
         self.last = self._pct()
 
     def _pct(self):
         raw = self.ema
-        if raw <= self.RAW_MIN:
+        if raw < self.lo:
+            self.lo = raw
+        if raw > self.hi:
+            self.hi = raw
+
+        lo, hi = self.lo, self.hi
+        if hi - lo < self.MIN_SPAN:
+            # Pas encore assez de course observée : on s'en remet à la plage
+            # supposée plutôt que d'amplifier le bruit sur trois points.
+            lo, hi = self.RAW_MIN, self.RAW_MAX
+
+        if raw <= lo:
             return 0
-        if raw >= self.RAW_MAX:
+        if raw >= hi:
             return 100
-        return ((raw - self.RAW_MIN) * 100) // (self.RAW_MAX - self.RAW_MIN)
+        pct = ((raw - lo) * 100) // (hi - lo)
+        if pct <= self.EDGE:
+            return 0
+        if pct >= 100 - self.EDGE:
+            return 100
+        return pct
 
     def value(self):
         """Position courante en pourcents, sans passer par la file."""

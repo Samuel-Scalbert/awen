@@ -49,6 +49,13 @@ BOOT_STEP_MS = 300       # apparition d'une ligne d'amorçage
 BOOT_HOLD_MS = 900       # pause finale, pour lire l'écran complet
 SWEEP_MS = 14            # une ligne du balayage de transition
 
+# Temps d'immobilité du potard avant d'envoyer le volume. Chaque envoi est
+# une requête HTTP bloquante vers le serveur, qui en fait une autre vers
+# Spotify : en tirer une par cran ferait une centaine d'appels sur une seule
+# rotation, tous mis à la queue leu leu pendant que l'écran attend. On
+# n'envoie donc que la valeur finale, une fois le geste terminé.
+VOLUME_SETTLE_MS = 250
+
 
 class App:
     def __init__(self, display, config):
@@ -71,6 +78,10 @@ class App:
         self.pot_target = None
         self.pot_armed = False
         self.wlan = None
+        self._vol_pending = None
+        self._vol_at = 0
+        self._vol_local = 0
+        self._vol_hold = 0          # jusqu'à quand la valeur locale prime
 
     # ------------------------------------------------------------ réseau
 
@@ -118,6 +129,16 @@ class App:
         data["online"] = True
         data["blink"] = self.state.get("blink", True)
         data["ip"] = self.state.get("ip", "")
+
+        # Spotify met une seconde ou deux à refléter un changement de volume.
+        # Sans ce garde-fou, un rafraîchissement qui tombe pendant qu'on
+        # tourne ramènerait la jauge à l'ancienne valeur, et le potard
+        # semblerait lutter contre l'écran.
+        if time.ticks_diff(self._vol_hold, time.ticks_ms()) > 0:
+            sp = data.get("spotify")
+            if isinstance(sp, dict):
+                sp["volume"] = self._vol_local
+
         self.state = data
         self.dirty = True
         gc.collect()
@@ -151,10 +172,27 @@ class App:
         self._post("/api/esp32/spotify", {"action": action})
 
     def set_volume(self, pct):
+        """Affiche tout de suite, envoie quand le geste s'arrête.
+
+        La jauge suit le doigt sans latence parce qu'elle est mise à jour
+        localement ; seul le réseau attend. C'est ce découplage qui rend le
+        réglage fluide au lieu de saccadé.
+        """
         sp = self.state.get("spotify")
         if sp is not None:
-            sp["volume"] = pct       # retour visuel immédiat, sans attendre
+            sp["volume"] = pct
             self.dirty = True
+        self._vol_pending = pct
+        self._vol_local = pct
+        self._vol_at = time.ticks_ms()
+        self._vol_hold = time.ticks_add(self._vol_at, 4000)
+
+    def _flush_volume(self, now):
+        if self._vol_pending is None:
+            return
+        if time.ticks_diff(now, self._vol_at) < VOLUME_SETTLE_MS:
+            return
+        pct, self._vol_pending = self._vol_pending, None
         self._post("/api/esp32/spotify", {"action": "volume", "value": pct})
 
     # -------------------------------------------------------- navigation
@@ -272,6 +310,7 @@ class App:
                 self.handle(ev)
 
             self._update_pot_arming()
+            self._flush_volume(now)
 
             if time.ticks_diff(now, self.t_blink) >= BLINK_MS:
                 self.t_blink = now
