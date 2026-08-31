@@ -19,7 +19,8 @@
 [CmdletBinding()]
 param(
     [string] $Port,
-    [switch] $Console
+    [switch] $Console,
+    [switch] $NoMpy      # envoyer les .py bruts, pour deboguer sur la carte
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,11 +125,60 @@ try {
         exit 1
     }
 
+    # --- precompilation ------------------------------------------------------
+    #
+    # MicroPython compile le .py en bytecode DANS LA RAM a chaque import. Nos
+    # modules pesent 75 Ko de source : sur une carte qui n'a qu'une centaine
+    # de kilo-octets de tas, cette compilation a suffi a mettre la pile reseau
+    # a sec (« mdns: Cannot allocate memory, free heap: 24 bytes »).
+    #
+    # Un .mpy est deja compile : il se charge sans compilateur et sans pic
+    # d'allocation. main.py reste en .py, MicroPython ne lance que celui-la
+    # au demarrage ; awen_config.py aussi, pour rester lisible sur la carte.
+    $Raw = @('main.py', 'awen_config.py')
+    $tmp = Join-Path $env:TEMP 'awen-mpy'
+    $useMpy = $false
+    if (-not $NoMpy) {
+        try {
+            python -c "import mpy_cross" 2>$null
+            $useMpy = ($LASTEXITCODE -eq 0)
+        } catch { $useMpy = $false }
+    }
+    if ($useMpy) {
+        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+        foreach ($f in ($Files | Where-Object { $Raw -notcontains $_ })) {
+            $out = Join-Path $tmp ($f -replace '\.py$', '.mpy')
+            python -m mpy_cross -o $out $f
+            if ($LASTEXITCODE -ne 0) { throw "mpy-cross a echoue sur $f" }
+        }
+        $saved = ($Files | Where-Object { $Raw -notcontains $_ } |
+                  ForEach-Object { (Get-Item $_).Length } |
+                  Measure-Object -Sum).Sum
+        $after = (Get-ChildItem $tmp -Filter *.mpy |
+                  Measure-Object -Property Length -Sum).Sum
+        Write-Host ("precompile : {0} Ko -> {1} Ko" -f `
+            [math]::Round($saved/1KB), [math]::Round($after/1KB)) -ForegroundColor Cyan
+    } else {
+        Write-Host 'mpy-cross absent : envoi des .py bruts.' -ForegroundColor Yellow
+        Write-Host '  pip install mpy-cross   (recommande : moins de RAM sur la carte)'
+    }
+
     # --- televersement -------------------------------------------------------
+    #
+    # Les anciens .py doivent partir, sinon MicroPython les prefere au .mpy
+    # du meme nom et toute la precompilation ne sert a rien.
     foreach ($f in $Files) {
-        Write-Host "  -> $f"
-        Invoke-Mpremote connect $Port fs cp $f ":$f" | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "echec de la copie de $f" }
+        if ($useMpy -and $Raw -notcontains $f) {
+            $mpy = $f -replace '\.py$', '.mpy'
+            Write-Host "  -> $mpy"
+            Invoke-Mpremote connect $Port fs cp (Join-Path $tmp $mpy) ":$mpy" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "echec de la copie de $mpy" }
+            Invoke-Mpremote connect $Port fs rm ":$f" 2>$null | Out-Null
+        } else {
+            Write-Host "  -> $f"
+            Invoke-Mpremote connect $Port fs cp $f ":$f" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "echec de la copie de $f" }
+        }
     }
 
     Write-Host 'Redemarrage...' -ForegroundColor Cyan

@@ -41,8 +41,8 @@ FRAME_MS = 16            # lecture des entrées
 BLINK_MS = 530           # demi-période du curseur
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
 POT_TOLERANCE = 3        # % d'écart sous lequel le potard reprend la main
-COVER = 160              # côté de la pochette, doit égaler COVER_SIZE serveur
-COVER_FILE = "/cover.bin"   # 51 Ko : sur la flash, jamais en RAM
+COVER = 112              # côté de la pochette, doit égaler COVER_SIZE serveur
+COVER_FILE = "/cover.bin"   # 25 Ko : sur la flash, jamais en RAM
 
 # Rythme des animations. Ces valeurs se lisent, elles ne s'expédient pas :
 # une ligne d'amorçage qui apparaît en 120 ms n'est pas une animation, c'est
@@ -58,11 +58,18 @@ SWEEP_MS = 14            # une ligne du balayage de transition
 # n'envoie donc que la valeur finale, une fois le geste terminé.
 VOLUME_SETTLE_MS = 250
 
-# Chien de garde matériel : la boucle doit le nourrir plus souvent que ça,
-# sinon la carte redémarre. Large, parce qu'une requête HTTP lente peut
-# légitimement immobiliser la boucle six secondes.
-WDT_MS = 60000
 MEM_WARN = 20000         # octets libres sous lesquels on s'inquiète
+
+# PAS DE machine.WDT ICI, ET C'EST DELIBERE
+#
+# On en avait mis un. Il a redémarré la carte en pleine opération légitime :
+# sur ESP32, machine.WDT s'appuie sur le chien de garde de tâches de
+# l'ESP-IDF, dont la fenêtre globale est bien plus courte que le délai qu'on
+# croit demander. Le journal disait « mpy_machine_wdt did not reset in time »
+# alors que la boucle tournait normalement.
+#
+# Le filet à exceptions ci-dessous couvre le vrai besoin — une panne coûte
+# une image, pas l'afficheur — sans rebooter à contretemps.
 
 
 class App:
@@ -111,6 +118,17 @@ class App:
             self.state["ip"] = self.wlan.ifconfig()[0]
             return True
         return False
+
+    def wifi_rssi(self):
+        """Puissance du signal en dBm, ou None si indisponible.
+
+        Tous les portages n'exposent pas status('rssi') ; on renvoie None
+        plutôt que de faire planter l'écran sur une carte qui ne sait pas.
+        """
+        try:
+            return self.wlan.status("rssi") if self.wlan else None
+        except Exception:
+            return None
 
     def _url(self, path):
         return "{}{}?key={}".format(self.cfg["base_url"], path,
@@ -234,6 +252,11 @@ class App:
                         break
                     f.write(chunk)
                     got += len(chunk)
+                    # Sans ça, les vingt-cinq tampons d'un kilo s'accumulent
+                    # et la pile réseau se retrouve sans mémoire au pire
+                    # moment : au milieu de son propre téléchargement.
+                    if got % 8192 == 0:
+                        gc.collect()
         except Exception as e:
             print("cover:", e)
             self._cover_tag = None      # on retentera au prochain passage
@@ -405,20 +428,9 @@ class App:
         self.in_boot = False
         self.g.sweep(SWEEP_MS)          # on entre dans l'interface
 
-        # Chien de garde matériel : si la boucle cesse de le nourrir pendant
-        # une minute, la carte redémarre. C'est le seul recours contre un
-        # blocage dur — un socket qui ne rend jamais la main, le bus SPI qui
-        # se fige — que l'attrapage d'exceptions ne peut pas couvrir.
-        wdt = None
-        try:
-            from machine import WDT
-            wdt = WDT(timeout=WDT_MS)
-        except Exception as e:
-            print("wdt indisponible:", e)
+        print("memoire libre au demarrage :", gc.mem_free())
 
         while True:
-            if wdt is not None:
-                wdt.feed()
             try:
                 self._tick()
             except Exception as e:

@@ -36,11 +36,15 @@ from flask import current_app
 # La pochette est réduite ici et envoyée en pixels bruts. L'ESP32 ne sait pas
 # décoder un JPEG, et lui faire faire le redimensionnement d'une image de
 # 300 px prendrait des secondes pour un résultat pire.
-# 160 x 160 x 2 = 51 Ko : bien trop pour un tampon en RAM sur l'ESP32, mais
-# sans importance puisqu'il l'écrit sur sa mémoire flash et la fait défiler
-# vers l'écran par tranches. C'est ce qui permet une pochette qui occupe les
-# deux tiers du panneau au lieu d'une vignette.
-COVER_SIZE = 160
+# 112 x 112 x 2 = 25 Ko. On était monté à 160 (51 Ko) et la carte n'a pas
+# tenu : plus de mémoire libre, la pile réseau ne pouvait plus rien allouer.
+# Un afficheur qui redémarre vaut moins qu'une pochette un peu plus petite.
+COVER_SIZE = 112
+
+# La pochette est réduite à 28x28 puis réagrandie au plus proche voisin :
+# des blocs de 4 pixels bien nets, dans l'esprit du reste de l'interface.
+# Une photo lissée sur un panneau de 240 px entouré de texte 8x8 jurerait.
+COVER_BLOCK = 4
 
 # Le panneau tourne avec _INVERT_COLORS = True dans st7789_min.py : le pilote
 # inverse chaque couleur avant de l'envoyer, SAUF pour les images, dont il
@@ -163,7 +167,13 @@ def cover_rgb565(url):
         r = requests.get(url, timeout=TIMEOUT)
         r.raise_for_status()
         img = Image.open(io.BytesIO(r.content)).convert("RGB")
-        img = img.resize((COVER_SIZE, COVER_SIZE), Image.LANCZOS)
+        # Deux temps : on réduit franchement en moyennant (LANCZOS garde les
+        # couleurs justes), puis on réagrandit au plus proche voisin pour
+        # obtenir des blocs francs. Réduire directement à la taille finale
+        # donnerait une image lisse, pas pixelisée.
+        small = COVER_SIZE // COVER_BLOCK
+        img = img.resize((small, small), Image.LANCZOS)
+        img = img.resize((COVER_SIZE, COVER_SIZE), Image.NEAREST)
     except Exception as e:
         current_app.logger.warning("spotify cover: %s", e)
         return None

@@ -154,8 +154,9 @@ class Screen:
         """Barre haute, curseur compris : c'est le seul mouvement permanent
         de l'interface, et une maquette qui l'omet donne un ecran plus mort
         que la machine."""
-        self.text(0, 0, title, "hi", bold=True)
-        self.cursor(len(title) + 1, 0)
+        self.text(0, 0, "AWEN", "fg")
+        self.text(5, 0, title, "hi", bold=True)
+        self.cursor(5 + len(title) + 1, 0)
         self.right(0, clock, "dim")
         self.rule(1)
 
@@ -194,41 +195,49 @@ def s_boot(p):
 def s_home(p):
     """Le tableau de bord. Dense a dessein.
 
-    C'est l'ecran qu'on regarde en passant sans appuyer sur rien : il doit
-    repondre aux questions du matin et donner envie d'aller chercher le
-    detail ailleurs. Pas de seance ici — elle a son ecran.
+    La police est ASCII, donc pas d'emoji : la couleur fait le travail a leur
+    place, avec un marqueur colore par section.
     """
     s = Screen(p)
-    s.text(0, 0, "Lundi 31 aout", "hi", bold=True)
-    s.cursor(14, 0)
+    s.text(0, 0, "AWEN", "fg")
+    s.text(5, 0, "Lundi 31 aout", "hi", bold=True)
+    s.cursor(19, 0)
     s.right(0, "S36", "dim")
     s.rule(1)
 
     s.big(5, 2, "19:01", scale=4)
-    s.center(4, "saint Aristide", "dim")
+    s.center(4, "- saint Aristide -", "dim")
     s.rule(5)
 
-    s.text(1, 6, "=  22C", "hi", bold=True)
-    s.text(8, 6, "COUVERT", "fg")
-    s.text(1, 7, "min  18  max  23", "dim")
+    s.text(0, 6, "=", "hi")
+    s.big(2, 6, "22C", scale=2)
+    s.right(6, "COUVERT", "fg")
+    s.text(1, 7, "min  18   max  23", "dim")
     s.right(7, "pluie  15%", "dim")
     s.rule(8)
 
-    s.text(1, 9, "SERVEUR", "dim")
+    s.text(0, 9, "+", "fg")
+    s.text(2, 9, "SERVEUR", "dim")
     s.right(9, "2/2 SERVICES", "fg")
-    s.text(1, 10, "disque 34%   ram 41%   12j 3h", "dim")
+    s.text(2, 10, "disque 2%  ram 13%  4j 2h", "dim")
 
-    s.text(1, 12, "OFFRES DU JOUR", "dim")
-    s.right(12, "2", "hi", bold=True)
+    s.text(0, 11, ">", "hi")
+    s.text(2, 11, "OFFRES DU JOUR", "dim")
+    s.right(11, "2", "hi", bold=True)
 
-    s.text(1, 13, "COACH", "dim")
-    s.right(13, "14 jours sans seance", "alert")
+    s.text(0, 12, "!", "alert")
+    s.text(2, 12, "COACH", "dim")
+    s.right(12, "14 jours sans seance", "alert")
 
-    s.text(1, 15, "ECOUTE", "dim")
-    s.right(15, "M83 - Midnight City", "fg")
+    s.text(0, 13, ">", "fg")
+    s.text(2, 13, "ECOUTE", "dim")
+    s.right(13, "M83 - Midnight City", "fg")
+    s.rule(14)
 
-    s.text(1, 16, "AWEN", "dim")
-    s.right(16, "EN LIGNE", "fg")
+    s.text(0, 15, "*", "fg")
+    s.text(2, 15, "WIFI", "dim")
+    s.right(15, "BON -64 dBm", "fg")
+    s.text(2, 16, "192.168.1.47", "dim")
 
     s.statusbar("A/C : ecrans", "B tenu: accueil")
     return s
@@ -358,9 +367,9 @@ def s_spotify(p):
     # Faute de vraie pochette ici, on montre son emprise exacte : 160 px de
     # cote, soit 20 colonnes sur 10 lignes, centrees. C'est cette place-la
     # qu'il faut juger, pas une image d'illustration.
-    s.frame(5, 3, 20, 10)
-    s.text(13, 7, "POCHETTE", "dim")
-    s.text(14, 8, "160 px", "dim")
+    s.frame(7, 3, 16, 9)
+    s.text(11, 6, "POCHETTE", "dim")
+    s.text(12, 7, "112 px", "dim")
 
     s.big(1, 13, "MIDNIGHT CITY", scale=2)
     s.text(1, 14, "M83", "fg")

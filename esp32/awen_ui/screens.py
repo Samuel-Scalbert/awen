@@ -29,7 +29,10 @@ import theme
 
 
 def _header(g, title, st):
-    """Barre haute, avec le curseur qui clignote juste après le titre.
+    """Barre haute : la marque, l'écran, le curseur, l'heure.
+
+    « AWEN » figure partout — c'est le nom de la machine, et un afficheur qui
+    ne dit jamais ce qu'il est ressemble à un écran de test.
 
     C'est le seul mouvement permanent de l'interface. Sans lui un écran
     immobile ne se distingue pas d'un écran gelé — surtout ici, où presque
@@ -38,8 +41,9 @@ def _header(g, title, st):
 
     Il ne coûte qu'une cellule par battement, grâce au redessin partiel.
     """
-    g.text(0, 0, title, g.p.HI)
-    g.cursor(len(title) + 1, 0, st.get("blink", True))
+    g.text(0, 0, "AWEN", g.p.FG)
+    g.text(5, 0, title, g.p.HI)
+    g.cursor(5 + len(title) + 1, 0, st.get("blink", True))
     g.right(0, st.get("time", ""), g.p.DIM)
     g.rule(1)
 
@@ -153,27 +157,35 @@ class Home(Screen):
         jour = st.get("jour", {})
         online = st.get("online", True)
 
-        g.text(0, 0, jour.get("long", st.get("date", ""))[:22], g.p.HI)
+        g.text(0, 0, "AWEN", g.p.FG)
+        g.text(5, 0, jour.get("long", st.get("date", ""))[:17], g.p.HI)
+        g.cursor(5 + len(jour.get("long", "")[:17]) + 1, 0,
+                 st.get("blink", True))
         g.right(0, "S{}".format(jour.get("semaine", "")), g.p.DIM)
         g.rule(1)
 
         # 5 caractères en 32x32 (echelle 4) : 160 px, centrés sur 240.
         g.big(5, 2, st.get("time", "--:--"), scale=4)
         saint = jour.get("saint", "")
-        g.center(4, ("saint " + saint) if saint else "", g.p.DIM)
+        g.center(4, ("- saint " + saint + " -") if saint else "", g.p.DIM)
         g.rule(5)
 
         # --- meteo : la question du matin, avant toutes les autres --------
+        #
+        # La police est ASCII, donc pas d'emoji. La couleur fait le travail a
+        # leur place : un marqueur colore par section, la valeur en clair,
+        # l'etiquette en sourdine. Cinq couleurs suffisent a hierarchiser ce
+        # qu'un jeu de pictogrammes ferait ailleurs.
         m = st.get("meteo", {})
         if m.get("ok"):
-            g.text(1, 6, "{}{:>4}C".format(m.get("icon", " "),
-                                           m.get("now_c", 0)), g.p.HI)
-            g.text(8, 6, m.get("label", "")[:20], g.p.FG)
-            g.text(1, 7, "min {:>3}  max {:>3}".format(
+            g.text(0, 6, m.get("icon", " "), g.p.HI)
+            g.big(2, 6, "{}C".format(m.get("now_c", 0))[:6], 2)
+            g.right(6, m.get("label", "")[:16], g.p.FG)
+            g.text(1, 7, "min {:>3}   max {:>3}".format(
                 m.get("min_c", 0), m.get("max_c", 0)), g.p.DIM)
             rain = m.get("rain_pct", 0)
             g.right(7, "pluie {:>3}%".format(rain),
-                    g.p.FG if rain >= 50 else g.p.DIM)
+                    g.p.ALERT if rain >= 60 else g.p.DIM)
         else:
             g.text(1, 6, "METEO INDISPONIBLE", g.p.DIM)
         g.rule(8)
@@ -181,44 +193,71 @@ class Home(Screen):
         # --- serveur : ce qui doit tourner tourne-t-il ? ------------------
         srv = st.get("serveur", {})
         total = srv.get("total", 0)
+        ok = srv.get("ok")
+        g.text(0, 9, "+" if ok and total else "!",
+               g.p.FG if ok and total else g.p.ALERT)
+        g.text(2, 9, "SERVEUR", g.p.DIM)
         if not total:
-            g.text(1, 9, "SERVEUR", g.p.DIM)
             g.right(9, "PAS DE RELEVE", g.p.ALERT)
         else:
-            g.text(1, 9, "SERVEUR", g.p.DIM)
-            ok = srv.get("ok")
             g.right(9, "{}/{} SERVICES".format(srv.get("up", 0), total),
                     g.p.FG if ok else g.p.ALERT)
             if not ok:
-                g.text(1, 10, "! " + ", ".join(srv.get("down", []))[:26],
+                g.text(2, 10, ("! " + ", ".join(srv.get("down", [])))[:26],
                        g.p.ALERT)
             else:
-                g.text(1, 10, "disque {}%   ram {}%   {}".format(
+                g.text(2, 10, "disque {}%  ram {}%  {}".format(
                     srv.get("disk_pct", 0), srv.get("mem_pct", 0),
-                    srv.get("uptime", "")), g.p.DIM)
+                    srv.get("uptime", ""))[:27], g.p.DIM)
 
         # --- ce qui attend une action de ta part -------------------------
-        g.text(1, 12, "OFFRES DU JOUR", g.p.DIM)
         n = st.get("jobs", {}).get("n", 0)
-        g.right(12, str(n), g.p.HI if n else g.p.DIM)
+        g.text(0, 11, ">" if n else " ", g.p.HI if n else g.p.DIM)
+        g.text(2, 11, "OFFRES DU JOUR", g.p.DIM)
+        g.right(11, str(n), g.p.HI if n else g.p.DIM)
 
         c = st.get("coach", {})
-        g.text(1, 13, "COACH", g.p.DIM)
-        g.right(13, (c.get("text") or "rien a signaler")[:22],
-                g.p.ALERT if c.get("level") == "alert" else g.p.FG)
+        alert = c.get("level") == "alert"
+        g.text(0, 12, c.get("icon") or " ",
+               g.p.ALERT if alert else g.p.FG)
+        g.text(2, 12, "COACH", g.p.DIM)
+        g.right(12, (c.get("text") or "rien a signaler")[:20],
+                g.p.ALERT if alert else g.p.FG)
 
         # --- ce qui joue --------------------------------------------------
         sp = st.get("spotify", {})
-        g.text(1, 15, "ECOUTE", g.p.DIM)
+        playing = sp.get("playing")
+        g.text(0, 13, ">" if playing else "|", g.p.FG if playing else g.p.DIM)
+        g.text(2, 13, "ECOUTE", g.p.DIM)
         if sp.get("device"):
-            g.right(15, "{} - {}".format(sp.get("artist", ""),
-                                         sp.get("title", ""))[:22], g.p.FG)
+            g.right(13, "{} - {}".format(sp.get("artist", ""),
+                                         sp.get("title", ""))[:20], g.p.FG)
         else:
-            g.right(15, "rien", g.p.DIM)
+            g.right(13, "rien", g.p.DIM)
 
-        g.text(1, 16, "AWEN", g.p.DIM)
-        g.right(16, "EN LIGNE" if online else "HORS LIGNE",
-                g.p.FG if online else g.p.ALERT)
+        g.rule(14)
+
+        # --- l'etat de la liaison, en bas : c'est le moins urgent ---------
+        rssi = app.wifi_rssi()
+        g.text(0, 15, "*" if online else "!",
+               g.p.FG if online else g.p.ALERT)
+        g.text(2, 15, "WIFI", g.p.DIM)
+        if rssi is None:
+            g.right(15, "EN LIGNE" if online else "HORS LIGNE",
+                    g.p.FG if online else g.p.ALERT)
+        else:
+            # Un dBm ne parle a personne : on le traduit, et on garde le
+            # chiffre pour qui veut comparer deux emplacements.
+            if rssi >= -60:
+                mot, col = "EXCELLENT", g.p.FG
+            elif rssi >= -70:
+                mot, col = "BON", g.p.FG
+            elif rssi >= -80:
+                mot, col = "FAIBLE", g.p.HI
+            else:
+                mot, col = "TRES FAIBLE", g.p.ALERT
+            g.right(15, "{} {} dBm".format(mot, rssi), col)
+        g.text(2, 16, st.get("ip", ""), g.p.DIM)
 
         # Pas de « [OK] MENU » : B ne fait rien ici, et annoncer une action
         # inexistante est pire que de n'en annoncer aucune.
@@ -434,10 +473,11 @@ class Spotify(Screen):
 
         # Le titre en 16x16 : 14 caracteres par ligne, deux lignes. Au-dela
         # on tronque — un titre de chanson se reconnait a son debut.
-        # 160 px de cote : 20 colonnes sur 10 lignes, centrees. C'est le seul
-        # element de tout le firmware qui merite cette place — une pochette
-        # en vignette ne sert a rien, on ne la reconnait pas.
-        g.image(5, 3, app.cover, app.COVER, sp.get("cover", ""))
+        # 112 px de cote : 14 colonnes sur 7 lignes, centrees, dans un
+        # contour. Sans lui une pochette sombre se fond dans le noir du
+        # panneau et on ne voit plus ou elle commence.
+        g.frame(7, 3, 16, 9)
+        g.image(8, 4, app.cover, app.COVER, sp.get("cover", ""))
 
         # Le « + [""] » n'est pas une precaution de style : _wrap("") rend une
         # liste vide, et indexer dessus planterait la boucle sur une piste
