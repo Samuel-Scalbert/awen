@@ -7,7 +7,7 @@ broches » — le dupliquer ici garantirait qu'un jour les deux divergent.
     Ecran   CS 5, DC 17, RST 21, retroeclairage 22, SCK 18, MOSI 23
     Boutons gauche 26, selection 27, droite 14   (buttons.py)
     Potard  34    (ADC1 obligatoire)
-    LED     13    (WS2812 : DIN)
+    LED     32 R, 33 V, 13 B   (+ commun, + 3 resistances 220R)
     DHT11   25    (DATA)
 
 À copier sur la carte, à côté de st7789_min.py, tft_setup.py et wifi.py.
@@ -40,19 +40,26 @@ POT = 34
 # produisent le même événement, et le rattrapage se désactive tout seul
 # puisqu'un encodeur n'a aucune position à trahir.
 #
-#     "clk": 32, "dt": 33,        au lieu de       "pot": POT,
+#     "clk": 4, "dt": 19,         au lieu de       "pot": POT,
 #
 # Ses broches peuvent être n'importe où (ce sont des entrées numériques,
 # ADC2 n'entre pas en jeu) sauf sur celles déjà prises par l'écran ou les
 # boutons. Son propre bouton-poussoir se câble comme les trois autres.
 
-# LED d'etat WS2812 : DIN ici, plus +5 V et masse.
+# LED RGB a 4 broches : une patte par couleur, plus le commun.
 #
-# PAS SUR GPIO 12. C'est une broche de strapping (MTDI) : si elle est tiree
-# au niveau haut au demarrage, l'ESP32 regle sa tension de flash a 1,8 V et
-# refuse de demarrer. Une LED branchee la peut suffire a briquer un
-# demarrage sur deux, avec un symptome qui n'a rien a voir avec la LED.
-LED_PIN = 13
+# UNE RESISTANCE DE 220 OHMS SUR CHAQUE PATTE DE COULEUR. Sans elle la LED
+# tire tout ce que le GPIO peut donner, et les deux se degradent.
+#
+# Le commun va au GND si la LED est a cathode commune (le cas courant), au
+# 3V3 si elle est a anode commune — regle alors LED_COMMON sur "anode",
+# sinon toutes les couleurs seront inversees. Voir led.py pour le test.
+#
+# PAS DE GPIO 12 ICI. C'est une broche de strapping (MTDI) : tiree au niveau
+# haut au demarrage, l'ESP32 regle sa tension de flash a 1,8 V et refuse de
+# demarrer — un symptome qui n'a rien a voir avec une LED.
+LED_R, LED_G, LED_B = 32, 33, 13
+LED_COMMON = "cathode"
 
 # DHT11 : broche DATA ici, plus VCC (3V3 ou 5V selon ton module) et masse.
 # La plupart des modules a trois broches ont deja leur resistance de tirage ;
@@ -60,7 +67,8 @@ LED_PIN = 13
 DHT_PIN = 25
 
 app = App(tft, {
-    "led": {"kind": "ws2812", "pin": LED_PIN},
+    "led": {"kind": "rgb", "pin_r": LED_R, "pin_g": LED_G,
+            "pin_b": LED_B, "common": LED_COMMON},
     "sensor": {"kind": "dht11", "pin": DHT_PIN},
     "ssid": SSID,
     "password": PASSWORD,

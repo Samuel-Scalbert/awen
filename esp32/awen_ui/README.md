@@ -38,7 +38,61 @@ TARS n'affiche jamais de texte serré.
 L'heure de l'écran de veille passe par `scale=4` — le pilote multiplie le
 glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 
-## Câblage
+## Câblage complet
+
+| Élément | Broche ESP32 | Alimentation |
+| --- | --- | --- |
+| **Écran** CS | 5 | **3V3** |
+| Écran DC | 17 | |
+| Écran RST | 21 | |
+| Écran rétroéclairage | 22 | |
+| Écran SCK | 18 | |
+| Écran MOSI | 23 | |
+| **Bouton A** gauche | 26 | vers **GND** |
+| **Bouton B** sélection | 27 | vers **GND** |
+| **Bouton C** droite | 14 | vers **GND** |
+| **Potentiomètre** curseur | **34** | extrémités sur **3V3** et **GND** |
+| **LED RGB** rouge | 32 | ⚠️ **220 Ω en série** |
+| LED RGB verte | 33 | ⚠️ **220 Ω en série** |
+| LED RGB bleue | 13 | ⚠️ **220 Ω en série** |
+| LED RGB commun | — | **GND** (cathode commune) ou **3V3** (anode) |
+| **DHT11** DATA | 25 | **3V3** et **GND** |
+
+Broches encore libres et sûres : **4, 15, 16, 19**, plus **35** en entrée
+seule. Un encodeur rotatif irait sur 4 et 19.
+
+### Où est le 5 V, et pourquoi tu n'en as pas besoin
+
+Sur une carte ESP32 DevKit la broche s'appelle **VIN** (parfois **5V**), en
+général en tête de rangée à côté de GND. Alimentée par l'USB, elle sort
+environ 4,7 V.
+
+**Rien ici n'en a besoin, et le DHT11 ne doit surtout pas y aller** :
+alimenté en 5 V il mettrait 5 V sur sa ligne DATA, reliée directement à un
+GPIO qui ne tolère que 3,6 V. L'entrée s'abîme, parfois lentement — le genre
+de panne qui se manifeste des semaines plus tard, sans lien apparent.
+
+La LED RGB est passive : ses trois pattes sont pilotées par les GPIO, seul
+le commun est câblé, au GND ou au 3V3 selon son type.
+
+### Les résistances ne sont pas facultatives
+
+Une LED sans limitation tire tout ce qu'elle peut. Un GPIO d'ESP32 donne
+12 mA confortablement et 40 mA en absolu : sans résistance, la LED **et** la
+sortie se dégradent. **220 Ω sur chaque patte de couleur**, jamais une seule
+sur le commun — elle ferait varier la couleur selon le nombre de canaux
+allumés.
+
+### Cathode ou anode commune
+
+La patte la plus longue est le commun. Pour trancher : relie-la au GND et
+touche une patte de couleur au 3V3 à travers 220 Ω. Si ça s'allume, c'est
+une **cathode commune** — le cas le plus répandu, et la valeur par défaut.
+
+Si les couleurs sortent à l'envers (l'accueil devrait être orange et sort
+cyan), mets `LED_COMMON = "anode"` dans `main.py`.
+
+## Détail des entrées
 
 Les boutons se câblent **entre le GPIO et la masse**, sans résistance : le
 tirage interne est activé dans `input.py`. Un bouton relâché lit donc 1, un
