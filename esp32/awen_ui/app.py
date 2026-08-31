@@ -244,7 +244,19 @@ class App:
 
     def _update_pot_arming(self):
         """Le potard reprend la main dès qu'il traverse la valeur courante."""
-        target = self.current().pot_target(self.state)
+        screen = self.current()
+        if screen.POT_FREE:
+            # Écran qui parcourt une liste : il n'y a aucune valeur à écraser
+            # par accident, donc pas de rattrapage. Sans ce cas, un
+            # pot_target() à None désarmerait le potard et l'écran ne
+            # recevrait plus rien — c'est ce qui empêchait de changer de thème.
+            self.pot_armed = True
+            if self.pot_target is not None:
+                self.pot_target = None
+                self.dirty = True
+            return
+
+        target = screen.pot_target(self.state)
         if target != self.pot_target:
             self.pot_target = target
             self.dirty = True

@@ -61,6 +61,11 @@ class Grid:
         # Mémo des tracés hors grille (jauges, filets, cadres, gros texte) :
         # on ne les redessine que quand leur valeur change vraiment.
         self._gfx = {}
+        # Ces tracés sont mis en file pendant draw() et joués APRÈS la passe
+        # de texte. Les exécuter tout de suite les ferait recouvrir par les
+        # fonds de cellule que flush() repeint juste après : jauges et filets
+        # apparaîtraient une image puis disparaîtraient.
+        self._queue = []
 
         self.clear()
 
@@ -82,6 +87,7 @@ class Grid:
             self.ch[i] = _SPACE
             self.fg[i] = self.p.FG
             self.bg[i] = self.p.BG
+        self._queue = []
 
     def text(self, col, row, s, fg=None, bg=None):
         """Écrit sur la grille, une cellule par caractère."""
@@ -126,6 +132,10 @@ class Grid:
         d = self.d
         ch, fg, bg = self.ch, self.fg, self.bg
         sch, sfg, sbg = self.sch, self.sfg, self.sbg
+        # Lignes effectivement repeintes : un tracé hors grille qui les
+        # traverse vient d'être recouvert et doit être refait, même si sa
+        # valeur n'a pas bougé.
+        touched = bytearray(ROWS)
 
         for row in range(ROWS):
             base = row * COLS
@@ -156,13 +166,74 @@ class Grid:
                 w = (col - start) * CW
                 d.fill_rect(x, y, w, CH, cb)
                 d.text("".join(buf), x, y + YOFF, color=cf, bg=cb)
+                touched[row] = 1
+
+        self._run_queue(touched)
+
+
+    # ---- mise en file : le trace reel a lieu dans flush(), apres le texte --
+
+    def rule(self, row, color=None):
+        self._queue.append(("rule", (row, color)))
+
+    def frame(self, col, row, width, height, color=None):
+        self._queue.append(("frame", (col, row, width, height, color)))
+
+    def bar(self, col, row, width, pct, color=None):
+        self._queue.append(("bar", (col, row, width, pct, color)))
+
+    def big(self, col, row, s, scale=2, fg=None):
+        self._queue.append(("big", (col, row, s, scale, fg)))
+
+    _SPAN = {"rule": 1, "frame": None, "bar": 1, "big": None}
+
+    def _run_queue(self, touched):
+        """Joue les tracés hors grille, une fois le texte posé.
+
+        L'ordre compte : flush() repeint le fond de chaque cellule modifiée,
+        et une jauge tracée avant serait recouverte. C'est ce qui faisait
+        disparaître toutes les barres et tous les filets de l'afficheur.
+
+        `touched` dit quelles lignes viennent d'être repeintes : le mémo y est
+        oublié, sinon un tracé recouvert serait considéré comme encore à
+        l'écran et ne reviendrait jamais.
+        """
+        for kind, args in self._queue:
+            self._forget_if_touched(kind, args, touched)
+        for kind, args in self._queue:
+            if kind == "rule":
+                self._draw_rule(*args)
+            elif kind == "frame":
+                self._draw_frame(*args)
+            elif kind == "bar":
+                self._draw_bar(*args)
+            else:
+                self._draw_big(*args)
+        self._queue = []
+
+    def _forget_if_touched(self, kind, args, touched):
+        if kind == "rule":
+            rows, key = (args[0],), ("rule", args[0])
+        elif kind == "frame":
+            col, row, w, h = args[0], args[1], args[2], args[3]
+            rows, key = range(row, row + h), ("frame", col, row, w, h)
+        elif kind == "bar":
+            rows, key = (args[1],), ("bar", args[0], args[1], args[2])
+        else:
+            col, row, scale = args[0], args[1], args[3]
+            span = max(1, (GLYPH * scale) // CH)
+            rows, key = range(row, row + span), ("big", col, row)
+        for r in rows:
+            if 0 <= r < ROWS and touched[r]:
+                self._gfx.pop(key, None)
+                return
 
     # ------------------------------------------------------------ graphiques
     #
     # Filets, cadres, jauges et gros texte ne passent pas par la grille de
     # caractères : les tracer directement est plus net et plus rapide.
 
-    def rule(self, row, color=None):
+    def _draw_rule(self, row, color=None):
         """Filet horizontal d'un pixel, en bas de la ligne indiquée."""
         key = ("rule", row)
         c = self.p.DIM if color is None else color
@@ -171,7 +242,7 @@ class Grid:
         self._gfx[key] = c
         self.d.fill_rect(0, row * CH + CH - 1, COLS * CW, 1, c)
 
-    def frame(self, col, row, width, height, color=None):
+    def _draw_frame(self, col, row, width, height, color=None):
         """Cadre d'un pixel autour d'une zone, en coordonnées de grille."""
         key = ("frame", col, row, width, height)
         c = self.p.DIM if color is None else color
@@ -185,7 +256,7 @@ class Grid:
         self.d.fill_rect(x, y, 1, h, c)
         self.d.fill_rect(x + w - 1, y, 1, h, c)
 
-    def bar(self, col, row, width, pct, color=None):
+    def _draw_bar(self, col, row, width, pct, color=None):
         """Jauge pleine, en blocs francs — jamais de dégradé.
 
         Seul le delta est repeint : une jauge de repos qui avance d'un pour
@@ -227,7 +298,7 @@ class Grid:
 
         self._gfx[key] = (filled, c)
 
-    def big(self, col, row, s, scale=2, fg=None):
+    def _draw_big(self, col, row, s, scale=2, fg=None):
         """Texte agrandi : le pilote multiplie le glyphe 8x8 par `scale`.
 
         scale=2 donne du 16x16, qui remplit exactement la hauteur d'une

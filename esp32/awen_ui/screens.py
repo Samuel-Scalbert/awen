@@ -87,6 +87,10 @@ class Screen:
     """Base commune. Par défaut, un écran n'absorbe rien et ignore le potard."""
 
     NAME = "?"
+    # Vrai quand le potard agit sans rattrapage. À distinguer d'un
+    # pot_target() qui renvoie None : celui-là veut dire « cet écran ignore le
+    # potard », et le désarme donc entièrement.
+    POT_FREE = False
 
     def draw(self, g, st, app):
         raise NotImplementedError
@@ -487,6 +491,7 @@ class Theme(Screen):
     """
 
     NAME = "theme"
+    POT_FREE = True              # rien à écraser : le potard agit tout de suite
 
     def __init__(self):
         self.saved = False
