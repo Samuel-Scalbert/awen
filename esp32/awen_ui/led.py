@@ -37,10 +37,12 @@ from machine import Pin, PWM
 FREQ = 1000              # au-dessus de la persistance retinienne
 DUTY_MAX = 1023          # PWM 10 bits, resolution par defaut de l'ESP32
 
-# Deux luminosites, parce que les deux composants n'ont rien a voir : une
-# LED nue derriere 220 ohms tire quelques milliamperes et reste discrete,
-# une WS2812 a fond est eblouissante a un metre.
-BRIGHT_RGB = 70
+# Deux luminosites, parce que les deux composants n'ont rien a voir.
+#
+# Le RGB etait a 70 % et c'etait bien trop : sur un bureau, une LED nue
+# derriere 220 ohms eclaire deja la piece a ce niveau. Un voyant d'etat doit
+# se remarquer quand on le cherche, pas quand on regarde ailleurs.
+BRIGHT_RGB = 10
 BRIGHT_WS = 10
 
 # Un rouge a la meme intensite electrique parait bien plus vif qu'un bleu :
