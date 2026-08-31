@@ -28,22 +28,54 @@ $Files = @('theme.py', 'grid.py', 'input.py', 'screens.py', 'app.py',
            'main.py', 'awen_config.py')
 $Required = @('st7789_min.py', 'tft_setup.py', 'wifi.py')
 
-# --- mpremote ---------------------------------------------------------------
-function Invoke-Mpremote {
-    param([Parameter(ValueFromRemainingArguments)] $Args)
+# --- trouver mpremote -------------------------------------------------------
+#
+# On ne fait confiance ni a `mpremote` ni a `python` sur le PATH. Sur cette
+# machine `python` est un lanceur qui repond « No pyvenv.cfg file », et
+# l'executable de mpremote est installe dans un Scripts\ absent du PATH.
+# Plutot que d'exiger un PATH propre, on essaie les candidats jusqu'a en
+# trouver un qui sache reellement importer mpremote.
+function Find-Mpremote {
     if (Get-Command mpremote -ErrorAction Ignore) {
-        & mpremote @Args
-    } else {
-        & python -m mpremote @Args
+        return @{ Exe = 'mpremote'; Pre = @() }
     }
+
+    $candidates = @()
+    foreach ($root in @($env:LOCALAPPDATA, 'D:\Users\{0}\AppData\Local' -f $env:USERNAME)) {
+        if (-not $root) { continue }
+        $candidates += Get-ChildItem -Path (Join-Path $root 'Python') -Filter 'python.exe' `
+            -Recurse -Depth 2 -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+        $candidates += Get-ChildItem -Path (Join-Path $root 'Python') -Filter 'mpremote.exe' `
+            -Recurse -Depth 2 -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+    }
+    if (Get-Command py -ErrorAction Ignore) { $candidates += 'py' }
+
+    foreach ($c in ($candidates | Select-Object -Unique)) {
+        if ($c -like '*mpremote.exe') {
+            return @{ Exe = $c; Pre = @() }
+        }
+        & $c -c 'import mpremote' 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            return @{ Exe = $c; Pre = @('-m', 'mpremote') }
+        }
+    }
+    return $null
 }
 
-$hasTool = (Get-Command mpremote -ErrorAction Ignore) -or
-           (python -c "import mpremote" 2>$null; $LASTEXITCODE -eq 0)
-if (-not $hasTool) {
-    Write-Host "mpremote est absent. Installe-le une fois :" -ForegroundColor Yellow
-    Write-Host '    pip install mpremote'
+$tool = Find-Mpremote
+if (-not $tool) {
+    Write-Host 'mpremote est introuvable. Installe-le une fois :' -ForegroundColor Yellow
+    Write-Host '    D:\Users\User\AppData\Local\Python\bin\python.exe -m pip install mpremote'
+    Write-Host '(ou avec le python de ton choix, du moment que c''est le meme ensuite)'
     exit 1
+}
+Write-Verbose "mpremote via : $($tool.Exe) $($tool.Pre -join ' ')"
+
+function Invoke-Mpremote {
+    param([Parameter(ValueFromRemainingArguments)] $Args)
+    & $tool.Exe @($tool.Pre + $Args)
 }
 
 # --- fichiers locaux --------------------------------------------------------
