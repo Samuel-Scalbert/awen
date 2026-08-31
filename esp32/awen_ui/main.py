@@ -33,6 +33,17 @@ BTN_LEFT, BTN_SELECT, BTN_RIGHT = 26, 27, 14
 # donc sans tirage interne parasite. Voir input.py.
 POT = 34
 
+# Pour passer à un encodeur rotatif, remplacer la ligne "pot" ci-dessous par
+# ses deux broches. Le reste du firmware ne verra pas la différence : les deux
+# produisent le même événement, et le rattrapage se désactive tout seul
+# puisqu'un encodeur n'a aucune position à trahir.
+#
+#     "clk": 32, "dt": 33,        au lieu de       "pot": POT,
+#
+# Ses broches peuvent être n'importe où (ce sont des entrées numériques,
+# ADC2 n'entre pas en jeu) sauf sur celles déjà prises par l'écran ou les
+# boutons. Son propre bouton-poussoir se câble comme les trois autres.
+
 app = App(tft, {
     "ssid": SSID,
     "password": PASSWORD,

@@ -26,11 +26,23 @@ import time
 BTN_A, BTN_B, BTN_C = 0, 1, 2
 SHORT, LONG, REPEAT = 0, 1, 2
 POT = 9                        # (POT, valeur) où valeur va de 0 à 100
+# L'encodeur émet le même marqueur : ce qui compte pour les écrans est la
+# valeur, pas la nature du composant qui l'a produite.
+TURN = POT
 
 DEBOUNCE_MS = 25               # sous 25 ms, c'est du rebond mécanique
 LONG_MS = 600                  # au-delà, l'intention est claire
 REPEAT_AFTER_MS = 450          # maintien : on commence à répéter
 REPEAT_EVERY_MS = 110          # puis à cette cadence
+
+# Décodeur quadrature pour l'encodeur optionnel. L'index est
+# (état précédent << 2) | état courant, la valeur le déplacement. Les
+# transitions impossibles valent 0, ce qui absorbe les rebonds au lieu de
+# compter des crans fantômes.
+_QUAD = (0, -1, 1, 0,
+         1, 0, 0, -1,
+         -1, 0, 0, 1,
+         0, 1, -1, 0)
 
 
 class Button:
@@ -163,10 +175,83 @@ class Pot:
             out.append((POT, pct))
 
 
+class Encoder:
+    """Encodeur rotatif en quadrature, lu par interruption.
+
+    On compte les quarts de cran dans l'interruption — qui doit rester
+    minuscule — et on convertit en crans dans poll(). La plupart des encodeurs
+    mécaniques font quatre transitions par cran ; ajuste STEPS_PER_DETENT si
+    le tien réagit deux fois trop ou deux fois trop peu.
+    """
+
+    STEPS_PER_DETENT = 4
+
+    def __init__(self, clk_no, dt_no):
+        self.clk = Pin(clk_no, Pin.IN, Pin.PULL_UP)
+        self.dt = Pin(dt_no, Pin.IN, Pin.PULL_UP)
+        self._state = (self.clk.value() << 1) | self.dt.value()
+        self._acc = 0
+        trig = Pin.IRQ_RISING | Pin.IRQ_FALLING
+        self.clk.irq(trigger=trig, handler=self._irq)
+        self.dt.irq(trigger=trig, handler=self._irq)
+
+    def _irq(self, _pin):
+        cur = (self.clk.value() << 1) | self.dt.value()
+        self._acc += _QUAD[(self._state << 2) | cur]
+        self._state = cur
+
+    def poll(self, out):
+        acc = self._acc
+        step = self.STEPS_PER_DETENT
+        while acc >= step:
+            acc -= step
+            out.append((TURN, 1))
+        while acc <= -step:
+            acc += step
+            out.append((TURN, -1))
+        self._acc = acc
+
+
+class _EncoderAsPot:
+    """Fait passer un encodeur pour un potard, vu des écrans.
+
+    L'encodeur est relatif ; le reste du firmware raisonne en position de 0
+    à 100. On accumule donc les crans dans un compteur borné. C'est le seul
+    endroit qui connaît la différence — et comme un encodeur n'a aucune
+    position physique à trahir, il n'a jamais besoin de rattrapage.
+    """
+
+    STEP = 4                        # % gagnés par cran
+
+    def __init__(self, clk, dt):
+        self.enc = Encoder(clk, dt)
+        self.last = 50              # on démarre au milieu, faute de mieux
+
+    def value(self):
+        return self.last
+
+    def poll(self, out):
+        moves = []
+        self.enc.poll(moves)
+        if not moves:
+            return
+        for _kind, delta in moves:
+            self.last = max(0, min(100, self.last + delta * self.STEP))
+        out.append((POT, self.last))
+
+
 class Input:
     """Toutes les entrées derrière un seul poll()."""
 
-    def __init__(self, pin_a=26, pin_b=27, pin_c=14, pot=34):
+    def __init__(self, pin_a=26, pin_b=27, pin_c=14, pot=34,
+                 clk=None, dt=None):
+        """Potard OU encodeur, jamais les deux.
+
+        Renseigner clk et dt bascule sur l'encodeur et ignore le potard. Les
+        deux produisent le même événement POT avec une valeur de 0 à 100 :
+        les écrans ne savent pas lequel est branché, et n'ont pas à le
+        savoir.
+        """
         # A et C se répètent quand on les maintient : c'est ce qui permet de
         # faire défiler sans toucher au potard. B ne se répète pas — son
         # appui long a un sens à lui.
@@ -175,7 +260,17 @@ class Input:
             Button(pin_b, BTN_B),
             Button(pin_c, BTN_C, repeats=True),
         )
-        self.pot = Pot(pot) if pot is not None else None
+        if clk is not None and dt is not None:
+            self.pot = _EncoderAsPot(clk, dt)
+            # Un encodeur n'a pas de position physique : rien ne peut être
+            # écrasé par accident, donc aucun rattrapage n'a de sens.
+            self.absolute = False
+        elif pot is not None:
+            self.pot = Pot(pot)
+            self.absolute = True
+        else:
+            self.pot = None
+            self.absolute = False
 
     def poll(self):
         """Renvoie la liste des événements survenus depuis le dernier appel."""

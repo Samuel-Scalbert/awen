@@ -315,10 +315,15 @@ class Grid:
         self._gfx[key] = (filled, c)
 
     def _draw_image(self, col, row, buf, size, tag):
+        # Le mémo retient AUSSI la présence du tampon. Sans ça, l'affichage
+        # d'un emplacement vide en attendant le téléchargement mémoriserait
+        # déjà l'étiquette, et l'image arrivée ensuite — même étiquette — ne
+        # serait jamais tracée. C'est ce qui laissait la pochette absente.
         key = ("image", col, row)
-        if self._gfx.get(key) == tag:
+        state = (tag, buf is not None)
+        if self._gfx.get(key) == state:
             return
-        self._gfx[key] = tag
+        self._gfx[key] = state
         if buf is None:
             self.d.fill_rect(col * CW, row * CH, size, size, self.p.BG)
             return

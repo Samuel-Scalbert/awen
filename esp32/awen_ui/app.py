@@ -57,6 +57,12 @@ SWEEP_MS = 14            # une ligne du balayage de transition
 # n'envoie donc que la valeur finale, une fois le geste terminé.
 VOLUME_SETTLE_MS = 250
 
+# Chien de garde matériel : la boucle doit le nourrir plus souvent que ça,
+# sinon la carte redémarre. Large, parce qu'une requête HTTP lente peut
+# légitimement immobiliser la boucle six secondes.
+WDT_MS = 60000
+MEM_WARN = 20000         # octets libres sous lesquels on s'inquiète
+
 
 class App:
     COVER = COVER
@@ -282,7 +288,8 @@ class App:
     def _update_pot_arming(self):
         """Le potard reprend la main dès qu'il traverse la valeur courante."""
         screen = self.current()
-        if screen.POT_FREE:
+        # Un encodeur n'a rien à rattraper : il est relatif par nature.
+        if not self.io.absolute or screen.POT_FREE:
             # Écran qui parcourt une liste : il n'y a aucune valeur à écraser
             # par accident, donc pas de rattrapage. Sans ce cas, un
             # pot_target() à None désarmerait le potard et l'écran ne
@@ -352,29 +359,92 @@ class App:
         self.in_boot = False
         self.g.sweep(SWEEP_MS)          # on entre dans l'interface
 
+        # Chien de garde matériel : si la boucle cesse de le nourrir pendant
+        # une minute, la carte redémarre. C'est le seul recours contre un
+        # blocage dur — un socket qui ne rend jamais la main, le bus SPI qui
+        # se fige — que l'attrapage d'exceptions ne peut pas couvrir.
+        wdt = None
+        try:
+            from machine import WDT
+            wdt = WDT(timeout=WDT_MS)
+        except Exception as e:
+            print("wdt indisponible:", e)
+
         while True:
-            now = time.ticks_ms()
+            if wdt is not None:
+                wdt.feed()
+            try:
+                self._tick()
+            except Exception as e:
+                # Sans ce filet, la moindre exception tue run() et l'écran
+                # reste figé sur sa dernière image : ça ressemble à un gel,
+                # mais le programme n'existe plus. Une panne passagère ne doit
+                # pas coûter l'afficheur jusqu'au prochain débranchement.
+                print("boucle:", e)
+                gc.collect()
+                time.sleep_ms(500)
 
-            for ev in self.io.poll():
-                self.handle(ev)
+    def _tick(self):
+        """Une image. Tout ce qui peut échouer est appelé depuis ici.
 
-            self._update_pot_arming()
-            self._flush_volume(now)
+        Découpé de run() pour qu'une exception soit rattrapée sans tuer la
+        boucle : la panne coûte une image, pas l'afficheur.
+        """
+        now = time.ticks_ms()
 
-            if time.ticks_diff(now, self.t_blink) >= BLINK_MS:
-                self.t_blink = now
-                self.state["blink"] = not self.state.get("blink", True)
-                self.dirty = True
+        for ev in self.io.poll():
+            self.handle(ev)
 
-            if self.t_poll == 0 or \
-                    time.ticks_diff(now, self.t_poll) >= self._poll_interval():
-                self.t_poll = now
-                self.fetch()
+        self._update_pot_arming()
+        self._flush_volume(now)
 
-            if self.dirty:
-                self.dirty = False
-                self.g.clear()
-                self.current().draw(self.g, self.state, self)
-                self.g.flush()
+        if time.ticks_diff(now, self.t_blink) >= BLINK_MS:
+            self.t_blink = now
+            self.state["blink"] = not self.state.get("blink", True)
+            self.dirty = True
 
-            time.sleep_ms(FRAME_MS)
+        if self.t_poll == 0 or                 time.ticks_diff(now, self.t_poll) >= self._poll_interval():
+            self.t_poll = now
+            self._ensure_wifi()
+            self.fetch()
+            # Uniquement sur l'ecran concerne : telecharger 8 Ko pour une
+            # image que personne ne regarde n'aurait aucun sens.
+            if self.current().NAME == "spotify":
+                self.fetch_cover(self.state.get("spotify", {}).get("cover", ""))
+            self._watch_memory()
+
+        if self.dirty:
+            self.dirty = False
+            self.g.clear()
+            self.current().draw(self.g, self.state, self)
+            self.g.flush()
+
+        time.sleep_ms(FRAME_MS)
+
+    def _ensure_wifi(self):
+        """Relance la connexion si elle est tombée.
+
+        Une box qui redémarre, un canal qui change, et la carte reste
+        déconnectée pour toujours : rien dans le firmware ne retentait, et
+        l'écran affichait « HORS LIGNE » jusqu'au débranchement.
+        """
+        if self.wlan is None or self.wlan.isconnected():
+            return
+        try:
+            self.wlan.connect(self.cfg["ssid"], self.cfg["password"])
+        except Exception as e:
+            print("wifi:", e)
+
+    def _watch_memory(self):
+        """Compacte et signale la mémoire libre.
+
+        MicroPython libère mais ne compacte pas : les allocations répétées
+        (le JSON à chaque cycle, 8 Ko par pochette) morcellent le tas jusqu'à
+        ce qu'une allocation échoue, après des heures et jamais tout de
+        suite. Le chiffre part sur la console série, c'est lui qu'il faudra
+        regarder si les gels reviennent.
+        """
+        gc.collect()
+        free = gc.mem_free()
+        if free < MEM_WARN:
+            print("memoire libre basse :", free)
