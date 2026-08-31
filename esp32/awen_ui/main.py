@@ -42,7 +42,9 @@ app = App(display, font, bigfont, {
     "password": awen_config.WIFI_PASSWORD,
     "base_url": awen_config.AWEN_URL,
     "api_key": awen_config.ESP32_API_KEY,
-    "pins": {"pin_a": 32, "pin_b": 33, "pin_c": 25, "clk": 26, "dt": 27},
+    # Le potard DOIT être sur ADC1 (GPIO 32-39) : ADC2 est inutilisable dès
+    # que le wifi est actif. Voir input.py.
+    "pins": {"pin_a": 32, "pin_b": 33, "pin_c": 25, "pot": 34},
 })
 
 app.run()

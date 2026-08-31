@@ -1,20 +1,30 @@
-"""Les sept écrans d'Awen, aux coordonnées des maquettes.
+"""Les huit écrans d'Awen, aux coordonnées des maquettes.
 
 Chaque écran expose :
-    NAME            libellé court, pour la trace série
-    draw(g, st)     compose la grille ; ne dessine jamais en pixels directs
-    on_input(ev, app)   renvoie True si l'événement a été absorbé
+    NAME              libellé court, pour la trace série
+    draw(g, st, app)  compose la grille ; ne dessine jamais en pixels directs
+    on_input(ev, app) renvoie True si l'événement a été absorbé
+    pot_target(st)    valeur logique actuelle en %, ou None si l'écran
+                      n'utilise pas le potentiomètre
+    on_pot(pct, app)  appelé seulement une fois le potard « rattrapé »
 
-Un écran ne décide rien : il lit `st`, le dernier résumé renvoyé par
-/api/esp32/summary, et l'affiche. Les charges, les cibles de répétitions et
-les conseils viennent tous du moteur de règles côté serveur — c'est ce qui
-garantit que l'écran et l'application web ne racontent jamais deux histoires
-différentes.
+LE POTENTIOMÈTRE EST ABSOLU, ET C'EST TOUT LE PROBLÈME
+
+Un encodeur envoie « +1 » ou « -1 » : il n'a pas de position. Un potard, si.
+Quand tu quittes les Paramètres avec HUMOUR à 75 % pour aller sur Spotify où
+le volume est à 30 %, le curseur est toujours physiquement à 75 %. Sans
+précaution, l'écran Spotify collerait le volume à 75 % à la première lecture,
+sans que tu aies rien touché.
+
+La parade est celle des consoles de mixage : le potard ne prend la main
+qu'après être passé par la valeur courante. Tant qu'il ne l'a pas rattrapée,
+l'écran affiche vers où tourner. C'est App qui arbitre (voir app.py), les
+écrans se contentent de déclarer leur valeur via pot_target().
 
 Texte en ASCII majuscule sans accents : voir grid.py.
 """
 from grid import COLS, ROWS
-from input import BTN_A, BTN_B, BTN_C, SHORT, LONG, REPEAT, TURN
+from input import BTN_A, BTN_B, BTN_C, POT, SHORT, LONG, REPEAT
 
 
 def _header(g, title, clock):
@@ -29,35 +39,70 @@ def _statusbar(g, left, right):
     g.right(ROWS - 1, right, g.p.DIM)
 
 
+def _pot_hint(g, row, app):
+    """Affiche vers où tourner tant que le potard n'a pas rattrapé la valeur.
+
+    Sans ce repère, l'utilisateur tourne et ne voit rien bouger : il croit le
+    potard cassé alors qu'il est simplement en attente de rattrapage.
+    """
+    if app.pot_armed or app.pot_target is None:
+        return
+    arrow = "TOURNE >" if app.pot_raw < app.pot_target else "< TOURNE"
+    g.text(1, row, "{} {:>3}%".format(arrow, app.pot_target), g.p.DIM)
+
+
+def _wrap(text, width):
+    """Coupe aux espaces, jamais au milieu d'un mot."""
+    lines, line = [], ""
+    for word in text.split():
+        if not line:
+            line = word
+        elif len(line) + 1 + len(word) <= width:
+            line += " " + word
+        else:
+            lines.append(line)
+            line = word
+    if line:
+        lines.append(line)
+    return lines
+
+
+def _mmss(seconds):
+    seconds = int(seconds)
+    return "{}:{:02d}".format(seconds // 60, seconds % 60)
+
+
 class Screen:
-    """Base commune. Par défaut un écran n'absorbe rien : la navigation passe."""
+    """Base commune. Par défaut, un écran n'absorbe rien et ignore le potard."""
 
     NAME = "?"
 
-    def draw(self, g, st):
+    def draw(self, g, st, app):
         raise NotImplementedError
 
     def on_input(self, ev, app):
         return False
+
+    def pot_target(self, st):
+        return None
+
+    def on_pot(self, pct, app):
+        pass
 
 
 # --------------------------------------------------------------------------
 
 
 class Boot(Screen):
-    """Amorçage. Les lignes tombent une par une — c'est tout le caractère.
-
-    L'écran se redessine à chaque passage parce que `step` avance ; le
-    redessin partiel fait que ça ne coûte qu'une ligne à la fois.
-    """
+    """Amorçage. Les lignes tombent une par une — c'est tout le caractère."""
 
     NAME = "boot"
-    CHECKS = ("RESEAU", "SERVEUR", "COACH", "VEILLE EMPLOI", "CAPTEURS")
+    CHECKS = ("RESEAU", "SERVEUR", "COACH", "VEILLE EMPLOI", "SPOTIFY")
 
     def __init__(self):
         self.step = 0
 
-    def draw(self, g, st):
+    def draw(self, g, st, app):
         g.center(2, "A W E N", g.p.HI)
         g.center(3, "assistant personnel", g.p.DIM)
         g.rule(5)
@@ -66,14 +111,14 @@ class Boot(Screen):
                 break
             r = 7 + i
             g.text(1, r, label, g.p.DIM)
-            done = i < self.step or st.get("ok")
+            done = i < self.step
             state = "OK" if done else "..."
             g.text(COLS - 1 - len(state), r, state,
                    g.p.FG if done else g.p.DIM)
         if self.step >= len(self.CHECKS):
             g.text(1, 13, "> demarrage", g.p.FG)
             g.cursor(13, 13, st.get("blink", True))
-        _statusbar(g, "v2.4", st.get("ip", ""))
+        _statusbar(g, "v3.0", st.get("ip", ""))
 
 
 class Home(Screen):
@@ -81,7 +126,7 @@ class Home(Screen):
 
     NAME = "home"
 
-    def draw(self, g, st):
+    def draw(self, g, st, app):
         gym = st.get("gym", {})
         g.text(0, 0, st.get("date", "").upper(), g.p.DIM)
         online = st.get("online", True)
@@ -100,9 +145,10 @@ class Home(Screen):
         g.text(1, 12, "OFFRES DU JOUR", g.p.DIM)
         g.right(12, str(st.get("jobs", {}).get("n", 0)), g.p.HI)
 
+        # Étiquette courte : à 30 colonnes, « DERNIERE SEANCE » plus une date
+        # alignée à droite se touchent sans espace.
         missed = gym.get("missed", 0)
-        g.text(1, 14, "SEANCES RATEES" if missed else "SERIE EN COURS",
-               g.p.DIM)
+        g.text(1, 14, "RATEES" if missed else "DERNIERE", g.p.DIM)
         g.right(14, str(missed) if missed else gym.get("last", ""),
                 g.p.ALERT if missed else g.p.FG)
 
@@ -112,17 +158,31 @@ class Home(Screen):
 class Gym(Screen):
     """Séance en cours. Une seule information compte : la série à faire.
 
-    L'encodeur ajuste la charge par pas de 2,5 kg — le plus petit disque de
-    la plupart des salles. Chaque cran vaut donc quelque chose de réel.
+    Le potard couvre un écart de -10 à +10 kg autour de la charge programmée,
+    par pas de 2,5 kg — le plus petit disque de la plupart des salles. Neuf
+    positions sur toute la course, donc chaque cran est franc et se retrouve
+    au doigt sans regarder.
     """
 
     NAME = "gym"
     STEP_KG = 2.5
+    STEPS = 8                        # 8 intervalles, 9 positions
 
     def __init__(self):
-        self.adjust = 0.0        # écart appliqué à la charge programmée
+        self.adjust = 0.0            # écart appliqué à la charge programmée
 
-    def draw(self, g, st):
+    def pot_target(self, st):
+        half = self.STEPS // 2
+        idx = int(self.adjust / self.STEP_KG) + half
+        return (idx * 100) // self.STEPS
+
+    def on_pot(self, pct, app):
+        half = self.STEPS // 2
+        idx = (pct * self.STEPS + 50) // 100
+        self.adjust = (idx - half) * self.STEP_KG
+        app.dirty = True
+
+    def draw(self, g, st, app):
         gym = st.get("gym", {})
         ex = gym.get("exercise", {})
         _header(g, "{} . SEANCE {}".format(
@@ -143,23 +203,21 @@ class Gym(Screen):
         g.text(COLS - 8, 8, "x {:<3}".format(ex.get("reps", 0)), g.p.FG)
         g.text(2, 9, "cible {} reps".format(ex.get("target", "8-12")), g.p.DIM)
 
-        g.text(1, 12, "REPOS", g.p.DIM)
+        g.text(1, 11, "REPOS", g.p.DIM)
         rest = st.get("rest_s", 0)
-        g.text(1, 13, "{:02d}:{:02d}".format(rest // 60, rest % 60), g.p.HI)
-        g.bar(8, 13, 20, st.get("rest_pct", 0))
+        g.text(1, 12, "{:02d}:{:02d}".format(rest // 60, rest % 60), g.p.HI)
+        g.bar(8, 12, 20, st.get("rest_pct", 0))
 
-        g.text(1, 15, "FAIT", g.p.DIM)
-        g.bar(8, 15, 20, gym.get("done_pct", 0))
-        g.right(16, "{} series restantes".format(gym.get("left", 0)), g.p.DIM)
+        g.text(1, 14, "FAIT", g.p.DIM)
+        g.bar(8, 14, 20, gym.get("done_pct", 0))
+        g.right(15, "{} series restantes".format(gym.get("left", 0)), g.p.DIM)
 
-        _statusbar(g, "< PREC", "SUIV >" if not self.adjust else "[OK] GARDER")
+        _pot_hint(g, 17, app)
+        _statusbar(g, "< PREC",
+                   "[OK] GARDER" if self.adjust else "SUIV >")
 
     def on_input(self, ev, app):
         kind, arg = ev
-        if kind == TURN:
-            self.adjust += arg * self.STEP_KG
-            app.dirty = True
-            return True
         if kind == BTN_B and arg == SHORT:
             if self.adjust:
                 app.commit_weight(self.adjust)
@@ -176,7 +234,7 @@ class Coach(Screen):
 
     NAME = "coach"
 
-    def draw(self, g, st):
+    def draw(self, g, st, app):
         c = st.get("coach", {})
         _header(g, "COACH", st.get("time", ""))
 
@@ -195,8 +253,8 @@ class Coach(Screen):
         g.text(1, 5, subject[:28].upper(), g.p.HI)
         g.text(1, 6, subject[28:56].upper(), g.p.HI)
 
-        for i, line in enumerate(c.get("detail", "").split("\n")[:2]):
-            g.text(1, 8 + i, line[:28], g.p.DIM)
+        for i, line in enumerate(_wrap(c.get("detail", ""), COLS - 2)[:2]):
+            g.text(1, 8 + i, line, g.p.DIM)
 
         g.rule(11)
         if c.get("to_kg") is not None:
@@ -204,9 +262,9 @@ class Coach(Screen):
             g.text(1, 13, "{:.1f} KG".format(c.get("from_kg", 0)), g.p.HI)
             g.text(9, 13, "->", g.p.DIM)
             g.text(12, 13, "{:.1f} KG".format(c["to_kg"]), g.p.FG)
-            # Pas de jauge de « confiance » ici : le moteur de règles n'en
-            # calcule aucune, et afficher un pourcentage inventé donnerait
-            # à un chiffre décoratif l'autorité d'une mesure.
+            # Pas de jauge de « confiance » : le moteur de règles n'en calcule
+            # aucune, et un pourcentage inventé donnerait à une décoration
+            # l'autorité d'une mesure.
             for i, line in enumerate(_wrap(c.get("why", ""), COLS - 2)[:2]):
                 g.text(1, 15 + i, line, g.p.DIM)
             _statusbar(g, "[A] APPLIQUER", "[B] IGNORER")
@@ -230,16 +288,31 @@ class Coach(Screen):
 
 
 class Jobs(Screen):
-    """Veille emploi. Trois offres, pas plus : à 30 colonnes il faut trancher."""
+    """Veille emploi. Trois offres à l'écran : à 30 colonnes, il faut trancher."""
 
     NAME = "jobs"
 
     def __init__(self):
         self.top = 0
 
-    def draw(self, g, st):
+    def _offers(self, st):
+        return st.get("jobs", {}).get("offers") or []
+
+    def pot_target(self, st):
+        extra = max(0, len(self._offers(st)) - 3)
+        if not extra:
+            return None
+        return (self.top * 100) // extra
+
+    def on_pot(self, pct, app):
+        extra = max(0, len(self._offers(app.state)) - 3)
+        if extra:
+            self.top = (pct * extra + 50) // 100
+            app.dirty = True
+
+    def draw(self, g, st, app):
         jobs = st.get("jobs", {})
-        offers = jobs.get("offers") or []
+        offers = self._offers(st)
         _header(g, "VEILLE EMPLOI", st.get("time", ""))
 
         n = jobs.get("n", len(offers))
@@ -250,8 +323,6 @@ class Jobs(Screen):
             j = self.top + i
             r = 5 + i * 4
             if j >= len(offers):
-                for k in range(3):
-                    g.text(0, r + k, " " * COLS)
                 continue
             o = offers[j]
             g.text(0, r, ">", g.p.DIM)
@@ -262,17 +333,75 @@ class Jobs(Screen):
             # le pipeline le fournit, et rien quand il ne le fournit pas.
             g.text(2, r + 2, o.get("org", "")[:28], g.p.DIM)
 
-        more = "v DEFILER" if len(offers) > 3 else ""
-        _statusbar(g, "PIPELINE 09:00", more)
+        _pot_hint(g, 17, app)
+        _statusbar(g, "PIPELINE 09:00",
+                   "{}/{}".format(self.top + 1, max(1, len(offers) - 2))
+                   if len(offers) > 3 else "")
+
+
+class Spotify(Screen):
+    """Ce qui joue, et le volume au potard.
+
+    C'est l'usage le plus naturel d'un potentiomètre de tout le firmware : un
+    volume a une position absolue, exactement comme le curseur. Là où un
+    encodeur oblige à tourner longtemps depuis une valeur inconnue, le potard
+    donne le volume au premier coup d'œil, sans rien afficher.
+    """
+
+    NAME = "spotify"
+
+    def pot_target(self, st):
+        sp = st.get("spotify", {})
+        if not sp.get("device"):
+            return None
+        return sp.get("volume", 50)
+
+    def on_pot(self, pct, app):
+        app.set_volume(pct)
+
+    def draw(self, g, st, app):
+        sp = st.get("spotify", {})
+        _header(g, "> SPOTIFY", st.get("time", ""))
+
+        if not sp.get("device"):
+            g.text(1, 8, "AUCUN APPAREIL", g.p.DIM)
+            g.text(1, 10, "Lance une lecture sur", g.p.DIM)
+            g.text(1, 11, "ton telephone.", g.p.DIM)
+            _statusbar(g, "< PREC", "SUIV >")
+            return
+
+        for i, line in enumerate(_wrap(sp.get("title", ""), COLS - 2)[:2]):
+            g.text(1, 3 + i, line.upper(), g.p.HI)
+        g.text(1, 6, sp.get("artist", "")[:28], g.p.FG)
+        g.text(1, 7, sp.get("album", "")[:28], g.p.DIM)
+
+        pos = sp.get("position_s", 0)
+        dur = sp.get("duration_s", 0)
+        g.text(1, 10, _mmss(pos), g.p.DIM)
+        g.right(10, _mmss(dur), g.p.DIM)
+        g.bar(1, 11, 28, (pos * 100 // dur) if dur else 0)
+
+        g.text(1, 14, "VOLUME", g.p.DIM)
+        g.right(14, "{:>3}%".format(sp.get("volume", 0)), g.p.HI)
+        g.bar(1, 15, 28, sp.get("volume", 0))
+
+        _pot_hint(g, 17, app)
+        playing = sp.get("playing")
+        _statusbar(g, "[A] << [B] {} [C] >>".format("||" if playing else " >"),
+                   sp.get("device", "")[:8])
 
     def on_input(self, ev, app):
         kind, arg = ev
-        offers = app.state.get("jobs", {}).get("offers") or []
-        if len(offers) <= 3:
+        if arg != SHORT:
             return False
-        if kind == TURN:
-            self.top = max(0, min(len(offers) - 3, self.top + arg))
-            app.dirty = True
+        if kind == BTN_A:
+            app.spotify("previous")
+            return True
+        if kind == BTN_B:
+            app.spotify("toggle")
+            return True
+        if kind == BTN_C:
+            app.spotify("next")
             return True
         return False
 
@@ -280,9 +409,8 @@ class Jobs(Screen):
 class Settings(Screen):
     """L'écran iconique de TARS, transposé au ton d'Awen.
 
-    Ces pourcentages ne sont pas décoratifs : ils sont renvoyés au serveur et
-    modulent la formulation des conseils — jamais les charges, qui restent
-    calculées par les règles.
+    Ces pourcentages ne sont pas décoratifs : ils modulent la formulation des
+    conseils — jamais les charges, qui restent calculées par les règles.
     """
 
     NAME = "settings"
@@ -292,7 +420,14 @@ class Settings(Screen):
         self.sel = 1                     # HUMOUR, comme dans le film
         self.values = [95, 75, 60, 40]
 
-    def draw(self, g, st):
+    def pot_target(self, st):
+        return self.values[self.sel]
+
+    def on_pot(self, pct, app):
+        self.values[self.sel] = pct
+        app.dirty = True
+
+    def draw(self, g, st, app):
         _header(g, "PARAMETRES", st.get("time", ""))
         for i, name in enumerate(self.KEYS):
             r = 4 + i * 3
@@ -301,79 +436,18 @@ class Settings(Screen):
             g.right(r, "{:>3}%".format(self.values[i]), g.p.HI)
             g.bar(1, r + 1, 28, self.values[i],
                   g.p.FG if focused else g.p.DIM)
-        g.text(1, 17, "> reglage " + self.KEYS[self.sel], g.p.DIM)
-        g.cursor(11 + len(self.KEYS[self.sel]), 17, st.get("blink", True))
-        _statusbar(g, "^v AJUSTER", "[OK] VALIDER")
+        _pot_hint(g, 17, app)
+        _statusbar(g, "[OK] CHOISIR", "POTARD REGLE")
 
     def on_input(self, ev, app):
         kind, arg = ev
-        if kind == TURN:
-            v = self.values[self.sel] + arg * 5
-            self.values[self.sel] = max(0, min(100, v))
-            app.dirty = True
-            return True
         if kind == BTN_B and arg == SHORT:
             self.sel = (self.sel + 1) % len(self.KEYS)
-            app.dirty = True
-            return True
-        if kind in (BTN_A, BTN_C) and arg == REPEAT:
-            step = -5 if kind == BTN_A else 5
-            v = self.values[self.sel] + step
-            self.values[self.sel] = max(0, min(100, v))
+            app.rearm_pot()          # nouvelle valeur : il faut la rattraper
             app.dirty = True
             return True
         return False
 
 
-class Chat(Screen):
-    """La discussion, pour le jour où Awen parlera.
-
-    Le texte s'écrit caractère par caractère : `reveal` est le nombre de
-    caractères déjà sortis, avancé par la boucle principale.
-    """
-
-    NAME = "chat"
-
-    def __init__(self):
-        self.reveal = 0
-
-    def draw(self, g, st):
-        chat = st.get("chat", {})
-        _header(g, "> AWEN", st.get("time", ""))
-
-        g.text(0, 3, "VOUS", g.p.DIM)
-        for i, line in enumerate(_wrap(chat.get("you", ""), COLS)[:2]):
-            g.text(0, 4 + i, line, g.p.FG)
-
-        g.text(0, 7, "AWEN", g.p.HI)
-        answer = chat.get("awen", "")
-        shown = answer[:self.reveal] if self.reveal else answer
-        lines = _wrap(shown, COLS)[:5]
-        for i, line in enumerate(lines):
-            g.text(0, 8 + i, line.ljust(COLS), g.p.FG)
-        if lines:
-            g.cursor(min(len(lines[-1]), COLS - 1), 8 + len(lines) - 1,
-                     st.get("blink", True))
-
-        listening = chat.get("listening")
-        _statusbar(g, "* ECOUTE" if listening else "  REPOS", "8B LOCAL")
-
-
-def _wrap(text, width):
-    """Coupe aux espaces, jamais au milieu d'un mot."""
-    lines, line = [], ""
-    for word in text.split():
-        if not line:
-            line = word
-        elif len(line) + 1 + len(word) <= width:
-            line += " " + word
-        else:
-            lines.append(line)
-            line = word
-    if line:
-        lines.append(line)
-    return lines
-
-
 # L'ordre du carrousel. Boot n'y figure pas : il ne se voit qu'au démarrage.
-CAROUSEL = (Home, Gym, Coach, Jobs, Settings, Chat)
+CAROUSEL = (Home, Gym, Spotify, Coach, Jobs, Settings)

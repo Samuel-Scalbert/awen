@@ -38,9 +38,8 @@ PALETTES = {
                  "hi": (255, 255, 255), "alert": (255, 96, 96)},
 }
 
-# L'ESP32 dessine des blocs, pas des degrades : on s'interdit tout ce que la
-# machine ne sait pas faire vite.
-BLOCK, HALF = "\u2588", "\u2591"
+# Le curseur clignotant est le seul aplat trace en dur : tout le reste passe
+# par des rectangles, comme sur la machine.
 
 
 class Screen:
@@ -71,10 +70,23 @@ class Screen:
         self.text(0, row, char * COLS, color)
 
     def bar(self, col, row, width, pct, color="fg"):
-        """Jauge en blocs pleins/vides : pas de degrade, l'ESP32 n'en veut pas."""
-        filled = round(width * pct / 100)
-        self.text(col, row, BLOCK * filled, color)
-        self.text(col + filled, row, HALF * (width - filled), "dim")
+        """Jauge en rectangles, exactement comme grid.bar() sur la machine.
+
+        On n'utilise PAS les caracteres de bloc : dans une police vectorielle
+        ils debordent d'une cellule vers le haut et viennent percuter la ligne
+        au-dessus. Surtout, le firmware trace des rectangles — une maquette
+        qui dessine autre chose ment sur le resultat.
+        """
+        c = self.p[color] if isinstance(color, str) else color
+        x, y = col * CW, row * CH + 3
+        h = CH - 6
+        total = width * CW
+        filled = round(total * pct / 100)
+        self.d.rectangle([x, y, x + filled - 1, y + h - 1], fill=c)
+        if filled < total:
+            ty = row * CH + CH // 2 - 1
+            self.d.rectangle([x + filled, ty, x + total - 1, ty + 1],
+                             fill=self.p["dim"])
 
     def frame(self, col, row, width, height, color="dim"):
         self.text(col, row, "\u250c" + "\u2500" * (width - 2) + "\u2510", color)
@@ -113,7 +125,7 @@ def s_boot(p):
     s.rule(5)
     lines = [
         ("RESEAU", "OK"), ("SERVEUR", "OK"), ("COACH", "OK"),
-        ("VEILLE EMPLOI", "OK"), ("CAPTEURS", "..."),
+        ("VEILLE EMPLOI", "OK"), ("SPOTIFY", "..."),
     ]
     for i, (label, state) in enumerate(lines):
         r = 7 + i
@@ -122,7 +134,7 @@ def s_boot(p):
         s.text(COLS - 1 - len(state), r, state, col)
     s.text(1, 13, "> demarrage", "fg")
     s.cursor(13, 13)
-    s.statusbar("v2.4", "192.168.1.32")
+    s.statusbar("v3.0", "192.168.1.32")
     return s
 
 
@@ -144,10 +156,10 @@ def s_home(p):
     s.text(1, 12, "OFFRES DU JOUR", "dim")
     s.right(12, "3", "hi", bold=True)
 
-    s.text(1, 14, "SERIE EN COURS", "dim")
-    s.right(14, "8 seances", "fg")
+    s.text(1, 14, "DERNIERE", "dim")
+    s.right(14, "Legs ven 28/08", "fg")
 
-    s.statusbar("AWEN", "\u2588\u2588\u2588\u2591\u2591 64%")
+    s.statusbar("AWEN", "[OK] MENU")
     return s
 
 
@@ -165,14 +177,15 @@ def s_gym(p):
     s.right(8, "x 10  ")
     s.text(2, 9, "cible 8-12 reps", "dim")
 
-    s.text(1, 12, "REPOS", "dim")
-    s.text(1, 13, "00:47", "hi", bold=True)
-    s.bar(8, 13, 20, 78)
+    s.text(1, 11, "REPOS", "dim")
+    s.text(1, 12, "00:47", "hi", bold=True)
+    s.bar(8, 12, 20, 78)
 
-    s.text(1, 15, "FAIT", "dim")
-    s.bar(8, 15, 20, 45)
-    s.right(16, "9 series restantes", "dim")
+    s.text(1, 14, "FAIT", "dim")
+    s.bar(8, 14, 20, 45)
+    s.right(15, "9 series restantes", "dim")
 
+    s.text(1, 17, "TOURNE >  50%", "dim")     # rattrapage du potard
     s.statusbar("< PREC", "SUIV >")
     return s
 
@@ -195,8 +208,11 @@ def s_coach(p):
     s.text(9, 13, "->", "dim")
     s.text(12, 13, "20.0 KG", "fg", bold=True)
 
-    s.text(1, 15, "confiance", "dim")
-    s.bar(12, 15, 16, 90)
+    # Aucune jauge de « confiance » : le moteur de regles n'en calcule pas,
+    # et un pourcentage invente donnerait a une decoration l'autorite d'une
+    # mesure. On affiche le motif reel a la place.
+    s.text(1, 15, "RIR moyen 3.2 : il te", "dim")
+    s.text(1, 16, "reste trop de reserve.", "dim")
 
     s.statusbar("[A] APPLIQUER", "[B] IGNORER")
     return s
@@ -217,9 +233,7 @@ def s_settings(p):
         s.right(r, "{:>3}%".format(val), "hi", bold=True)
         s.bar(1, r + 1, 28, val)
 
-    s.text(1, 17, "> reglage HUMOUR", "dim")
-    s.cursor(18, 17)
-    s.statusbar("^v AJUSTER", "[OK] VALIDER")
+    s.statusbar("[OK] CHOISIR", "POTARD REGLE")
     return s
 
 
@@ -231,51 +245,52 @@ def s_jobs(p):
     s.text(1, 3, "3", "hi", bold=True)
     s.text(3, 3, "OFFRES CE MATIN", "fg")
 
+    # Pas de score : la veille ne note pas les offres, et afficher une jauge
+    # inventee donnerait a une decoration l'autorite d'une mesure.
     offers = [
-        ("DATA ENGINEER", "Sancare", 92),
-        ("PRODUCT OWNER DATA", "AXA Direct", 78),
-        ("BUSINESS ANALYST", "Adone Conseil", 64),
+        ("DATA ENGINEER JUNIOR", "Sancare"),
+        ("PRODUCT OWNER DATA", "AXA Direct Assurance"),
+        ("BUSINESS ANALYST DATA", "Adone Conseil"),
     ]
-    for i, (title, org, score) in enumerate(offers):
+    for i, (title, org) in enumerate(offers):
         r = 5 + i * 4
         s.text(0, r, ">", "dim")
         s.text(2, r, title[:26], "hi")
-        s.text(2, r + 1, org, "dim")
-        s.right(r + 1, "{}%".format(score), "fg")
-        s.bar(2, r + 2, 26, score)
+        s.text(2, r + 2, org[:28], "dim")
 
-    s.statusbar("PIPELINE 09:00", "v DEFILER")
+    s.statusbar("PIPELINE 09:00", "1/3")
     return s
 
 
-def s_chat(p):
-    """La discussion, pour le jour ou Awen parlera. Le texte s'ecrit."""
+def s_spotify(p):
+    """Ce qui joue, et le volume au potard.
+
+    C'est l'usage le plus naturel d'un potentiometre de tout le firmware : un
+    volume a une position absolue, exactement comme le curseur.
+    """
     s = Screen(p)
-    s.header("> AWEN", "21:47")
+    s.header("> SPOTIFY", "21:47")
 
-    s.text(0, 3, "VOUS", "dim")
-    s.text(0, 4, "combien je souleve au", "fg")
-    s.text(0, 5, "developpe couche ?", "fg")
+    s.text(1, 3, "MIDNIGHT CITY", "hi", bold=True)
+    s.text(1, 6, "M83", "fg")
+    s.text(1, 7, "Hurry Up, We're Dreaming", "dim")
 
-    s.text(0, 7, "AWEN", "hi", bold=True)
-    for i, line in enumerate([
-        "42.5 kg sur ta derniere",
-        "seance, quatre series",
-        "de dix. Tu as pris cinq",
-        "kilos en six semaines.",
-    ]):
-        s.text(0, 8 + i, line, "fg")
-    s.text(0, 12, "Continue comme ca.", "fg")
-    s.cursor(19, 12)
+    s.text(1, 10, "1:47", "dim")
+    s.right(10, "4:03", "dim")
+    s.bar(1, 11, 28, 44)
 
-    s.statusbar("* ECOUTE", "8B LOCAL")
+    s.text(1, 14, "VOLUME", "dim")
+    s.right(14, " 64%", "hi", bold=True)
+    s.bar(1, 15, 28, 64)
+
+    s.statusbar("[A] << [B] || [C] >>", "IPHONE")
     return s
 
 
 SCREENS = {
     "01-boot": s_boot, "02-home": s_home, "03-gym": s_gym,
-    "04-coach": s_coach, "05-settings": s_settings,
-    "06-jobs": s_jobs, "07-chat": s_chat,
+    "04-spotify": s_spotify, "05-coach": s_coach,
+    "06-jobs": s_jobs, "07-settings": s_settings,
 }
 
 

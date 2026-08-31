@@ -190,21 +190,32 @@ sudo chown "$USER:$USER" /srv/recherche-cdi
 echo 'JOB_SEARCH_DIR=/srv/recherche-cdi' >> ~/awen/.env
 ```
 
-Côté Windows, après chaque passage du pipeline :
+Côté Windows, une fois :
 
 ```powershell
-.\scripts\sync-jobs.ps1
+.\scripts\install-jobs-sync.ps1
 ```
 
 Le script ne copie que `Veille quotidienne/` et `Lettres de motivation/` — les
 deux seuls dossiers lus par `app/services/job_watch.py`. Les CV et notes
 d'entretien restent sur le PC.
 
-Pour l'automatiser à 9h30, une fois :
+**Pourquoi toutes les 30 minutes plutôt qu'une fois le matin :** le pipeline
+finit quand il finit — un jour à 9h05, un autre à 12h47. Une synchronisation à
+heure fixe rate tout ce qui arrive après, et le compte rendu attend le
+lendemain. `sync-jobs.ps1` compare une empreinte du dossier (nombre de
+fichiers, taille, date la plus récente) et n'ouvre le réseau que si quelque
+chose a bougé : une exécution à vide coûte quelques millisecondes, donc la
+répéter est gratuit.
+
+La tâche est réglée sur *rattraper une exécution manquée* : si le PC dormait
+au créneau, elle part au réveil au lieu de sauter le tour. L'empreinte n'est
+enregistrée qu'après un envoi réussi — serveur éteint, on réessaie.
 
 ```powershell
-schtasks /create /tn "Awen - sync veille emploi" /sc daily /st 09:30 ^
-  /tr "powershell -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\awen\scripts\sync-jobs.ps1\""
+.\scripts\sync-jobs.ps1 -Verbose     # a la main, pour voir ce qu'il fait
+.\scripts\sync-jobs.ps1 -Force       # transferer meme sans changement
+.\scripts\install-jobs-sync.ps1 -Uninstall
 ```
 
 La tâche suppose un alias SSH `awen` dans `~/.ssh/config` :

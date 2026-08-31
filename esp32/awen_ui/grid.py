@@ -185,14 +185,23 @@ class Grid:
         x = col * CW
         y = row * CH + 3            # 10 px de haut, centrés dans la cellule
         h = CH - 6
+        ty = row * CH + CH // 2 - 1  # rail de 2 px pour la partie vide
+
+        def _empty(x0, w):
+            """Efface puis retrace le rail : sans rail, une jauge à 5 % ne
+            laisse pas deviner jusqu'où elle peut monter."""
+            if w <= 0:
+                return
+            self.d.fill_rect(x0, y, w, h, self.p.BG)
+            self.d.fill_rect(x0, ty, w, 2, self.p.DIM)
 
         if prev is None or prevc != c:
             self.d.fill_rect(x, y, filled, h, c)
-            self.d.fill_rect(x + filled, y, total - filled, h, self.p.BG)
+            _empty(x + filled, total - filled)
         elif filled > prev:
             self.d.fill_rect(x + prev, y, filled - prev, h, c)
         else:
-            self.d.fill_rect(x + filled, y, prev - filled, h, self.p.BG)
+            _empty(x + filled, prev - filled)
 
         self._gfx[key] = (filled, c)
 
