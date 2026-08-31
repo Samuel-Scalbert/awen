@@ -36,7 +36,11 @@ from flask import current_app
 # La pochette est réduite ici et envoyée en pixels bruts. L'ESP32 ne sait pas
 # décoder un JPEG, et lui faire faire le redimensionnement d'une image de
 # 300 px prendrait des secondes pour un résultat pire.
-COVER_SIZE = 64                 # 64 x 64 x 2 octets = 8 Ko, tenable en RAM
+# 160 x 160 x 2 = 51 Ko : bien trop pour un tampon en RAM sur l'ESP32, mais
+# sans importance puisqu'il l'écrit sur sa mémoire flash et la fait défiler
+# vers l'écran par tranches. C'est ce qui permet une pochette qui occupe les
+# deux tiers du panneau au lieu d'une vignette.
+COVER_SIZE = 160
 
 # Le panneau tourne avec _INVERT_COLORS = True dans st7789_min.py : le pilote
 # inverse chaque couleur avant de l'envoyer, SAUF pour les images, dont il
@@ -115,10 +119,15 @@ def now_playing():
     device = d.get("device") or {}
     artists = ", ".join(a["name"] for a in item.get("artists", []))
 
-    # La plus petite image proposée par Spotify : on la réduit encore, autant
-    # partir de 64 px que de 640.
+    # La plus petite image AU MOINS aussi grande que ce qu'on affiche :
+    # partir de 64 px pour en produire 160 donnerait une bouillie, et partir
+    # de 640 ferait télécharger dix fois trop au serveur.
     images = album.get("images") or []
-    art = images[-1]["url"] if images else ""
+    art = ""
+    if images:
+        usable = [i for i in images if (i.get("width") or 0) >= COVER_SIZE]
+        art = (min(usable, key=lambda i: i["width"]) if usable
+               else max(images, key=lambda i: i.get("width") or 0))["url"]
 
     return {
         "title": item.get("name", ""),

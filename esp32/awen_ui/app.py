@@ -41,7 +41,8 @@ FRAME_MS = 16            # lecture des entrées
 BLINK_MS = 530           # demi-période du curseur
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
 POT_TOLERANCE = 3        # % d'écart sous lequel le potard reprend la main
-COVER = 64               # côté de la pochette, doit égaler COVER_SIZE serveur
+COVER = 160              # côté de la pochette, doit égaler COVER_SIZE serveur
+COVER_FILE = "/cover.bin"   # 51 Ko : sur la flash, jamais en RAM
 
 # Rythme des animations. Ces valeurs se lisent, elles ne s'expédient pas :
 # une ligne d'amorçage qui apparaît en 120 ms n'est pas une animation, c'est
@@ -175,36 +176,58 @@ class App:
             self.t_poll = 0
 
     def fetch_cover(self, tag):
-        """Récupère la pochette réduite, seulement quand elle a changé.
+        """Écrit la pochette sur la flash, seulement quand elle a changé.
 
-        Le serveur la renvoie déjà en 64x64 RGB565 inversé : l'ESP32 n'a plus
-        qu'à la pousser sur le bus SPI. Décoder un JPEG ici serait hors de
-        portée, et redemander 8 Ko toutes les cinq secondes pour la même
-        image serait du gaspillage pur.
+        Le serveur la renvoie déjà en RGB565 inversé : l'ESP32 n'a aucun
+        décodage à faire. Mais 160x160 pèse 51 Ko, bien au-delà de ce qu'on
+        peut allouer d'un bloc en MicroPython — on écrit donc la réponse au
+        fil de l'eau dans un fichier, que le pilote enverra ensuite à l'écran
+        par tranches. La RAM n'en voit jamais plus d'un kilo-octet.
+
+        Le fichier est réécrit à chaque changement de piste. La flash tient
+        cent mille cycles d'effacement : quelques écritures par heure ne
+        l'entament pas.
         """
         if tag == self._cover_tag:
             return
         self._cover_tag = tag
+        self.cover = None
         if not tag:
-            self.cover = None
+            self.dirty = True
             return
+
+        total = self.COVER * self.COVER * 2
         r = None
+        got = 0
         try:
-            r = urequests.get(self._url("/api/esp32/cover"), timeout=NET_TIMEOUT)
+            r = urequests.get(self._url("/api/esp32/cover"),
+                              timeout=NET_TIMEOUT)
             if r.status_code != 200:
                 raise OSError(r.status_code)
-            data = r.content
+            with open(COVER_FILE, "wb") as f:
+                while got < total:
+                    chunk = r.raw.read(min(1024, total - got))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    got += len(chunk)
         except Exception as e:
             print("cover:", e)
-            self.cover = None
             self._cover_tag = None      # on retentera au prochain passage
             return
         finally:
             if r is not None:
                 r.close()
-        self.cover = data if len(data) == self.COVER * self.COVER * 2 else None
+            gc.collect()
+
+        # Une image tronquée afficherait une bande de bruit sous la pochette :
+        # mieux vaut ne rien montrer et réessayer.
+        if got == total:
+            self.cover = COVER_FILE
+        else:
+            print("cover: {} octets sur {}".format(got, total))
+            self._cover_tag = None
         self.dirty = True
-        gc.collect()
 
     def spotify(self, action):
         """Lecture, pause, piste suivante — le serveur détient le jeton.

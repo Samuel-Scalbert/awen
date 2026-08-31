@@ -11,6 +11,7 @@ donc en lecture seule, un aperçu de ce qui attend. Seul le coach a des
 boutons, parce que trancher un conseil depuis son bureau, ça, c'est naturel.
 """
 from datetime import date, datetime, timedelta
+from hashlib import sha1
 
 from flask import (Blueprint, Response, abort, current_app, jsonify, request)
 
@@ -145,6 +146,12 @@ def _spotify_block():
     # Un identifiant court de pochette plutôt que l'URL : l'ESP32 s'en sert
     # uniquement pour savoir si l'image a changé, et une URL Spotify fait
     # 64 caractères qu'il transporterait toutes les cinq secondes pour rien.
+    #
+    # Une empreinte de l'URL entière, pas un morceau du nom de fichier : les
+    # URL Spotify commencent toutes par le même préfixe (ab67616d00004851
+    # désigne la taille, pas l'album), donc découper le début donnait un
+    # identifiant identique pour toutes les pochettes — et une image qui ne
+    # se rafraîchissait jamais.
     art = sp.get("art_url") or ""
     return {
         "title": _ascii(sp["title"])[:56],
@@ -155,7 +162,7 @@ def _spotify_block():
         "volume": sp["volume"],
         "playing": sp["playing"],
         "device": _ascii(sp["device"])[:12],
-        "cover": art.rsplit("/", 1)[-1][:16] if art else "",
+        "cover": sha1(art.encode()).hexdigest()[:12] if art else "",
     }
 
 

@@ -185,15 +185,19 @@ class Grid:
     def big(self, col, row, s, scale=2, fg=None):
         self._queue.append(("big", (col, row, s, scale, fg)))
 
-    def image(self, col, row, buf, size, tag):
-        """Image en pixels bruts RGB565, déjà inversés pour ce panneau.
+    def image(self, col, row, src, size, tag):
+        """Image RGB565 déjà inversée pour ce panneau.
 
-        `tag` identifie le contenu : tant qu'il ne change pas, on ne renvoie
-        pas les 8 Ko sur le bus SPI. Une pochette d'album reste affichée
-        plusieurs minutes ; la retracer à chaque image serait le plus gros
-        gaspillage du firmware.
+        `src` est soit un chemin de fichier — le pilote le fait alors défiler
+        par tranches, sans jamais le charger entièrement — soit un tampon en
+        mémoire pour les petites images.
+
+        `tag` identifie le contenu : tant qu'il ne change pas, rien ne repart
+        sur le bus SPI. Une pochette reste affichée plusieurs minutes ; la
+        retracer à chaque image serait le plus gros gaspillage du firmware.
         """
-        self._queue.append(("image", (col, row, buf, size, tag)))
+        kind = "imagefile" if isinstance(src, str) else "image"
+        self._queue.append((kind, (col, row, src, size, tag)))
 
     _SPAN = {"rule": 1, "frame": None, "bar": 1, "big": None}
 
@@ -219,6 +223,8 @@ class Grid:
                 self._draw_bar(*args)
             elif kind == "image":
                 self._draw_image(*args)
+            elif kind == "imagefile":
+                self._draw_image_file(*args)
             else:
                 self._draw_big(*args)
         self._queue = []
@@ -231,7 +237,7 @@ class Grid:
             rows, key = range(row, row + h), ("frame", col, row, w, h)
         elif kind == "bar":
             rows, key = (args[1],), ("bar", args[0], args[1], args[2])
-        elif kind == "image":
+        elif kind in ("image", "imagefile"):
             col, row, size = args[0], args[1], args[3]
             span = max(1, size // CH)
             rows, key = range(row, row + span), ("image", col, row)
@@ -313,6 +319,30 @@ class Grid:
             _empty(x + filled, prev - filled)
 
         self._gfx[key] = (filled, c)
+
+    def _draw_image_file(self, col, row, path, size, tag):
+        """Fait défiler un fichier RGB565 vers l'écran, sans le charger.
+
+        C'est draw_image_file() du pilote, qui lit par tranches de 2 Ko : une
+        pochette de 51 Ko passe donc sans jamais occuper plus d'un kilo-octet
+        de RAM. Sans ça, elle ne pourrait pas dépasser 64 pixels de côté.
+        """
+        key = ("image", col, row)
+        state = (tag, path is not None)
+        if self._gfx.get(key) == state:
+            return
+        self._gfx[key] = state
+        if path is None:
+            self.d.fill_rect(col * CW, row * CH, size, size, self.p.BG)
+            return
+        try:
+            self.d.draw_image_file(path, col * CW, row * CH, size, size)
+        except OSError as e:
+            # Fichier absent ou tronqué : on laisse la place vide plutôt que
+            # d'écrire du bruit, et on oublie le mémo pour réessayer.
+            print("image:", e)
+            self._gfx.pop(key, None)
+            self.d.fill_rect(col * CW, row * CH, size, size, self.p.BG)
 
     def _draw_image(self, col, row, buf, size, tag):
         # Le mémo retient AUSSI la présence du tampon. Sans ça, l'affichage

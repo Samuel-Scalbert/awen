@@ -338,24 +338,24 @@ def s_spotify(p):
     s = Screen(p)
     s.header("> SPOTIFY", "21:47")
 
-    # Faute de vraie pochette ici, on montre son emprise exacte : c'est cette
-    # place-la qu'il faut juger, pas une image d'illustration.
-    s.frame(1, 3, 8, 4)
-    s.text(3, 4, "POCH", "dim")
-    s.text(3, 5, "ETTE", "dim")
+    # Faute de vraie pochette ici, on montre son emprise exacte : 160 px de
+    # cote, soit 20 colonnes sur 10 lignes, centrees. C'est cette place-la
+    # qu'il faut juger, pas une image d'illustration.
+    s.frame(5, 3, 20, 10)
+    s.text(13, 7, "POCHETTE", "dim")
+    s.text(14, 8, "160 px", "dim")
 
-    s.big(10, 3, "MIDNIGHT", scale=2)
-    s.big(10, 4, "CITY", scale=2)
-    s.text(10, 5, "M83", "fg")
-    s.text(10, 6, "Hurry Up, We're", "dim")
+    s.big(1, 13, "MIDNIGHT CITY", scale=2)
+    s.text(1, 14, "M83", "fg")
 
-    s.text(1, 10, "1:47", "dim")
-    s.right(10, "4:03", "dim")
-    s.bar(1, 11, 28, 44)
+    s.text(1, 15, "1:47", "dim")
+    s.right(15, "4:03", "dim")
+    s.bar(1, 16, 28, 44)
 
-    s.text(1, 14, "VOLUME", "dim")
-    s.right(14, " 64%", "hi", bold=True)
-    s.bar(1, 15, 28, 64)
+    # Volume sur une seule ligne : etiquette, jauge et valeur cohabitent.
+    s.text(0, 17, "VOL", "dim")
+    s.bar(4, 17, 21, 64)
+    s.right(17, " 64%", "hi", bold=True)
 
     s.statusbar("[B] PAUSE", "A/C tenu: piste")
     return s

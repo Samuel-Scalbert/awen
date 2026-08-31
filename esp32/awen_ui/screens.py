@@ -384,30 +384,36 @@ class Spotify(Screen):
 
         # Le titre en 16x16 : 14 caracteres par ligne, deux lignes. Au-dela
         # on tronque — un titre de chanson se reconnait a son debut.
-        # La pochette occupe 8 colonnes sur 4 lignes ; le texte prend les 20
-        # colonnes restantes, soit 10 caracteres par ligne en 16x16.
-        g.image(1, 3, app.cover, app.COVER, sp.get("cover", ""))
+        # 160 px de cote : 20 colonnes sur 10 lignes, centrees. C'est le seul
+        # element de tout le firmware qui merite cette place — une pochette
+        # en vignette ne sert a rien, on ne la reconnait pas.
+        g.image(5, 3, app.cover, app.COVER, sp.get("cover", ""))
 
-        # Les deux emplacements sont toujours ecrits, quitte a l'etre a vide :
-        # un titre passe de deux lignes a une laisserait sinon la seconde en
-        # place, puisque le texte agrandi echappe au suivi de la grille.
-        lines = (_wrap(sp.get("title", "").upper(), 10) + ["", ""])[:2]
-        for i, line in enumerate(lines):
-            g.big(10, 3 + i, line, 2)
-        g.text(10, 5, sp.get("artist", "")[:20], g.p.FG)
-        g.text(10, 6, sp.get("album", "")[:20], g.p.DIM)
+        # Le « + [""] » n'est pas une precaution de style : _wrap("") rend une
+        # liste vide, et indexer dessus planterait la boucle sur une piste
+        # sans titre.
+        title = (_wrap(sp.get("title", "").upper(), 14) + [""])[0]
+        g.big(1, 13, title[:14], 2)
+        g.text(1, 14, sp.get("artist", "")[:28], g.p.FG)
 
         pos = sp.get("position_s", 0)
         dur = sp.get("duration_s", 0)
-        g.text(1, 10, _mmss(pos), g.p.DIM)
-        g.right(10, _mmss(dur), g.p.DIM)
-        g.bar(1, 11, 28, (pos * 100 // dur) if dur else 0)
+        g.text(1, 15, _mmss(pos), g.p.DIM)
+        g.right(15, _mmss(dur), g.p.DIM)
+        g.bar(1, 16, 28, (pos * 100 // dur) if dur else 0)
 
-        g.text(1, 14, "VOLUME", g.p.DIM)
-        g.right(14, "{:>3}%".format(sp.get("volume", 0)), g.p.HI)
-        g.bar(1, 15, 28, sp.get("volume", 0))
+        # Volume sur une seule ligne : etiquette, jauge et valeur cohabitent
+        # sans se toucher, faute de place pour une ligne de plus.
+        g.text(0, 17, "VOL", g.p.DIM)
+        g.bar(4, 17, 21, sp.get("volume", 0))
+        g.right(17, "{:>3}%".format(sp.get("volume", 0)), g.p.HI)
 
-        _pot_hint(g, 17, app)
+        # Le repere de rattrapage prend la place de l'artiste : il n'apparait
+        # qu'avec un potard non rattrape, et savoir ou tourner compte alors
+        # plus que de relire un nom deja lu.
+        if not app.pot_armed and app.pot_target is not None:
+            g.text(1, 14, " " * 28)
+            _pot_hint(g, 14, app)
         playing = sp.get("playing")
         # 30 colonnes en tout : « [B] PAUSE » tient a gauche, le rappel du
         # geste piste a droite. Le nom de l'appareil ne rentre pas, et il
