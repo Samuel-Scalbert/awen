@@ -192,28 +192,45 @@ def s_boot(p):
 
 
 def s_home(p):
-    """Ecran de veille : l'heure domine, le reste chuchote."""
+    """Le tableau de bord. Dense a dessein.
+
+    C'est l'ecran qu'on regarde en passant sans appuyer sur rien : il doit
+    repondre aux questions du matin et donner envie d'aller chercher le
+    detail ailleurs. Pas de seance ici — elle a son ecran.
+    """
     s = Screen(p)
-    s.text(0, 0, "LUN 31 AOU", "dim")
-    s.cursor(11, 0)
-    s.right(0, "\u2588 EN LIGNE", "fg")
+    s.text(0, 0, "Lundi 31 aout", "hi", bold=True)
+    s.cursor(14, 0)
+    s.right(0, "S36", "dim")
     s.rule(1)
 
-    # 5 caracteres en 32x32 (echelle 4) : 160 px, centres sur 240.
-    s.big(5, 3, "21:47", scale=4)
+    s.big(5, 2, "19:01", scale=4)
+    s.center(4, "saint Aristide", "dim")
+    s.rule(5)
 
-    s.rule(7)
-    s.text(1, 9, "PROCHAINE SEANCE", "dim")
-    s.big(1, 10, "PULL", scale=2)
-    s.right(10, "dans 11 h", "fg")
+    s.text(1, 6, "=  22C", "hi", bold=True)
+    s.text(8, 6, "COUVERT", "fg")
+    s.text(1, 7, "min  18  max  23", "dim")
+    s.right(7, "pluie  15%", "dim")
+    s.rule(8)
+
+    s.text(1, 9, "SERVEUR", "dim")
+    s.right(9, "2/2 SERVICES", "fg")
+    s.text(1, 10, "disque 34%   ram 41%   12j 3h", "dim")
 
     s.text(1, 12, "OFFRES DU JOUR", "dim")
-    s.right(12, "3", "hi", bold=True)
+    s.right(12, "2", "hi", bold=True)
 
-    s.text(1, 14, "DERNIERE", "dim")
-    s.right(14, "Legs ven 28/08", "fg")
+    s.text(1, 13, "COACH", "dim")
+    s.right(13, "14 jours sans seance", "alert")
 
-    s.statusbar("AWEN", "A/C : ecrans")
+    s.text(1, 15, "ECOUTE", "dim")
+    s.right(15, "M83 - Midnight City", "fg")
+
+    s.text(1, 16, "AWEN", "dim")
+    s.right(16, "EN LIGNE", "fg")
+
+    s.statusbar("A/C : ecrans", "B tenu: accueil")
     return s
 
 

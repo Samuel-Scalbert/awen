@@ -94,6 +94,7 @@ class App:
         self._vol_hold = 0          # jusqu'à quand la valeur locale prime
         self.cover = None           # pochette en RGB565 brut
         self._cover_tag = None
+        self._pos_at = 0            # quand la position de lecture a été lue
 
     # ------------------------------------------------------------ réseau
 
@@ -152,9 +153,31 @@ class App:
                 sp["volume"] = self._vol_local
 
         self.state = data
+        self._pos_at = time.ticks_ms()
         self.dirty = True
         gc.collect()
         return True
+
+    def play_position(self):
+        """La position de lecture, avancée localement depuis le dernier relevé.
+
+        Interroger Spotify plus souvent pour voir un compteur bouger serait
+        absurde : quand une piste joue, sa position avance d'une seconde par
+        seconde et le firmware sait l'heure qu'il est. On extrapole donc, et
+        le compteur devient fluide sans un seul appel supplémentaire.
+
+        Le résultat est borné par la durée : sur une piste qui se termine, la
+        dérive afficherait sinon un temps supérieur au morceau avant que le
+        relevé suivant ne remette les pendules à l'heure.
+        """
+        sp = self.state.get("spotify") or {}
+        pos = sp.get("position_s", 0)
+        if not sp.get("playing"):
+            return pos
+        elapsed = time.ticks_diff(time.ticks_ms(), self._pos_at) // 1000
+        dur = sp.get("duration_s", 0)
+        pos += max(0, elapsed)
+        return min(pos, dur) if dur else pos
 
     def _post(self, path, payload):
         r = None

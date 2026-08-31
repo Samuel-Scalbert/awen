@@ -18,7 +18,10 @@ from flask import (Blueprint, Response, abort, current_app, jsonify, request)
 from ..models import ProgramExercise, Workout, db
 from ..services.coach import analyse, apply_advice
 from ..services.job_watch import get_daily_reports
+from ..services import host as host_svc
+from ..services import saints
 from ..services import spotify as spotify_svc
+from ..services import weather as weather_svc
 from ..services.progression import (CYCLE, TRAINING_WEEKDAYS,
                                     next_session_type, plan_upcoming)
 
@@ -183,6 +186,37 @@ def spotify_cover():
                     headers={"X-Cover-Size": str(spotify_svc.COVER_SIZE)})
 
 
+JOURS = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi",
+         "Dimanche")
+MOIS = ("janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet",
+        "aout", "septembre", "octobre", "novembre", "decembre")
+
+
+def _day_block(today):
+    """Date en toutes lettres et saint du jour, déjà mis en forme."""
+    return {
+        "long": "{} {} {}".format(JOURS[today.weekday()], today.day,
+                                  MOIS[today.month - 1]),
+        "saint": saints.of(today),
+        "semaine": today.isocalendar()[1],
+    }
+
+
+def _weather_block():
+    w = weather_svc.today()
+    if w is None:
+        return {"ok": False}
+    return {
+        "ok": True,
+        "now_c": w["now_c"],
+        "min_c": w["min_c"],
+        "max_c": w["max_c"],
+        "rain_pct": w["rain_pct"],
+        "label": _ascii(w["label"])[:20],
+        "icon": w["icon"],
+    }
+
+
 @bp.route("/summary")
 def summary():
     _check_key()
@@ -252,6 +286,9 @@ def summary():
         },
         "coach": _coach_block(),
         "spotify": _spotify_block(),
+        "jour": _day_block(today),
+        "meteo": _weather_block(),
+        "serveur": host_svc.summary(),
     })
 
 

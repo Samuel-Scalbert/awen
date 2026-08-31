@@ -137,42 +137,92 @@ class Boot(Screen):
 
 
 class Home(Screen):
-    """Veille. L'heure occupe le tiers haut, tout le reste chuchote."""
+    """Le tableau de bord. Dense à dessein.
+
+    C'est l'écran qu'on regarde en passant, sans appuyer sur rien : il doit
+    répondre aux questions du matin — quel jour, quel temps, tout tourne-t-il,
+    y a-t-il des offres — et donner envie d'aller chercher le détail ailleurs.
+
+    Pas de séance ici : elle a son écran, et elle ne se consulte pas d'un
+    coup d'œil. La place gagnée sert à ce qui, lui, se lit en une seconde.
+    """
 
     NAME = "home"
 
     def draw(self, g, st, app):
-        gym = st.get("gym", {})
-        date = st.get("date", "").upper()
-        g.text(0, 0, date, g.p.DIM)
-        g.cursor(len(date) + 1, 0, st.get("blink", True))
+        jour = st.get("jour", {})
         online = st.get("online", True)
-        g.right(0, "EN LIGNE" if online else "HORS LIGNE",
-                g.p.FG if online else g.p.ALERT)
+
+        g.text(0, 0, jour.get("long", st.get("date", ""))[:22], g.p.HI)
+        g.right(0, "S{}".format(jour.get("semaine", "")), g.p.DIM)
         g.rule(1)
 
         # 5 caractères en 32x32 (echelle 4) : 160 px, centrés sur 240.
-        g.big(5, 3, st.get("time", "--:--"), scale=4)
+        g.big(5, 2, st.get("time", "--:--"), scale=4)
+        saint = jour.get("saint", "")
+        g.center(4, ("saint " + saint) if saint else "", g.p.DIM)
+        g.rule(5)
 
-        g.rule(7)
-        g.text(1, 9, "PROCHAINE SEANCE", g.p.DIM)
-        # En 16x16 : « PULL » occupe 8 colonnes, la date en tient 9 a droite.
-        g.big(1, 10, (gym.get("next_focus") or "REPOS").upper()[:8], 2)
-        g.right(10, gym.get("next", ""), g.p.FG)
+        # --- meteo : la question du matin, avant toutes les autres --------
+        m = st.get("meteo", {})
+        if m.get("ok"):
+            g.text(1, 6, "{}{:>4}C".format(m.get("icon", " "),
+                                           m.get("now_c", 0)), g.p.HI)
+            g.text(8, 6, m.get("label", "")[:20], g.p.FG)
+            g.text(1, 7, "min {:>3}  max {:>3}".format(
+                m.get("min_c", 0), m.get("max_c", 0)), g.p.DIM)
+            rain = m.get("rain_pct", 0)
+            g.right(7, "pluie {:>3}%".format(rain),
+                    g.p.FG if rain >= 50 else g.p.DIM)
+        else:
+            g.text(1, 6, "METEO INDISPONIBLE", g.p.DIM)
+        g.rule(8)
 
+        # --- serveur : ce qui doit tourner tourne-t-il ? ------------------
+        srv = st.get("serveur", {})
+        total = srv.get("total", 0)
+        if not total:
+            g.text(1, 9, "SERVEUR", g.p.DIM)
+            g.right(9, "PAS DE RELEVE", g.p.ALERT)
+        else:
+            g.text(1, 9, "SERVEUR", g.p.DIM)
+            ok = srv.get("ok")
+            g.right(9, "{}/{} SERVICES".format(srv.get("up", 0), total),
+                    g.p.FG if ok else g.p.ALERT)
+            if not ok:
+                g.text(1, 10, "! " + ", ".join(srv.get("down", []))[:26],
+                       g.p.ALERT)
+            else:
+                g.text(1, 10, "disque {}%   ram {}%   {}".format(
+                    srv.get("disk_pct", 0), srv.get("mem_pct", 0),
+                    srv.get("uptime", "")), g.p.DIM)
+
+        # --- ce qui attend une action de ta part -------------------------
         g.text(1, 12, "OFFRES DU JOUR", g.p.DIM)
-        g.right(12, str(st.get("jobs", {}).get("n", 0)), g.p.HI)
+        n = st.get("jobs", {}).get("n", 0)
+        g.right(12, str(n), g.p.HI if n else g.p.DIM)
 
-        # Étiquette courte : à 30 colonnes, « DERNIERE SEANCE » plus une date
-        # alignée à droite se touchent sans espace.
-        missed = gym.get("missed", 0)
-        g.text(1, 14, "RATEES" if missed else "DERNIERE", g.p.DIM)
-        g.right(14, str(missed) if missed else gym.get("last", ""),
-                g.p.ALERT if missed else g.p.FG)
+        c = st.get("coach", {})
+        g.text(1, 13, "COACH", g.p.DIM)
+        g.right(13, (c.get("text") or "rien a signaler")[:22],
+                g.p.ALERT if c.get("level") == "alert" else g.p.FG)
+
+        # --- ce qui joue --------------------------------------------------
+        sp = st.get("spotify", {})
+        g.text(1, 15, "ECOUTE", g.p.DIM)
+        if sp.get("device"):
+            g.right(15, "{} - {}".format(sp.get("artist", ""),
+                                         sp.get("title", ""))[:22], g.p.FG)
+        else:
+            g.right(15, "rien", g.p.DIM)
+
+        g.text(1, 16, "AWEN", g.p.DIM)
+        g.right(16, "EN LIGNE" if online else "HORS LIGNE",
+                g.p.FG if online else g.p.ALERT)
 
         # Pas de « [OK] MENU » : B ne fait rien ici, et annoncer une action
         # inexistante est pire que de n'en annoncer aucune.
-        _statusbar(g, "AWEN", "A/C : ecrans")
+        _statusbar(g, "A/C : ecrans", "B tenu: accueil")
 
 
 class Gym(Screen):
@@ -396,7 +446,9 @@ class Spotify(Screen):
         g.big(1, 13, title[:14], 2)
         g.text(1, 14, sp.get("artist", "")[:28], g.p.FG)
 
-        pos = sp.get("position_s", 0)
+        # Position extrapolee localement : le compteur avance chaque seconde
+        # sans que le serveur soit interroge plus souvent. Voir app.py.
+        pos = app.play_position()
         dur = sp.get("duration_s", 0)
         g.text(1, 15, _mmss(pos), g.p.DIM)
         g.right(15, _mmss(dur), g.p.DIM)
