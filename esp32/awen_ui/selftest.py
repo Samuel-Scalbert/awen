@@ -60,8 +60,43 @@ def test_led():
     line()
 
 
+def probe_data_line():
+    """La ligne DATA est-elle seulement tiree au niveau haut ?
+
+    Au repos, un DHT11 correctement alimente laisse sa ligne DATA au niveau
+    haut grace a sa resistance de tirage. Ce simple test separe deux pannes
+    que « ETIMEDOUT » confond :
+
+      - au niveau BAS en permanence : rien ne tire la ligne. Capteur non
+        alimente, masse absente, resistance de tirage manquante, ou fil
+        DATA sur la mauvaise broche.
+      - au niveau HAUT : le cablage porte, le capteur est alimente, et le
+        probleme est dans le dialogue lui-meme.
+
+    On lit SANS tirage interne : avec PULL_UP, la broche lirait 1 meme si
+    rien n'est branche, et le test ne prouverait rien.
+    """
+    p = Pin(DHT_PIN, Pin.IN)
+    hauts = sum(p.value() for _ in range(50))
+    if hauts >= 45:
+        return "haut", hauts
+    if hauts <= 5:
+        return "bas", hauts
+    return "instable", hauts
+
+
 def test_dht():
     line("=== DHT11 (GPIO {}) ===".format(DHT_PIN))
+    etat, hauts = probe_data_line()
+    line("  ligne DATA au repos : {} ({}/50 lectures a 1)".format(etat, hauts))
+    if etat == "bas":
+        line("  -> RIEN NE TIRE LA LIGNE. Avant d'aller plus loin, verifie :")
+        line("     le capteur est-il alimente (VCC au 3V3, GND au GND) ?")
+        line("     le fil DATA est-il bien sur GPIO {} ?".format(DHT_PIN))
+        line("     capteur nu sans module : 10 kOhm entre DATA et 3V3.")
+    elif etat == "instable":
+        line("  -> la ligne flotte : DATA n'est probablement reliee a rien.")
+
     try:
         import dht
     except ImportError:

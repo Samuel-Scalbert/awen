@@ -171,10 +171,15 @@ class App:
                 raise OSError(r.status_code)
             data = r.json()
         except Exception as e:
-            # La memoire libre accompagne l'erreur : sans elle, impossible de
-            # distinguer un serveur injoignable d'une carte a court de RAM,
-            # et les deux se presentent comme un ECONNABORTED.
-            print("fetch:", e, "| memoire libre:", gc.mem_free())
+            # L'adresse de la carte accompagne l'erreur autant que la
+            # memoire libre. Les deux pannes se ressemblent depuis le code
+            # mais rien ne les rapproche : ECONNABORTED veut dire que la pile
+            # reseau manquait de place, EHOSTUNREACH que la carte et le
+            # serveur ne sont pas sur le meme reseau. Sans l'adresse, on
+            # cherche une fuite memoire alors que la carte est sur le wifi
+            # invite.
+            print("fetch:", e, "| ip:", self.state.get("ip", "?"),
+                  "| memoire libre:", gc.mem_free())
             self.state["online"] = False
             self.dirty = True
             self.t_poll = time.ticks_add(time.ticks_ms(),
