@@ -199,7 +199,7 @@ def s_home(p):
 
     s.rule(7)
     s.text(1, 9, "PROCHAINE SEANCE", "dim")
-    s.text(1, 10, "PULL", "hi", bold=True)
+    s.big(1, 10, "PULL", scale=2)
     s.right(10, "dans 11 h", "fg")
 
     s.text(1, 12, "OFFRES DU JOUR", "dim")
@@ -213,29 +213,36 @@ def s_home(p):
 
 
 def s_gym(p):
-    """Seance en cours : une seule information compte, la serie a faire."""
+    """Apercu de la seance a venir, avec les charges decidees par le coach.
+
+    En lecture seule : l'afficheur est sur un bureau, pas dans la salle.
+    """
     s = Screen(p)
-    s.header("PULL \u00b7 SEANCE 09", "21:47")
+    s.header("SEANCE 09", "21:47")
 
-    s.text(1, 3, "TIRAGE VERTICAL", "hi", bold=True)
-    s.text(1, 4, "exercice 2 / 6", "dim")
+    s.big(1, 3, "PULL", scale=2)
+    s.right(3, "AUJOURD HUI", "fg")
 
-    s.frame(0, 6, COLS, 5)
-    s.text(2, 7, "SERIE 3 / 4", "dim")
-    s.text(2, 8, "40.0 KG", "hi", bold=True)
-    s.right(8, "x 10  ")
-    s.text(2, 9, "cible 8-12 reps", "dim")
+    # Le serveur rogne le nom selon la longueur de la charge, pour qu'ils ne
+    # se percutent jamais sur une ligne de 30 colonnes. On montre le
+    # resultat de ce calcul, pas des noms complets qui deborderaient.
+    exercises = [
+        ("PEC FLY / REAR DELT", "4 x 15"),
+        ("SEATED ROW", "42.5 kg x 15"),
+        ("TRACTIONS (ASS", "40 kg x 10"),
+        ("CURL BICEPS", "12.5 kg x 12"),
+        ("FACE PULL", "20 kg x 15"),
+    ]
+    for i, (name, detail) in enumerate(exercises):
+        r = 5 + i * 2
+        budget = COLS - 2 - len(detail) - 1
+        s.text(0, r, ">", "dim")
+        s.text(2, r, name[:budget], "hi")
+        s.right(r, detail, "fg")
 
-    s.text(1, 11, "REPOS", "dim")
-    s.text(1, 12, "00:47", "hi", bold=True)
-    s.bar(8, 12, 20, 78)
-
-    s.text(1, 14, "FAIT", "dim")
-    s.bar(8, 14, 20, 45)
-    s.right(15, "9 series restantes", "dim")
-
+    s.text(1, 16, "dernier : Legs ven 28/08", "dim")
     s.text(1, 17, "TOURNE >  50%", "dim")     # rattrapage du potard
-    s.statusbar("< PREC", "SUIV >")
+    s.statusbar("< PREC", "1/1")
     return s
 
 
@@ -253,15 +260,12 @@ def s_coach(p):
 
     s.rule(11)
     s.text(1, 12, "PROPOSITION", "dim")
-    s.text(1, 13, "22.5 KG", "hi", bold=True)
-    s.text(9, 13, "->", "dim")
-    s.text(12, 13, "20.0 KG", "fg", bold=True)
-
-    # Aucune jauge de « confiance » : le moteur de regles n'en calcule pas,
+    s.text(1, 13, "de 22.5 kg a", "dim")
+    # La charge proposee est le seul chiffre qui compte : en 16x16.
+    # Aucune jauge de « confiance » — le moteur de regles n'en calcule pas,
     # et un pourcentage invente donnerait a une decoration l'autorite d'une
-    # mesure. On affiche le motif reel a la place.
-    s.text(1, 15, "RIR moyen 3.2 : il te", "dim")
-    s.text(1, 16, "reste trop de reserve.", "dim")
+    # mesure.
+    s.big(1, 15, "20.0 KG", scale=2)
 
     s.statusbar("[B] APPLIQUER", "sinon : ignore")
     return s
@@ -320,7 +324,7 @@ def s_spotify(p):
     s = Screen(p)
     s.header("> SPOTIFY", "21:47")
 
-    s.text(1, 3, "MIDNIGHT CITY", "hi", bold=True)
+    s.big(1, 3, "MIDNIGHT CITY", scale=2)
     s.text(1, 6, "M83", "fg")
     s.text(1, 7, "Hurry Up, We're Dreaming", "dim")
 
@@ -342,7 +346,7 @@ def s_theme(p):
     s = Screen(p)
     s.header("THEME", "21:47")
 
-    s.text(1, 3, PALETTE_NAMES[current], "hi", bold=True)
+    s.big(1, 3, PALETTE_NAMES[current], scale=2)
     s.right(3, "{}/{}".format(current + 1, len(PALETTE_NAMES)), "dim")
 
     for i, name in enumerate(PALETTE_NAMES):

@@ -140,7 +140,8 @@ class Home(Screen):
 
         g.rule(7)
         g.text(1, 9, "PROCHAINE SEANCE", g.p.DIM)
-        g.text(1, 10, (gym.get("next_focus") or "REPOS").upper(), g.p.HI)
+        # En 16x16 : « PULL » occupe 8 colonnes, la date en tient 9 a droite.
+        g.big(1, 10, (gym.get("next_focus") or "REPOS").upper()[:8], 2)
         g.right(10, gym.get("next", ""), g.p.FG)
 
         g.text(1, 12, "OFFRES DU JOUR", g.p.DIM)
@@ -195,7 +196,7 @@ class Gym(Screen):
                 st.get("time", ""))
 
         focus = (gym.get("focus") or "REPOS").upper()
-        g.text(1, 3, focus, g.p.HI)
+        g.big(1, 3, focus[:8], 2)
         when = gym.get("today") and "AUJOURD HUI" or gym.get("next", "")
         g.right(3, when, g.p.FG)
 
@@ -256,15 +257,17 @@ class Coach(Screen):
 
         g.rule(11)
         if c.get("to_kg") is not None:
-            g.text(1, 13, "PROPOSITION", g.p.DIM)
-            g.text(1, 15, "{:g} KG".format(c.get("from_kg", 0)), g.p.HI)
-            g.text(9, 15, "->", g.p.DIM)
-            g.text(12, 15, "{:g} KG".format(c["to_kg"]), g.p.FG)
+            g.text(1, 12, "PROPOSITION", g.p.DIM)
+            g.text(1, 13, "de {:g} kg a".format(c.get("from_kg", 0)), g.p.DIM)
+            # La charge proposee est le seul chiffre qui compte ici : elle
+            # merite d'etre lisible depuis l'autre bout du bureau.
+            g.big(1, 15, "{:g} KG".format(c["to_kg"]), 2, g.p.HI)
             # Pas de jauge de « confiance » : le moteur de règles n'en calcule
             # aucune, et un pourcentage inventé donnerait à une décoration
             # l'autorité d'une mesure.
             _statusbar(g, "[B] APPLIQUER", "sinon : ignore")
         else:
+            g.big(1, 15, "", 2)          # efface une proposition disparue
             _statusbar(g, "< PREC", "SUIV >")
 
     def on_input(self, ev, app):
@@ -364,8 +367,14 @@ class Spotify(Screen):
             _statusbar(g, "< PREC", "SUIV >")
             return
 
-        for i, line in enumerate(_wrap(sp.get("title", ""), COLS - 2)[:2]):
-            g.text(1, 3 + i, line.upper(), g.p.HI)
+        # Le titre en 16x16 : 14 caracteres par ligne, deux lignes. Au-dela
+        # on tronque — un titre de chanson se reconnait a son debut.
+        # Les deux emplacements sont toujours ecrits, quitte a l'etre a vide :
+        # un titre passe de deux lignes a une laisserait sinon la seconde en
+        # place, puisque le texte agrandi echappe au suivi de la grille.
+        lines = (_wrap(sp.get("title", "").upper(), 14) + ["", ""])[:2]
+        for i, line in enumerate(lines):
+            g.big(1, 3 + i, line, 2)
         g.text(1, 6, sp.get("artist", "")[:28], g.p.FG)
         g.text(1, 7, sp.get("album", "")[:28], g.p.DIM)
 
@@ -486,7 +495,7 @@ class Theme(Screen):
         _header(g, "THEME", st.get("time", ""))
 
         cur = self._index(app)
-        g.text(1, 3, g.p.name, g.p.HI)
+        g.big(1, 3, g.p.name[:10], 2)
         g.right(3, "{}/{}".format(cur + 1, len(theme.PALETTES)), g.p.DIM)
 
         for i, p in enumerate(theme.PALETTES):

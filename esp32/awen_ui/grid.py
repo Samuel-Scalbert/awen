@@ -218,26 +218,36 @@ class Grid:
 
         self._gfx[key] = (filled, c)
 
-    def big(self, col, row, s, scale=4, fg=None):
-        """Texte agrandi, pour l'heure de l'écran de veille.
+    def big(self, col, row, s, scale=2, fg=None):
+        """Texte agrandi : le pilote multiplie le glyphe 8x8 par `scale`.
 
-        Le pilote multiplie le glyphe 8x8 par `scale` : 4 donne du 32x32,
-        soit quatre colonnes et deux lignes par caractère. On mémorise la
-        chaîne pour ne pas la retracer soixante fois par seconde.
+        scale=2 donne du 16x16, qui remplit exactement la hauteur d'une
+        cellule et occupe deux colonnes par caractère. scale=4 donne du
+        32x32, deux lignes de haut : c'est l'horloge de l'écran de veille.
+
+        Le tracé sort de la grille de caractères, donc le suivi cellule par
+        cellule ne peut pas l'effacer. On mémorise ce qui a été écrit pour
+        pouvoir le faire soi-même — passer une chaîne vide efface la zone,
+        ce dont on a besoin quand une valeur disparaît sans changement
+        d'écran.
         """
         key = ("big", col, row)
         c = self.p.HI if fg is None else fg
         prev = self._gfx.get(key)
         if prev == (s, c, scale):
             return
-        self._gfx[key] = (s, c, scale)
 
         x, y = col * CW, row * CH
         gw = GLYPH * scale
         if prev is not None and len(prev[0]) > len(s):
-            # Le texte a raccourci : on efface l'ancienne emprise, sinon un
-            # « 9:05 » laisserait un chiffre orphelin de « 12:05 ».
-            self.d.fill_rect(x, y, len(prev[0]) * gw, gw, self.p.BG)
+            # Le texte a raccourci ou disparu : on efface l'ancienne emprise,
+            # sinon « 9:05 » laisserait un chiffre orphelin de « 12:05 ».
+            self.d.fill_rect(x, y, len(prev[0]) * GLYPH * prev[2],
+                             GLYPH * prev[2], self.p.BG)
+        if not s:
+            self._gfx.pop(key, None)
+            return
+        self._gfx[key] = (s, c, scale)
         self.d.text(s, x, y, color=c, bg=self.p.BG, scale=scale)
 
     def _invalidate(self):

@@ -102,8 +102,14 @@ def _session_preview(focus, last_workout):
             detail = "{:g} kg x {}".format(pe.weight_kg, pe.rep_max or 0)
         else:
             detail = "{} x {}".format(pe.sets, pe.rep_max or 0)
+        # Le nom et la charge partagent une ligne de 30 colonnes : le nom
+        # commence en colonne 2, la charge est calée à droite. Tronquer le
+        # nom à une longueur fixe le ferait donc percuter les charges longues
+        # (« TRACTIONS (ASSIST. » contre « 40 kg x 10 »). On lui donne ce qui
+        # reste, moins une colonne de respiration.
+        budget = COLS - 2 - len(detail) - 1
         out.append({
-            "name": _ascii(pe.name)[:20],
+            "name": _ascii(pe.name)[:budget],
             "detail": detail,
             "sets": pe.sets,
         })
