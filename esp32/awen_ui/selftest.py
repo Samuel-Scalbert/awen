@@ -132,10 +132,19 @@ def test_pot():
         lo = min(lo, v)
         hi = max(hi, v)
         time.sleep_ms(50)
-    line("  lu : {} a {}  (course de {} points sur 4095)".format(lo, hi, hi - lo))
-    if hi - lo < 300:
-        line("  -> course trop faible : curseur non relie, ou extremites")
-        line("     inversees avec le curseur.")
+    span = hi - lo
+    line("  lu : {} a {}  (course de {} points sur 4095)".format(lo, hi, span))
+    if span < 300:
+        line("  -> quasi immobile : le curseur n'est relie a rien, ou le")
+        line("     potard n'est plus la du tout.")
+    elif span < 1500:
+        line("  -> COURSE TROP FAIBLE. Un potard cable entre 3V3 et GND")
+        line("     balaie pres de 3800 points. Verifie que ses DEUX pattes")
+        line("     exterieures sont bien l'une au 3V3 et l'autre au GND, et")
+        line("     que le fil du milieu part vers GPIO {}.".format(POT_PIN))
+        line("     Une extremite en l'air donne exactement ce resultat.")
+    else:
+        line("  -> course correcte.")
     line()
 
 

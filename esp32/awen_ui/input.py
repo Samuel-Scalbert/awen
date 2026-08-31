@@ -128,7 +128,17 @@ class Pot:
     ALPHA_NUM, ALPHA_DEN = 1, 4    # lissage : 1/4 de la nouvelle mesure
     DEADBAND = 1                   # en pourcents
     EDGE = 2                       # % collés aux extrêmes
-    MIN_SPAN = 300                 # en deçà, on n'a pas vu assez de course
+    # Un potard correctement câblé entre 3V3 et GND balaie près de 3800
+    # points. En deçà de 1500, ce n'est pas « pas encore assez tourné » :
+    # c'est un câblage incomplet — une extrémité en l'air, ou le curseur
+    # confondu avec un bord.
+    #
+    # Le seuil était à 300, et c'était le vrai défaut : une course de 561
+    # points passait pour valide, l'échelle l'étirait sur 0-100 %, et le
+    # moindre frémissement du convertisseur faisait bondir la valeur de
+    # sept pour cent. Le potard ne « buguait » pas, on amplifiait son bruit
+    # par sept.
+    MIN_SPAN = 1500
 
     def __init__(self, pin_no):
         self.adc = ADC(Pin(pin_no))
