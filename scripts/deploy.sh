@@ -20,9 +20,14 @@ fi
 
 echo "Mise à jour ${local_rev:0:7} -> ${remote_rev:0:7}"
 
-# --ff-only : si quelqu'un a modifié un fichier directement sur le serveur,
-# la mise à jour échoue franchement au lieu de fabriquer un conflit silencieux.
-git pull --ff-only origin main
+# On fusionne la révision déjà récupérée plus haut, sans rappeler GitHub :
+# un second aller-retour réseau, c'est une occasion de plus d'échouer, et la
+# garantie de déployer autre chose que la révision qu'on vient de comparer si
+# quelqu'un pousse entre-temps.
+#
+# --ff-only : si un fichier a été modifié directement sur le serveur, la mise
+# à jour échoue franchement au lieu de fabriquer un conflit silencieux.
+git merge --ff-only "$remote_rev"
 
 # Si la construction échoue, compose laisse le conteneur actuel en place :
 # le serveur continue de répondre avec la version précédente.

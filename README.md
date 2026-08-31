@@ -122,7 +122,12 @@ chmod +x scripts/*.sh
 ```
 
 Un timer systemd interroge GitHub toutes les 5 minutes et ne reconstruit que
-si `origin/main` a bougé. Le serveur n'expose donc rien sur Internet : pas de
+si `origin/main` a bougé.
+
+> Si les `git fetch` échouent par intermittence avec
+> `expected flush after ref listing` / `could not read Username`, c'est HTTP/2
+> qui déraille entre git et GitHub. Sur le serveur :
+> `git config --global http.version HTTP/1.1`. Le serveur n'expose donc rien sur Internet : pas de
 webhook, pas de port ouvert sur la box.
 
 ```bash
