@@ -31,3 +31,6 @@ esp32/.pio/
 
 # Sauvegardes locales de la base
 data/backups/
+
+# Maquettes ecran ESP32 : 1 Mo regenerable en une commande.
+esp32/mockups/
