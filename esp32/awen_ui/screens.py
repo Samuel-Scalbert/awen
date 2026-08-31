@@ -212,7 +212,9 @@ class Home(Screen):
         g.text(0, 9, "#", g.p.DIM)
         g.text(2, 9, "CHAMBRE", g.p.DIM)
         if ti is None:
-            g.right(9, "pas de capteur", g.p.DIM)
+            etat = app.sensor.state()
+            g.right(9, "pas cable" if etat == "absent" else "muet",
+                    g.p.DIM if etat == "absent" else g.p.ALERT)
         else:
             ecart = ti - (m.get("now_c", ti) if m.get("ok") else ti)
             g.right(9, "{:>2}C  {:>2}%  {:+d}".format(ti, hi, ecart),

@@ -20,7 +20,8 @@
 param(
     [string] $Port,
     [switch] $Console,
-    [switch] $NoMpy      # envoyer les .py bruts, pour deboguer sur la carte
+    [switch] $NoMpy,     # envoyer les .py bruts, pour deboguer sur la carte
+    [switch] $Test       # lancer selftest.py au lieu de televerser
 )
 
 $ErrorActionPreference = 'Stop'
@@ -112,6 +113,14 @@ try {
         $Port = $ports[0]
     }
     Write-Host "Carte sur $Port" -ForegroundColor Cyan
+
+    if ($Test) {
+        # Le test se lance sans rien installer : il verifie le materiel, pas
+        # le firmware, et doit pouvoir tourner meme quand celui-ci plante.
+        Write-Host 'Test materiel — suis les instructions.' -ForegroundColor Cyan
+        Invoke-Mpremote connect $Port run selftest.py
+        exit $LASTEXITCODE
+    }
 
     # --- dependances deja sur la carte -------------------------------------
     $onBoard = (Invoke-Mpremote connect $Port fs ls) -join "`n"

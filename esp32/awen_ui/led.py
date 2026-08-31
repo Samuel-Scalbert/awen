@@ -37,7 +37,11 @@ from machine import Pin, PWM
 FREQ = 1000              # au-dessus de la persistance retinienne
 DUTY_MAX = 1023          # PWM 10 bits, resolution par defaut de l'ESP32
 
-BRIGHTNESS = 25          # pourcents ; une LED nue est eblouissante de pres
+# Deux luminosites, parce que les deux composants n'ont rien a voir : une
+# LED nue derriere 220 ohms tire quelques milliamperes et reste discrete,
+# une WS2812 a fond est eblouissante a un metre.
+BRIGHT_RGB = 70
+BRIGHT_WS = 10
 
 # Un rouge a la meme intensite electrique parait bien plus vif qu'un bleu :
 # on le brise pour que « orange » sorte orange et pas rouge.
@@ -63,7 +67,7 @@ class RgbPwm:
         self.last = rgb
         vals = (0, 0, 0) if rgb is None else rgb
         for chan, v, gain in zip(self.ch, vals, GAINS):
-            duty = v * DUTY_MAX * BRIGHTNESS * gain // (255 * 100 * 100)
+            duty = v * DUTY_MAX * BRIGHT_RGB * gain // (255 * 100 * 100)
             chan.duty(DUTY_MAX - duty if self.invert else duty)
 
 
@@ -80,7 +84,7 @@ class Ws2812:
             return
         self.last = rgb
         self.np[0] = ((0, 0, 0) if rgb is None
-                      else tuple(c * BRIGHTNESS // 100 for c in rgb))
+                      else tuple(c * BRIGHT_WS // 100 for c in rgb))
         self.np.write()
 
 

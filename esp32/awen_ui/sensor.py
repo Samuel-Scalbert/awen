@@ -64,6 +64,18 @@ class Dht:
         return self.t, self.h
 
 
+    def state(self):
+        """« ok », « muet » ou « absent » — pour que l'écran le dise.
+
+        « Pas de capteur » quand il est en fait câblé mais silencieux envoie
+        chercher au mauvais endroit. Les deux cas méritent deux mots
+        différents.
+        """
+        if self.t is not None:
+            return "ok"
+        return "muet"
+
+
 class NoSensor:
     """Aucun capteur câblé. Le reste du firmware n'a pas à le savoir."""
 
@@ -72,6 +84,9 @@ class NoSensor:
 
     def reading(self, now):
         return None, None
+
+    def state(self):
+        return "absent"
 
 
 def make(pin=None, kind="dht11"):
