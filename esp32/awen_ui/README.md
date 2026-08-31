@@ -102,19 +102,25 @@ quand on change de ligne dans les Paramètres, puisque la valeur cible change.
 
 ## Installation
 
-```bash
-cp awen_config.example.py awen_config.py   # wifi + cle d'API
-mpremote cp theme.py grid.py input.py screens.py app.py main.py \
-            awen_config.py :
-mpremote reset
+```powershell
+Copy-Item awen_config.example.py awen_config.py   # URL + cle d'API
+notepad awen_config.py
+.\upload.ps1                                      # trouve le port tout seul
+.\upload.ps1 -Console                             # + la sortie de la carte
 ```
 
-`st7789_min.py`, `tft_setup.py` et `wifi.py` doivent déjà être sur la carte —
-ils viennent d'esp32-desk-display et ne sont pas dupliqués ici.
+`st7789_min.py`, `tft_setup.py`, `wifi.py` et `wifi_config.py` doivent déjà
+être sur la carte — ils viennent d'esp32-desk-display et ne sont pas dupliqués
+ici. `upload.ps1` vérifie leur présence et refuse de continuer sinon, plutôt
+que de te laisser découvrir un `ImportError` sur un écran noir.
 
-`awen_config.py` contient un mot de passe wifi et la clé d'API : il est dans
-le `.gitignore`, ne le versionne jamais. `ESP32_API_KEY` doit correspondre
-exactement au `.env` du serveur.
+**Le wifi n'est pas dans `awen_config.py`.** Il vient de `wifi_config.py`,
+déjà sur la carte et déjà utilisé par `wifi.py` et `spotify_screen.py`. Un mot
+de passe dupliqué finit desynchronisé, ou publié.
+
+`awen_config.py` ne contient donc que l'URL du serveur et la clé d'API. Il est
+dans le `.gitignore`, ne le versionne jamais, et `ESP32_API_KEY` doit
+correspondre exactement au `.env` du serveur.
 
 ## Ce qui marche aujourd'hui
 

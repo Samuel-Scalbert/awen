@@ -14,6 +14,12 @@ la clé d'API et le mot de passe wifi, il ne doit jamais partir sur GitHub.
 """
 from tft_setup import tft
 
+# Le wifi vient de wifi_config.py, deja sur la carte et deja utilise par
+# wifi.py et spotify_screen.py. On ne redemande pas un mot de passe qui existe
+# a un metre de la : un secret duplique est un secret qui finit desynchronise,
+# ou publie.
+from wifi_config import PASSWORD, SSID
+
 import awen_config
 from app import App
 
@@ -28,8 +34,8 @@ BTN_LEFT, BTN_SELECT, BTN_RIGHT = 26, 27, 14
 POT = 34
 
 app = App(tft, {
-    "ssid": awen_config.WIFI_SSID,
-    "password": awen_config.WIFI_PASSWORD,
+    "ssid": SSID,
+    "password": PASSWORD,
     "base_url": awen_config.AWEN_URL,
     "api_key": awen_config.ESP32_API_KEY,
     "pins": {"pin_a": BTN_LEFT, "pin_b": BTN_SELECT,

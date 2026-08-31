@@ -26,7 +26,7 @@ $ErrorActionPreference = 'Stop'
 
 $Files = @('theme.py', 'grid.py', 'input.py', 'screens.py', 'app.py',
            'main.py', 'awen_config.py')
-$Required = @('st7789_min.py', 'tft_setup.py', 'wifi.py')
+$Required = @('st7789_min.py', 'tft_setup.py', 'wifi.py', 'wifi_config.py')
 
 # --- trouver mpremote -------------------------------------------------------
 #
@@ -81,7 +81,7 @@ function Invoke-Mpremote {
 # --- fichiers locaux --------------------------------------------------------
 Push-Location $PSScriptRoot
 try {
-    $missing = $Files | Where-Object { -not (Test-Path -LiteralPath $_) }
+    $missing = @($Files | Where-Object { -not (Test-Path -LiteralPath $_) })
     if ($missing) {
         if ($missing -contains 'awen_config.py') {
             Write-Host 'awen_config.py manque. Cree-le une fois :' -ForegroundColor Yellow
@@ -94,7 +94,10 @@ try {
 
     # --- port -------------------------------------------------------------
     if (-not $Port) {
-        $ports = [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object
+        # @() est indispensable : avec un seul port, PowerShell deballe le
+        # tableau en une simple chaine, et $ports[0] renvoie alors son premier
+        # caractere — « C » au lieu de « COM5 ».
+        $ports = @([System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object)
         if ($ports.Count -eq 0) {
             Write-Host 'Aucun port serie. La carte est-elle branchee en USB ?' -ForegroundColor Yellow
             Write-Host 'Certains cables USB ne transportent que le courant : essaie-en un autre.'
@@ -114,7 +117,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Impossible de parler a la carte sur $Port. Ferme Thonny ou tout autre programme qui tient le port."
     }
-    $absent = $Required | Where-Object { $onBoard -notmatch [regex]::Escape($_) }
+    $absent = @($Required | Where-Object { $onBoard -notmatch [regex]::Escape($_) })
     if ($absent) {
         Write-Host "Il manque sur la carte : $($absent -join ', ')" -ForegroundColor Yellow
         Write-Host 'Ils viennent du depot esp32-desk-display (dossier micropython/).'

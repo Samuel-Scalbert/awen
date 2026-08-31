@@ -1,11 +1,12 @@
 """Copie ce fichier en awen_config.py et renseigne-le.
 
-awen_config.py contient un mot de passe wifi et une clé d'API : il est dans
-le .gitignore et ne doit jamais être versionné.
-"""
+Le wifi n'est PAS ici : il vient de wifi_config.py, déjà sur la carte et déjà
+utilisé par wifi.py et spotify_screen.py. Dupliquer un mot de passe, c'est se
+garantir qu'un jour les deux copies divergeront — ou qu'une des deux fuitera.
 
-WIFI_SSID = "TON_WIFI"
-WIFI_PASSWORD = "TON_MOT_DE_PASSE"
+awen_config.py contient une clé d'API : il est dans le .gitignore, ne le
+versionne jamais.
+"""
 
 # Sans slash final. Sur le réseau local ; via Tailscale, mets l'IP tailnet.
 AWEN_URL = "http://192.168.1.32:5000"
