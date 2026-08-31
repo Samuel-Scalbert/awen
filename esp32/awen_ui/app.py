@@ -399,7 +399,13 @@ class App:
         alert = (self.state.get("coach", {}).get("level") == "alert"
                  or not self.state.get("online", True))
         if alert and not self.state.get("blink", True):
-            color = None            # une demi-periode eteinte : ca clignote
+            # On respire entre pleine intensite et moitie, jamais jusqu'a
+            # l'extinction. Une LED qui s'eteint fait perdre la couleur de
+            # l'ecran une demi-seconde sur deux, et le clignotement franc
+            # accroche l'oeil bien plus qu'il ne le devrait pour un voyant
+            # pose sur un bureau. Un battement doux se remarque sans
+            # s'imposer, et la couleur reste lisible en permanence.
+            color = tuple(c // 2 for c in color)
         self.led.show(color)
 
     def _update_pot_arming(self):
