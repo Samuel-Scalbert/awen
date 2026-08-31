@@ -185,10 +185,19 @@ try {
     foreach ($f in $Files) {
         if ($useMpy -and $Raw -notcontains $f) {
             $mpy = $f -replace '\.py$', '.mpy'
-            Write-Host "  -> $mpy"
             Invoke-Mpremote connect $Port fs cp (Join-Path $tmp $mpy) ":$mpy" | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "echec de la copie de $mpy" }
-            Invoke-Mpremote connect $Port fs rm ":$f" 2>$null | Out-Null
+            # Le .py doit disparaitre, sinon les deux coexistent : selon le
+            # portage MicroPython choisit l'un ou l'autre, et s'il prend le
+            # .py toute la precompilation ne sert a rien — sans que rien ne
+            # le signale. On rapporte donc la suppression.
+            $gone = ''
+            if ($onBoard -match [regex]::Escape($f)) {
+                Invoke-Mpremote connect $Port fs rm ":$f" 2>$null | Out-Null
+                $gone = if ($LASTEXITCODE -eq 0) { '  (.py retire)' }
+                        else { '  (.py TOUJOURS LA)' }
+            }
+            Write-Host "  -> $mpy$gone"
         } else {
             Write-Host "  -> $f"
             Invoke-Mpremote connect $Port fs cp $f ":$f" | Out-Null

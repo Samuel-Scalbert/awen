@@ -37,6 +37,9 @@ import theme
 
 POLL_MS = 30000          # rafraîchissement des données serveur
 POLL_SPOTIFY_MS = 5000   # une piste change trop souvent pour attendre 30 s
+# Apres un echec, on retente vite : attendre le cycle complet laisserait
+# l'ecran affirmer « HORS LIGNE » une demi-minute pour une socket avortee.
+RETRY_MS = 4000
 FRAME_MS = 16            # lecture des entrées
 BLINK_MS = 530           # demi-période du curseur
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
@@ -150,6 +153,12 @@ class App:
         témoin « EN LIGNE » : un afficheur qui se vide à la moindre coupure
         wifi est plus inquiétant qu'utile.
         """
+        # Le ramasse-miettes AVANT la requete, pas apres : lwip alloue ses
+        # tampons au moment de la connexion, et c'est precisement la qu'il
+        # lui faut de la place. Un tas fragmente donne un ECONNABORTED qui
+        # ressemble a une panne serveur alors que c'est la carte qui manque
+        # de memoire.
+        gc.collect()
         r = None
         try:
             r = urequests.get(self._url("/api/esp32/summary"),
@@ -158,9 +167,14 @@ class App:
                 raise OSError(r.status_code)
             data = r.json()
         except Exception as e:
-            print("fetch:", e)
+            # La memoire libre accompagne l'erreur : sans elle, impossible de
+            # distinguer un serveur injoignable d'une carte a court de RAM,
+            # et les deux se presentent comme un ECONNABORTED.
+            print("fetch:", e, "| memoire libre:", gc.mem_free())
             self.state["online"] = False
             self.dirty = True
+            self.t_poll = time.ticks_add(time.ticks_ms(),
+                                         RETRY_MS - self._poll_interval())
             return False
         finally:
             if r is not None:
@@ -247,6 +261,7 @@ class App:
             return
 
         total = self.COVER * self.COVER * 2
+        gc.collect()
         r = None
         got = 0
         try:
