@@ -167,11 +167,49 @@ Points à connaître :
   le `.env` — le laisser commenté dans le `.env` est le bon réflexe.
 - **Servi par gunicorn**, un seul worker et plusieurs threads : SQLite supporte
   mal plusieurs processus écrivains.
-- **`JOB_SEARCH_DIR`** pointe vers le dossier du pipeline Claude cowork. S'il
-  reste sur une autre machine, il faut le rendre visible au serveur (Syncthing,
-  partage réseau…) puis décommenter le montage correspondant dans
-  `docker-compose.yml`. Sans lui, la page Jobs affiche simplement qu'aucun
+- **`JOB_SEARCH_DIR`** pointe vers le dossier du pipeline Claude cowork
+  (voir ci-dessous). Sans lui, la page Jobs affiche simplement qu'aucun
   dossier n'est configuré : le reste de l'app fonctionne normalement.
+
+### Veille emploi : du PC Windows vers le serveur
+
+Le pipeline Claude cowork tourne à 9h sur le PC Windows, mais le serveur ne
+voit pas ce disque. On lui **pousse** donc les données, plutôt que de monter un
+partage réseau qui casserait dès que le PC dort.
+
+Côté serveur, une fois :
+
+```bash
+sudo mkdir -p /srv/recherche-cdi
+sudo chown "$USER:$USER" /srv/recherche-cdi
+echo 'JOB_SEARCH_DIR=/srv/recherche-cdi' >> ~/awen/.env
+```
+
+Côté Windows, après chaque passage du pipeline :
+
+```powershell
+.\scripts\sync-jobs.ps1
+```
+
+Le script ne copie que `Veille quotidienne/` et `Lettres de motivation/` — les
+deux seuls dossiers lus par `app/services/job_watch.py`. Les CV et notes
+d'entretien restent sur le PC.
+
+Pour l'automatiser à 9h30, une fois :
+
+```powershell
+schtasks /create /tn "Awen - sync veille emploi" /sc daily /st 09:30 ^
+  /tr "powershell -NoProfile -ExecutionPolicy Bypass -File \"%USERPROFILE%\awen\scripts\sync-jobs.ps1\""
+```
+
+La tâche suppose un alias SSH `awen` dans `~/.ssh/config` :
+
+```
+Host awen
+    HostName 192.168.1.32
+    User sscalbert
+    IdentityFile ~/.ssh/id_ed25519
+```
 
 ## Dépannage
 
@@ -193,8 +231,12 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 - [x] Recettes / meal prep + liste de courses en portions
 - [x] Calendrier (séances + planning + événements Samsung ICS)
 - [x] Module recherche d'emploi (veille quotidienne du pipeline Claude cowork)
-- [ ] Endpoint JSON ESP32 + firmware ([esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display))
-- [ ] Script auto-update sur commit (webhook Git)
+- [x] Statistiques (tableau de bord, page par exercice, graphiques SVG)
+- [x] Déploiement Docker + auto-update et sauvegardes sur le serveur maison
+- [x] Coach à base de règles (RIR, stagnation, deload, pesées, tests de détente)
+- [x] Endpoint JSON ESP32
+- [ ] Firmware de l'afficheur ([esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display))
+- [ ] Assistant vocal local sur le GPU du serveur
 
 ## Licence
 

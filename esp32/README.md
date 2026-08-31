@@ -31,12 +31,21 @@ Réponse JSON (chaînes pré-formatées pour l'affichage) :
   "jobs": {
     "n": 1,
     "titles": ["Data Engineer Junior - Sancare"]
+  },
+  "coach": {
+    "level": "warn",
+    "icon": "⚠️",
+    "text": "Extension triceps - charge inadaptee"
   }
 }
 ```
 
 - `gym.today` vaut `""` les jours de repos ; `missed` compte les jours
-  d'entraînement (lun/mer/ven/sam) passés depuis la dernière séance.
+  d'entraînement (lun/mer/ven) passés depuis la dernière séance.
+- `coach` est le conseil prioritaire du moteur de règles, déjà tronqué à
+  38 caractères pour tenir sur les 240 px de large. `level` vaut `info`,
+  `warn` ou `alert` — de quoi choisir la couleur du texte. Les trois champs
+  sont vides quand il n'y a rien à signaler.
 - `jobs` reflète la veille du jour du pipeline Claude cowork (page Jobs).
 - L'état up/down de l'app n'est pas dans le JSON : c'est le succès ou
   l'échec de la requête elle-même qui le donne.

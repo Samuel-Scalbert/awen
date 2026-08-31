@@ -1,0 +1,5 @@
+# Le depot est edite sous Windows mais execute sous Linux : les scripts shell
+# doivent rester en LF, sinon le noyau lit « #!/bin/bash\r » et refuse tout.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
