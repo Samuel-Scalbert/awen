@@ -61,41 +61,62 @@ def test_led():
 
 
 def probe_data_line():
-    """La ligne DATA est-elle seulement tiree au niveau haut ?
+    """Deux lectures qui, ensemble, designent le coupable.
 
-    Au repos, un DHT11 correctement alimente laisse sa ligne DATA au niveau
-    haut grace a sa resistance de tirage. Ce simple test separe deux pannes
-    que « ETIMEDOUT » confond :
+    SANS tirage interne, au repos : un DHT11 alimente tient sa ligne DATA au
+    niveau haut par sa propre resistance.
 
-      - au niveau BAS en permanence : rien ne tire la ligne. Capteur non
-        alimente, masse absente, resistance de tirage manquante, ou fil
-        DATA sur la mauvaise broche.
-      - au niveau HAUT : le cablage porte, le capteur est alimente, et le
-        probleme est dans le dialogue lui-meme.
+      haut      le cablage porte et le capteur est alimente ; le probleme
+                est dans le dialogue lui-meme.
+      bas       rien ne tire la ligne vers le haut.
+      instable  la ligne flotte : DATA n'est reliee a rien.
 
-    On lit SANS tirage interne : avec PULL_UP, la broche lirait 1 meme si
-    rien n'est branche, et le test ne prouverait rien.
+    AVEC le tirage interne (~45 kOhm), on tranche le cas « bas », qui a deux
+    causes opposees :
+
+      redevient haut   personne ne tire vers le bas. Le module n'est donc pas
+                       alimente — mauvais contact du 3V3 ou de la masse sur
+                       la platine, le cas le plus frequent — ou il n'a pas
+                       de resistance de tirage.
+      reste bas        quelque chose tire activement vers la masse et gagne
+                       contre 45 kOhm. C'est un court-circuit : capteur mort,
+                       ou fil DATA en realite sur la masse.
+
+    Sans ce second essai, les deux se presentent identiquement et on cherche
+    un capteur mort alors qu'un fil est simplement mal enfonce.
     """
     p = Pin(DHT_PIN, Pin.IN)
-    hauts = sum(p.value() for _ in range(50))
-    if hauts >= 45:
-        return "haut", hauts
-    if hauts <= 5:
-        return "bas", hauts
-    return "instable", hauts
+    libre = sum(p.value() for _ in range(50))
+    p = Pin(DHT_PIN, Pin.IN, Pin.PULL_UP)
+    time.sleep_ms(5)
+    tire = sum(p.value() for _ in range(50))
+    if libre >= 45:
+        return "haut", libre, tire
+    if libre <= 5:
+        return "bas", libre, tire
+    return "instable", libre, tire
 
 
 def test_dht():
     line("=== DHT11 (GPIO {}) ===".format(DHT_PIN))
-    etat, hauts = probe_data_line()
-    line("  ligne DATA au repos : {} ({}/50 lectures a 1)".format(etat, hauts))
+    etat, libre, tire = probe_data_line()
+    line("  ligne DATA au repos    : {} ({}/50 a 1)".format(etat, libre))
+    line("  avec tirage interne    : {}/50 a 1".format(tire))
     if etat == "bas":
-        line("  -> RIEN NE TIRE LA LIGNE. Avant d'aller plus loin, verifie :")
-        line("     le capteur est-il alimente (VCC au 3V3, GND au GND) ?")
-        line("     le fil DATA est-il bien sur GPIO {} ?".format(DHT_PIN))
-        line("     capteur nu sans module : 10 kOhm entre DATA et 3V3.")
+        if tire >= 45:
+            line("  -> LE MODULE N'EST PAS ALIMENTE. Personne ne tire vers le")
+            line("     bas : la ligne remonte des qu'on la tire vers le haut.")
+            line("     Le capteur n'est donc pas mort — c'est le 3V3 ou la")
+            line("     masse qui n'arrive pas. Reenfonce les trois fils, et")
+            line("     verifie que la rangee de la platine est bien alimentee.")
+        else:
+            line("  -> COURT-CIRCUIT VERS LA MASSE. Quelque chose tire la")
+            line("     ligne vers le bas et gagne contre 45 kOhm. Soit le fil")
+            line("     DATA est en fait sur la masse, soit le capteur est HS.")
+            line("     Debranche le module et relance : si la ligne devient")
+            line("     instable, c'est bien le capteur.")
     elif etat == "instable":
-        line("  -> la ligne flotte : DATA n'est probablement reliee a rien.")
+        line("  -> la ligne flotte : DATA n'est reliee a rien.")
 
     try:
         import dht
