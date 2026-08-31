@@ -1,7 +1,8 @@
 # Afficheur Awen — firmware MicroPython
 
 Les sept écrans de [`esp32/mockups.py`](../mockups.py), transposés en
-MicroPython. Grille 30×20, police bitmap 8×16, redessin partiel.
+MicroPython pour le pilote `st7789_min.py` d'esp32-desk-display. Grille 30×20,
+police 8×8 sur un pas de 16, redessin partiel.
 
 ```
 theme.py     palettes RGB565 (ambre, phosphore, glacier)
@@ -14,30 +15,43 @@ main.py      cablage materiel  <- le seul fichier a adapter
 
 ## Ce que le firmware suppose
 
-Écrit contre **[russhughes/st7789_mpy](https://github.com/russhughes/st7789_mpy)**
-et sa police `vga1_8x16`, qui donne exactement 30 colonnes sur 20 lignes en
-240×320. `vga1_bold_16x32` sert à l'heure de l'écran de veille.
-
-`grid.py` n'appelle que **deux** méthodes du pilote :
+Écrit contre **ton pilote maison `st7789_min.py`** du dépôt
+[esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display).
+`grid.py` n'appelle que **deux** de ses méthodes :
 
 ```python
-display.text(font, texte, x, y, couleur, fond)
-display.fill_rect(x, y, largeur, hauteur, couleur)
+tft.text(chaine, x, y, color=..., bg=..., scale=1)   # police 8x8 integree
+tft.fill_rect(x, y, largeur, hauteur, couleur)
 ```
 
-Pour un autre pilote, adapter ces deux appels suffit.
+### La grille, et pourquoi 20 lignes et pas 40
+
+240 ÷ 8 = **30 colonnes**. La police intégrée de `framebuf` fait 8 pixels de
+haut, ce qui donnerait 40 lignes — mais on prend un pas vertical de **16**,
+soit 20 lignes avec 8 pixels de respiration.
+
+Ce n'est pas du gâchis. Une 8×8 collée ligne contre ligne sur 40 lignes donne
+un pavé illisible à un mètre, et l'écran est posé sur un bureau, pas tenu à la
+main. L'interligne double est aussi ce qui donne aux terminaux leur allure :
+TARS n'affiche jamais de texte serré.
+
+L'heure de l'écran de veille passe par `scale=4` — le pilote multiplie le
+glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 
 ## Câblage
 
-Boutons entre le GPIO et la masse, sans résistance externe — le tirage interne
-est activé dans `input.py`.
+L'écran vient de `tft_setup.py`, qui est déjà « le seul endroit où vivent les
+numéros de broches ». Ce firmware l'importe au lieu de les redéclarer.
 
 | Entrée | GPIO | Rôle |
 | --- | --- | --- |
-| Bouton A | 32 | écran précédent · maintenu, défile |
-| Bouton B | 33 | valider · **appui long** = retour à l'accueil |
-| Bouton C | 25 | écran suivant · maintenu, défile |
+| Bouton gauche | 26 | écran précédent · maintenu, défile |
+| Bouton sélection | 27 | valider · **appui long** = retour à l'accueil |
+| Bouton droite | 14 | écran suivant · maintenu, défile |
 | Potentiomètre | **34** | valeurs (extrémités sur 3V3 et GND, curseur sur 34) |
+
+Écran (rappel, défini dans `tft_setup.py`) : CS 5, DC 17, RST 21,
+rétroéclairage 22, SCK 18, MOSI 23, SPI 2 à 80 MHz.
 
 > **GPIO 34 n'est pas négociable.** L'ESP32 a deux convertisseurs analogiques
 > et **ADC2 cesse de fonctionner dès que le wifi est actif**. Un potard câblé
@@ -45,9 +59,6 @@ est activé dans `input.py`.
 > (des valeurs qui sautent au hasard) ne ressemble pas du tout à sa cause.
 > Les broches 32–39 sont sur ADC1 ; 34–39 sont en entrée seule, donc sans
 > tirage interne parasite.
-
-Écran (broches SPI courantes, **à vérifier contre ta carte**) : SCK 14,
-MOSI 13, DC 2, CS 15, RST 4, rétroéclairage 21.
 
 ## Navigation
 
@@ -97,6 +108,9 @@ mpremote cp theme.py grid.py input.py screens.py app.py main.py \
             awen_config.py :
 mpremote reset
 ```
+
+`st7789_min.py`, `tft_setup.py` et `wifi.py` doivent déjà être sur la carte —
+ils viennent d'esp32-desk-display et ne sont pas dupliqués ici.
 
 `awen_config.py` contient un mot de passe wifi et la clé d'API : il est dans
 le `.gitignore`, ne le versionne jamais. `ESP32_API_KEY` doit correspondre

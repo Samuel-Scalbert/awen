@@ -7,9 +7,9 @@ reste ici, ce qui rend les écrans testables sans matériel.
 CÂBLAGE — boutons entre le GPIO et la masse, sans résistance externe : le
 tirage interne est activé, un bouton relâché lit donc 1 et enfoncé 0.
 
-    A (gauche)  GPIO 32     precedent
-    B (milieu)  GPIO 33     valider  /  appui long = accueil
-    C (droite)  GPIO 25     suivant
+    A (gauche)  GPIO 26     precedent            \
+    B (select)  GPIO 27     valider / appui long  > repris de buttons.py
+    C (droite)  GPIO 14     suivant              /
     potard      GPIO 34     valeurs  (extremes sur 3V3 et GND, curseur ici)
 
 GPIO 34 n'est pas un choix esthétique. L'ESP32 a deux convertisseurs
@@ -133,7 +133,7 @@ class Pot:
 class Input:
     """Toutes les entrées derrière un seul poll()."""
 
-    def __init__(self, pin_a=32, pin_b=33, pin_c=25, pot=34):
+    def __init__(self, pin_a=26, pin_b=27, pin_c=14, pot=34):
         # A et C se répètent quand on les maintient : c'est ce qui permet de
         # faire défiler sans toucher au potard. B ne se répète pas — son
         # appui long a un sens à lui.

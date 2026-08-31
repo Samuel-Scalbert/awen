@@ -44,8 +44,8 @@ POT_TOLERANCE = 3        # % d'écart sous lequel le potard reprend la main
 
 
 class App:
-    def __init__(self, display, font, bigfont, config):
-        self.g = Grid(display, font, PAL, bigfont)
+    def __init__(self, display, config):
+        self.g = Grid(display, PAL)
         self.io = Input(**config.get("pins", {}))
         self.cfg = config
 

@@ -21,7 +21,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 240, 320
-CW, CH = 8, 16          # police 8x16 -> 30 colonnes x 20 lignes
+CW, CH = 8, 16          # cellule : 8 de large, 16 de haut -> 30 x 20
+GLYPH = 8               # la police integree de framebuf fait 8x8
+YOFF = (CH - GLYPH) // 2
 COLS, ROWS = W // CW, H // CH
 
 FONT_PATH = r"C:\Windows\Fonts\consola.ttf"
@@ -49,16 +51,22 @@ class Screen:
         self.p = pal
         self.img = Image.new("RGB", (W, H), pal["bg"])
         self.d = ImageDraw.Draw(self.img)
-        self.font = ImageFont.truetype(FONT_PATH, 14)
-        self.bold = ImageFont.truetype(FONT_BOLD, 14)
+        # Taille calee sur la police 8x8 de la carte, pas sur ce qui est
+        # joli ici : une maquette plus fine que la machine ment.
+        self.font = ImageFont.truetype(FONT_PATH, 11)
+        self.bold = ImageFont.truetype(FONT_BOLD, 11)
 
     def text(self, col, row, s, color="fg", bold=False):
-        """Ecrit sur la grille, un caractere par cellule."""
+        """Ecrit sur la grille, un caractere par cellule.
+
+        Le glyphe fait 8 px de haut dans une cellule de 16 : on le centre.
+        """
         f = self.bold if bold else self.font
         c = self.p[color] if isinstance(color, str) else color
         for i, ch in enumerate(s):
             if 0 <= col + i < COLS:
-                self.d.text(((col + i) * CW, row * CH + 1), ch, font=f, fill=c)
+                self.d.text(((col + i) * CW, row * CH + YOFF - 2), ch,
+                            font=f, fill=c)
 
     def right(self, row, s, color="fg", bold=False):
         self.text(COLS - len(s), row, s, color, bold)
@@ -66,8 +74,15 @@ class Screen:
     def center(self, row, s, color="fg", bold=False):
         self.text((COLS - len(s)) // 2, row, s, color, bold)
 
-    def rule(self, row, color="dim", char="\u2500"):
-        self.text(0, row, char * COLS, color)
+    def rule(self, row, color="dim"):
+        """Filet d'un pixel, en rectangle comme grid.rule() sur la machine.
+
+        Surtout pas un caractere de filet : a cette taille il ne remplit pas
+        sa cellule et la ligne sort en pointilles.
+        """
+        c = self.p[color] if isinstance(color, str) else color
+        y = row * CH + CH - 1
+        self.d.rectangle([0, y, W - 1, y], fill=c)
 
     def bar(self, col, row, width, pct, color="fg"):
         """Jauge en rectangles, exactement comme grid.bar() sur la machine.
@@ -89,12 +104,36 @@ class Screen:
                              fill=self.p["dim"])
 
     def frame(self, col, row, width, height, color="dim"):
-        self.text(col, row, "\u250c" + "\u2500" * (width - 2) + "\u2510", color)
-        for r in range(row + 1, row + height - 1):
-            self.text(col, r, "\u2502", color)
-            self.text(col + width - 1, r, "\u2502", color)
-        self.text(col, row + height - 1,
-                  "\u2514" + "\u2500" * (width - 2) + "\u2518", color)
+        """Cadre d'un pixel, en rectangles \u2014 meme raison que rule()."""
+        c = self.p[color] if isinstance(color, str) else color
+        x, y = col * CW, row * CH
+        w, h = width * CW, height * CH
+        self.d.rectangle([x, y, x + w - 1, y], fill=c)
+        self.d.rectangle([x, y + h - 1, x + w - 1, y + h - 1], fill=c)
+        self.d.rectangle([x, y, x, y + h - 1], fill=c)
+        self.d.rectangle([x + w - 1, y, x + w - 1, y + h - 1], fill=c)
+
+    def big(self, col, row, s, scale=4, color="hi"):
+        """Texte agrandi, comme le fait le pilote : un glyphe 8x8 multiplie.
+
+        On rend petit puis on agrandit au plus proche voisin, exactement
+        comme st7789_min.text(scale=N). Rendre directement une grande police
+        vectorielle donnerait des courbes lisses que la carte ne produira
+        jamais.
+        """
+        c = self.p[color] if isinstance(color, str) else color
+        # Seuillage en 1 bit avant l'agrandissement : la carte n'a que des
+        # pixels allumes ou eteints. Sans ca, l'antialiasing de la police
+        # vectorielle produirait des bords gris que le materiel ne fera pas.
+        mask = Image.new("L", (GLYPH * len(s), GLYPH), 0)
+        md = ImageDraw.Draw(mask)
+        for i, ch in enumerate(s):
+            md.text((i * GLYPH, -2), ch, font=self.font, fill=255)
+        mask = mask.point(lambda v: 255 if v > 110 else 0)
+        tmp = Image.new("RGB", mask.size, self.p["bg"])
+        tmp.paste(c, mask=mask)
+        tmp = tmp.resize((GLYPH * len(s) * scale, GLYPH * scale), Image.NEAREST)
+        self.img.paste(tmp, (col * CW, row * CH))
 
     def cursor(self, col, row, color="hi"):
         self.d.rectangle([col * CW, row * CH + 2,
@@ -145,8 +184,8 @@ def s_home(p):
     s.right(0, "\u2588 EN LIGNE", "fg")
     s.rule(1)
 
-    big = ImageFont.truetype(FONT_BOLD, 62)
-    s.d.text((W // 2, 74), "21:47", font=big, fill=p["hi"], anchor="mm")
+    # 5 caracteres en 32x32 (echelle 4) : 160 px, centres sur 240.
+    s.big(5, 3, "21:47", scale=4)
 
     s.rule(7)
     s.text(1, 9, "PROCHAINE SEANCE", "dim")

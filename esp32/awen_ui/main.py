@@ -1,50 +1,39 @@
-"""Point d'entrée : câblage du matériel, puis on passe la main à App.
+"""Point d'entrée de l'afficheur Awen.
 
-C'est le seul fichier à retoucher pour changer de carte ou de pilote. Tout le
-reste du dossier ignore délibérément quel écran est branché.
+Ce fichier ne déclare aucune broche d'écran. `tft_setup.py`, dans le dépôt
+esp32-desk-display, est déjà « le seul endroit où vivent les numéros de
+broches » — le dupliquer ici garantirait qu'un jour les deux divergent.
 
-Copie awen_config.example.py en awen_config.py et renseigne-le : ce fichier-là
-contient la clé d'API et le mot de passe wifi, il ne doit jamais partir sur
-GitHub.
+    Ecran   CS 5, DC 17, RST 21, retroeclairage 22, SCK 18, MOSI 23
+    Boutons gauche 26, selection 27, droite 14   (buttons.py)
+    Potard  34                                   (a cabler)
+
+À copier sur la carte, à côté de st7789_min.py, tft_setup.py et wifi.py.
+Copie awen_config.example.py en awen_config.py et renseigne-le : il contient
+la clé d'API et le mot de passe wifi, il ne doit jamais partir sur GitHub.
 """
-from machine import Pin, SPI
-import st7789
-import vga1_8x16 as font
-import vga1_bold_16x32 as bigfont
+from tft_setup import tft
 
 import awen_config
 from app import App
 
-# ---- écran ---------------------------------------------------------------
-# Broches d'une carte ESP32 + ST7789 240x320 courante. Vérifie-les contre ta
-# propre carte : c'est la première chose qui casse d'un modèle à l'autre.
-SPI_ID = 1
-PIN_SCK, PIN_MOSI = 14, 13
-PIN_DC, PIN_CS, PIN_RST, PIN_BL = 2, 15, 4, 21
+# Les numéros repris de buttons.py. On ne réutilise pas ses objets Pin :
+# input.py a besoin de créer les siens pour gérer l'anti-rebond, les appuis
+# longs et la répétition, dont buttons.py ne s'occupe pas.
+BTN_LEFT, BTN_SELECT, BTN_RIGHT = 26, 27, 14
 
-# baudrate au maximum supporté : le redessin partiel économise déjà beaucoup,
-# mais un SPI lent se voit malgré tout sur les grandes zones.
-spi = SPI(SPI_ID, baudrate=40000000, polarity=1,
-          sck=Pin(PIN_SCK), mosi=Pin(PIN_MOSI))
+# Le potard DOIT être sur ADC1 (GPIO 32-39) : ADC2 cesse de fonctionner dès
+# que le wifi est actif. 34 est libre sur cette carte et en entrée seule,
+# donc sans tirage interne parasite. Voir input.py.
+POT = 34
 
-display = st7789.ST7789(
-    spi, 240, 320,
-    reset=Pin(PIN_RST, Pin.OUT),
-    cs=Pin(PIN_CS, Pin.OUT),
-    dc=Pin(PIN_DC, Pin.OUT),
-    backlight=Pin(PIN_BL, Pin.OUT),
-    rotation=0)
-display.init()
-
-# ---- application ---------------------------------------------------------
-app = App(display, font, bigfont, {
+app = App(tft, {
     "ssid": awen_config.WIFI_SSID,
     "password": awen_config.WIFI_PASSWORD,
     "base_url": awen_config.AWEN_URL,
     "api_key": awen_config.ESP32_API_KEY,
-    # Le potard DOIT être sur ADC1 (GPIO 32-39) : ADC2 est inutilisable dès
-    # que le wifi est actif. Voir input.py.
-    "pins": {"pin_a": 32, "pin_b": 33, "pin_c": 25, "pot": 34},
+    "pins": {"pin_a": BTN_LEFT, "pin_b": BTN_SELECT,
+             "pin_c": BTN_RIGHT, "pot": POT},
 })
 
 app.run()

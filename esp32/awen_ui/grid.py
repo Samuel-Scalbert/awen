@@ -1,42 +1,51 @@
 """Rendu sur la grille 30x20 de l'écran, avec redessin partiel.
 
-L'écran fait 240x320 et la police vga1_8x16 fait 8x16 pixels : la surface se
-découpe donc exactement en 30 colonnes sur 20 lignes.
+Écrit pour le pilote maison `st7789_min.py` du dépôt esp32-desk-display, dont
+l'API est :
 
-Le point important de ce module n'est pas de savoir écrire du texte, c'est de
-savoir ne PAS le réécrire. Repeindre les 240x320 pixels coûte une trentaine de
-millisecondes en MicroPython ; à une image par seconde pour une horloge, ça se
-voit et ça clignote. On garde donc une copie de ce qui est réellement affiché
-et, à chaque flush, on ne redessine que les cellules qui ont changé. Une
-horloge qui passe de 21:47 à 21:48 ne coûte qu'une cellule.
+    tft.text(chaine, x, y, color=..., bg=..., scale=1)   police 8x8 integree
+    tft.fill_rect(x, y, largeur, hauteur, couleur)
 
-Les caractères sont volontairement limités à l'ASCII : la police bitmap
-embarquée n'a ni accents ni flèches, et un caractère absent sort en rectangle
-vide. Écris « SEANCE », pas « SÉANCE ».
+LA GRILLE
+
+240 / 8 = 30 colonnes. La police fait 8 pixels de haut, mais on prend un pas
+vertical de 16 : 20 lignes, avec 8 pixels de respiration entre elles.
+
+Ce n'est pas un gâchis de place. Une police 8x8 collée ligne contre ligne sur
+40 lignes donne un pavé illisible à un mètre, et l'écran est posé sur un
+bureau, pas tenu à la main. L'espacement double est aussi ce qui donne aux
+terminaux leur allure — TARS n'affiche jamais de texte serré.
+
+Le glyphe est centré verticalement dans sa cellule (+4 px).
+
+POURQUOI TOUT CE MÉCANISME DE COPIE
+
+Repeindre 240x320 coûte une trentaine de millisecondes en MicroPython : à une
+image par seconde pour une horloge, ça clignote et ça rame. On garde donc une
+copie de ce qui est réellement affiché et on ne redessine que les cellules qui
+ont changé, en regroupant les voisines de mêmes couleurs en un seul appel.
+Une horloge qui passe de 21:47 à 21:48 ne coûte qu'une cellule.
+
+Les caractères sont limités à l'ASCII : la police intégrée de framebuf n'a ni
+accents ni flèches. Écris « SEANCE », pas « SÉANCE ».
 """
 from array import array
 
 COLS, ROWS = 30, 20
-CW, CH = 8, 16
+CW, CH = 8, 16          # cellule : 8 de large, 16 de haut
+GLYPH = 8               # la police, elle, fait 8x8
+YOFF = (CH - GLYPH) // 2
 N = COLS * ROWS
 
 _SPACE = 32
 
 
 class Grid:
-    """Une grille de caractères qui se redessine le moins possible.
+    """Une grille de caractères qui se redessine le moins possible."""
 
-    display doit fournir deux méthodes seulement, ce qui rend le portage vers
-    un autre pilote trivial :
-        display.text(font, texte, x, y, couleur_texte, couleur_fond)
-        display.fill_rect(x, y, largeur, hauteur, couleur)
-    """
-
-    def __init__(self, display, font, palette, bigfont=None):
+    def __init__(self, display, palette):
         self.d = display
-        self.f = font
         self.p = palette
-        self.bigfont = bigfont
 
         # Ce qu'on veut voir.
         self.ch = bytearray(N)
@@ -49,8 +58,8 @@ class Grid:
         self.sfg = array("H", [0] * N)
         self.sbg = array("H", [0] * N)
 
-        # Mémo des tracés hors grille (jauges, filets, cadres) : on ne les
-        # redessine que quand leur valeur change vraiment.
+        # Mémo des tracés hors grille (jauges, filets, cadres, gros texte) :
+        # on ne les redessine que quand leur valeur change vraiment.
         self._gfx = {}
 
         self.clear()
@@ -100,16 +109,18 @@ class Grid:
     def flush(self):
         """Envoie à l'écran les seules cellules qui ont changé.
 
-        On regroupe les cellules voisines qui partagent les mêmes couleurs en
-        une seule chaîne : un appel au pilote pour vingt caractères coûte
-        beaucoup moins que vingt appels d'un caractère.
+        Deux appels par zone sale : un rectangle pour repeindre toute la
+        hauteur de cellule, puis le texte. Le pilote ne peint le fond que sur
+        les 8 pixels du glyphe ; sans le rectangle, la moitié basse d'une
+        cellule garderait ce qu'il y avait avant.
         """
-        d, f = self.d, self.f
+        d = self.d
         ch, fg, bg = self.ch, self.fg, self.bg
         sch, sfg, sbg = self.sch, self.sfg, self.sbg
 
         for row in range(ROWS):
             base = row * COLS
+            y = row * CH
             col = 0
             while col < COLS:
                 k = base + col
@@ -132,13 +143,15 @@ class Grid:
                     sch[k], sfg[k], sbg[k] = ch[k], cf, cb
                     col += 1
 
-                d.text(f, "".join(buf), start * CW, row * CH, cf, cb)
+                x = start * CW
+                w = (col - start) * CW
+                d.fill_rect(x, y, w, CH, cb)
+                d.text("".join(buf), x, y + YOFF, color=cf, bg=cb)
 
     # ------------------------------------------------------------ graphiques
     #
-    # Filets, cadres et jauges ne passent pas par la grille de caractères :
-    # les tracer en rectangles est plus net et plus rapide que d'aligner des
-    # caractères de remplissage.
+    # Filets, cadres, jauges et gros texte ne passent pas par la grille de
+    # caractères : les tracer directement est plus net et plus rapide.
 
     def rule(self, row, color=None):
         """Filet horizontal d'un pixel, en bas de la ligne indiquée."""
@@ -205,26 +218,27 @@ class Grid:
 
         self._gfx[key] = (filled, c)
 
-    def big(self, col, row, s, fg=None):
-        """Texte à la grande police (16x32), pour l'heure de l'écran de veille.
+    def big(self, col, row, s, scale=4, fg=None):
+        """Texte agrandi, pour l'heure de l'écran de veille.
 
-        Occupe deux colonnes et deux lignes par caractère. Sans bigfont
-        déclarée, on retombe sur la police normale plutôt que de planter.
+        Le pilote multiplie le glyphe 8x8 par `scale` : 4 donne du 32x32,
+        soit quatre colonnes et deux lignes par caractère. On mémorise la
+        chaîne pour ne pas la retracer soixante fois par seconde.
         """
-        if self.bigfont is None:
-            self.text(col, row, s, fg)
-            return
         key = ("big", col, row)
         c = self.p.HI if fg is None else fg
-        if self._gfx.get(key) == (s, c):
-            return
         prev = self._gfx.get(key)
-        self._gfx[key] = (s, c)
+        if prev == (s, c, scale):
+            return
+        self._gfx[key] = (s, c, scale)
+
         x, y = col * CW, row * CH
+        gw = GLYPH * scale
         if prev is not None and len(prev[0]) > len(s):
-            # Le texte a raccourci : on efface l'ancienne emprise.
-            self.d.fill_rect(x, y, len(prev[0]) * 16, 32, self.p.BG)
-        self.d.text(self.bigfont, s, x, y, c, self.p.BG)
+            # Le texte a raccourci : on efface l'ancienne emprise, sinon un
+            # « 9:05 » laisserait un chiffre orphelin de « 12:05 ».
+            self.d.fill_rect(x, y, len(prev[0]) * gw, gw, self.p.BG)
+        self.d.text(s, x, y, color=c, bg=self.p.BG, scale=scale)
 
     def wipe(self):
         """Efface physiquement l'écran et invalide tout.

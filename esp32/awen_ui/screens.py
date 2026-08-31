@@ -134,8 +134,8 @@ class Home(Screen):
                 g.p.FG if online else g.p.ALERT)
         g.rule(1)
 
-        # 5 caractères en 16x32 : 80 px, centrés sur 240.
-        g.big(10, 3, st.get("time", "--:--"))
+        # 5 caractères en 32x32 (echelle 4) : 160 px, centrés sur 240.
+        g.big(5, 3, st.get("time", "--:--"), scale=4)
 
         g.rule(7)
         g.text(1, 9, "PROCHAINE SEANCE", g.p.DIM)
