@@ -151,7 +151,11 @@ class Screen:
                          fill=self.p[color])
 
     def header(self, title, clock="21:47"):
+        """Barre haute, curseur compris : c'est le seul mouvement permanent
+        de l'interface, et une maquette qui l'omet donne un ecran plus mort
+        que la machine."""
         self.text(0, 0, title, "hi", bold=True)
+        self.cursor(len(title) + 1, 0)
         self.right(0, clock, "dim")
         self.rule(1)
 
@@ -191,6 +195,7 @@ def s_home(p):
     """Ecran de veille : l'heure domine, le reste chuchote."""
     s = Screen(p)
     s.text(0, 0, "LUN 31 AOU", "dim")
+    s.cursor(11, 0)
     s.right(0, "\u2588 EN LIGNE", "fg")
     s.rule(1)
 
@@ -280,11 +285,16 @@ def s_settings(p):
         ("SINCERITE", 95), ("HUMOUR", 75),
         ("INSISTANCE", 60), ("VERBOSITE", 40),
     ]
+    # HUMOUR est selectionne au demarrage, comme dans le film — et comme
+    # dans screens.py, ou Settings.sel vaut 1.
     for i, (name, val) in enumerate(params):
         r = 4 + i * 3
-        s.text(1, r, name, "hi" if i == 0 else "fg")
+        focused = i == 1
+        s.text(1, r, name, "hi" if focused else "fg")
+        if focused:
+            s.cursor(1 + len(name) + 1, r)
         s.right(r, "{:>3}%".format(val), "hi", bold=True)
-        s.bar(1, r + 1, 28, val)
+        s.bar(1, r + 1, 28, val, "fg" if focused else "dim")
 
     s.statusbar("[B] LIGNE", "POTARD : VALEUR")
     return s
@@ -353,6 +363,8 @@ def s_theme(p):
         r = 5 + i
         s.text(0, r, ">" if i == current else " ", "fg")
         s.text(2, r, name, "hi" if i == current else "dim")
+        if i == current:
+            s.cursor(2 + len(name) + 1, r)
 
     s.rule(12)
     s.text(1, 13, "APERCU", "dim")

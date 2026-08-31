@@ -170,7 +170,19 @@ Repeindre les 240×320 d'un coup produit un flash noir qui se lit comme un gel
 de l'affichage : rien ne bouge, puis tout a changé. Le balayage prend le même
 temps mais raconte ce qui se passe.
 
-Si le rythme ne te convient pas, ces deux constantes sont les seules à
+**Le curseur** bat une fois par seconde (`BLINK_MS = 530`) juste après le
+titre, sur tous les écrans. C'est le seul mouvement permanent : sans lui, un
+écran qui ne change qu'une fois par minute ne se distingue pas d'un écran
+gelé. Sur Paramètres et Thème, un second curseur marque la ligne que le
+potentiomètre commande — quatre lignes qui se ressemblent ont besoin d'un
+repère qui bouge, la surbrillance seule ne suffit pas.
+
+Il ne coûte qu'une cellule par battement grâce au redessin partiel. Ce détail
+n'est pas gratuit : `clear()` ne vide **pas** le mémo des jauges, des filets
+et du texte agrandi, sinon chaque battement les retracerait deux fois par
+seconde et l'écran scintillerait. Seul un changement d'écran purge ce mémo.
+
+Si le rythme ne te convient pas, ces trois constantes sont les seules à
 toucher. Monter `SWEEP_MS` à 25 donne une transition nettement plus posée.
 
 ## Le rattrapage du potentiomètre

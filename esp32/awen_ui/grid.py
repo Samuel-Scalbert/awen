@@ -67,12 +67,21 @@ class Grid:
     # ---------------------------------------------------------------- texte
 
     def clear(self):
-        """Vide la grille. Ne dessine rien : c'est flush() qui tranchera."""
+        """Vide la grille de caractères. Ne dessine rien : flush() tranchera.
+
+        Le mémo des tracés hors grille (jauges, filets, cadres, gros texte)
+        n'est délibérément PAS vidé ici. clear() est appelé avant chaque
+        image, y compris pour le simple battement du curseur : purger le mémo
+        ferait retracer toutes les jauges et tout le texte agrandi deux fois
+        par seconde, ce qui se verrait comme un scintillement — précisément
+        ce que le redessin partiel existe pour éviter.
+
+        Le mémo n'est purgé qu'au changement d'écran, par _invalidate().
+        """
         for i in range(N):
             self.ch[i] = _SPACE
             self.fg[i] = self.p.FG
             self.bg[i] = self.p.BG
-        self._gfx.clear()
 
     def text(self, col, row, s, fg=None, bg=None):
         """Écrit sur la grille, une cellule par caractère."""

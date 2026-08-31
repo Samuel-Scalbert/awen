@@ -28,9 +28,19 @@ from input import BTN_A, BTN_B, BTN_C, POT, SHORT, LONG, REPEAT
 import theme
 
 
-def _header(g, title, clock):
+def _header(g, title, st):
+    """Barre haute, avec le curseur qui clignote juste après le titre.
+
+    C'est le seul mouvement permanent de l'interface. Sans lui un écran
+    immobile ne se distingue pas d'un écran gelé — surtout ici, où presque
+    rien ne bouge entre deux rafraîchissements espacés de trente secondes.
+    Un bloc qui bat une fois par seconde suffit à dire que la machine vit.
+
+    Il ne coûte qu'une cellule par battement, grâce au redessin partiel.
+    """
     g.text(0, 0, title, g.p.HI)
-    g.right(0, clock, g.p.DIM)
+    g.cursor(len(title) + 1, 0, st.get("blink", True))
+    g.right(0, st.get("time", ""), g.p.DIM)
     g.rule(1)
 
 
@@ -129,7 +139,9 @@ class Home(Screen):
 
     def draw(self, g, st, app):
         gym = st.get("gym", {})
-        g.text(0, 0, st.get("date", "").upper(), g.p.DIM)
+        date = st.get("date", "").upper()
+        g.text(0, 0, date, g.p.DIM)
+        g.cursor(len(date) + 1, 0, st.get("blink", True))
         online = st.get("online", True)
         g.right(0, "EN LIGNE" if online else "HORS LIGNE",
                 g.p.FG if online else g.p.ALERT)
@@ -192,8 +204,7 @@ class Gym(Screen):
     def draw(self, g, st, app):
         gym = st.get("gym", {})
         rows = self._rows(st)
-        _header(g, "SEANCE {}".format(gym.get("session_no", "--")),
-                st.get("time", ""))
+        _header(g, "SEANCE {}".format(gym.get("session_no", "--")), st)
 
         focus = (gym.get("focus") or "REPOS").upper()
         g.big(1, 3, focus[:8], 2)
@@ -233,7 +244,7 @@ class Coach(Screen):
 
     def draw(self, g, st, app):
         c = st.get("coach", {})
-        _header(g, "COACH", st.get("time", ""))
+        _header(g, "COACH", st)
 
         if not c.get("text"):
             g.text(1, 8, "RIEN A SIGNALER", g.p.DIM)
@@ -311,7 +322,7 @@ class Jobs(Screen):
     def draw(self, g, st, app):
         jobs = st.get("jobs", {})
         offers = self._offers(st)
-        _header(g, "VEILLE EMPLOI", st.get("time", ""))
+        _header(g, "VEILLE EMPLOI", st)
 
         n = jobs.get("n", len(offers))
         g.text(1, 3, str(n), g.p.HI)
@@ -358,7 +369,7 @@ class Spotify(Screen):
 
     def draw(self, g, st, app):
         sp = st.get("spotify", {})
-        _header(g, "> SPOTIFY", st.get("time", ""))
+        _header(g, "> SPOTIFY", st)
 
         if not sp.get("device"):
             g.text(1, 8, "AUCUN APPAREIL", g.p.DIM)
@@ -436,11 +447,16 @@ class Settings(Screen):
         app.dirty = True
 
     def draw(self, g, st, app):
-        _header(g, "PARAMETRES", st.get("time", ""))
+        _header(g, "PARAMETRES", st)
         for i, name in enumerate(self.KEYS):
             r = 4 + i * 3
             focused = i == self.sel
             g.text(1, r, name, g.p.HI if focused else g.p.FG)
+            # Le curseur marque la ligne que le potard commande. Une simple
+            # mise en surbrillance ne suffirait pas : sur cet ecran quatre
+            # lignes se ressemblent, et rien d'autre ne bouge.
+            if focused:
+                g.cursor(1 + len(name) + 1, r, st.get("blink", True))
             g.right(r, "{:>3}%".format(self.values[i]), g.p.HI)
             g.bar(1, r + 1, 28, self.values[i],
                   g.p.FG if focused else g.p.DIM)
@@ -492,7 +508,7 @@ class Theme(Screen):
             self.saved = False
 
     def draw(self, g, st, app):
-        _header(g, "THEME", st.get("time", ""))
+        _header(g, "THEME", st)
 
         cur = self._index(app)
         g.big(1, 3, g.p.name[:10], 2)
@@ -503,6 +519,8 @@ class Theme(Screen):
             mark = ">" if i == cur else " "
             g.text(0, r, mark, g.p.FG)
             g.text(2, r, p.name, g.p.HI if i == cur else g.p.DIM)
+            if i == cur:
+                g.cursor(2 + len(p.name) + 1, r, st.get("blink", True))
 
         # Un echantillon des cinq roles, pour juger la palette sur piece
         # plutot que sur son nom.
