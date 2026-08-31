@@ -21,3 +21,8 @@ class Config:
     ESP32_API_KEY = os.getenv("ESP32_API_KEY", "change-me")
     # Dossier du pipeline Claude cowork de recherche d'emploi
     JOB_SEARCH_DIR = os.getenv("JOB_SEARCH_DIR", "")
+    # Spotify. Le jeton vit ici et pas sur l'ESP32 : sur une carte il serait
+    # en clair, lisible en branchant un câble, et irrévocable sans reflasher.
+    SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "")
+    SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
+    SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN", "")

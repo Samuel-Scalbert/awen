@@ -17,6 +17,7 @@ from flask import Blueprint, abort, current_app, jsonify, request
 from ..models import ProgramExercise, Workout, db
 from ..services.coach import analyse, apply_advice
 from ..services.job_watch import get_daily_reports
+from ..services import spotify as spotify_svc
 from ..services.progression import (CYCLE, TRAINING_WEEKDAYS,
                                     next_session_type, plan_upcoming)
 
@@ -130,6 +131,23 @@ def _coach_block():
     }
 
 
+def _spotify_block():
+    """L'état de lecture, tronqué aux 28 colonnes utiles de l'écran."""
+    sp = spotify_svc.now_playing()
+    if sp is None:
+        return {"device": ""}          # non configuré : l'écran le dira
+    return {
+        "title": _ascii(sp["title"])[:56],
+        "artist": _ascii(sp["artist"])[:28],
+        "album": _ascii(sp["album"])[:28],
+        "position_s": sp["position_s"],
+        "duration_s": sp["duration_s"],
+        "volume": sp["volume"],
+        "playing": sp["playing"],
+        "device": _ascii(sp["device"])[:12],
+    }
+
+
 @bp.route("/summary")
 def summary():
     _check_key()
@@ -198,7 +216,17 @@ def summary():
             "offers": offers,
         },
         "coach": _coach_block(),
+        "spotify": _spotify_block(),
     })
+
+
+@bp.route("/spotify", methods=["POST"])
+def spotify_action():
+    """Télécommande : play, pause, toggle, next, previous, volume."""
+    _check_key()
+    body = request.get_json(silent=True) or {}
+    ok, detail = spotify_svc.command(body.get("action", ""), body.get("value"))
+    return jsonify(ok=ok, detail=detail), (200 if ok else 502)
 
 
 @bp.route("/advice", methods=["POST"])
