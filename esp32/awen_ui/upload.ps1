@@ -137,18 +137,28 @@ try {
     # au demarrage ; awen_config.py aussi, pour rester lisible sur la carte.
     $Raw = @('main.py', 'awen_config.py')
     $tmp = Join-Path $env:TEMP 'awen-mpy'
+    # On reutilise l'interpreteur trouve pour mpremote, jamais `python` du
+    # PATH : sur cette machine il repond « No pyvenv.cfg file » et la
+    # detection concluait a tort que mpy-cross etait absent.
+    $py = if ($tool.Pre.Count) { $tool.Exe } else { $null }
+    if (-not $py) {
+        foreach ($c in @('py', 'python')) {
+            if (Get-Command $c -ErrorAction Ignore) {
+                & $c -c "import mpy_cross" 2>$null
+                if ($LASTEXITCODE -eq 0) { $py = $c; break }
+            }
+        }
+    }
     $useMpy = $false
-    if (-not $NoMpy) {
-        try {
-            python -c "import mpy_cross" 2>$null
-            $useMpy = ($LASTEXITCODE -eq 0)
-        } catch { $useMpy = $false }
+    if (-not $NoMpy -and $py) {
+        & $py -c "import mpy_cross" 2>$null
+        $useMpy = ($LASTEXITCODE -eq 0)
     }
     if ($useMpy) {
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
         foreach ($f in ($Files | Where-Object { $Raw -notcontains $_ })) {
             $out = Join-Path $tmp ($f -replace '\.py$', '.mpy')
-            python -m mpy_cross -o $out $f
+            & $py -m mpy_cross -o $out $f
             if ($LASTEXITCODE -ne 0) { throw "mpy-cross a echoue sur $f" }
         }
         $saved = ($Files | Where-Object { $Raw -notcontains $_ } |
@@ -160,7 +170,12 @@ try {
             [math]::Round($saved/1KB), [math]::Round($after/1KB)) -ForegroundColor Cyan
     } else {
         Write-Host 'mpy-cross absent : envoi des .py bruts.' -ForegroundColor Yellow
-        Write-Host '  pip install mpy-cross   (recommande : moins de RAM sur la carte)'
+        Write-Host '  Installe-le avec le MEME python que mpremote :'
+        # Pas d'operateur ?? ici : c'est du PowerShell 7, et Windows
+        # PowerShell 5.1 le refuse a l'analyse — le script entier ne se
+        # chargerait meme pas.
+        $hint = if ($py) { $py } else { 'python' }
+        Write-Host ("    {0} -m pip install mpy-cross" -f $hint)
     }
 
     # --- televersement -------------------------------------------------------

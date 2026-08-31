@@ -30,6 +30,20 @@ Les caractères sont limités à l'ASCII : la police intégrée de framebuf n'a 
 accents ni flèches. Écris « SEANCE », pas « SÉANCE ».
 """
 from array import array
+import os
+
+
+def _readable(path, size):
+    """Le fichier existe-t-il et fait-il exactement la taille attendue ?
+
+    Vérification AVANT d'appeler le pilote, pas après. draw_image_file()
+    abaisse CS puis ouvre le fichier : si l'ouverture échoue, l'écran reste
+    sélectionné et le bus SPI est perdu. Mieux vaut ne pas l'appeler.
+    """
+    try:
+        return os.stat(path)[6] == size
+    except OSError:
+        return False
 
 COLS, ROWS = 30, 20
 CW, CH = 8, 16          # cellule : 8 de large, 16 de haut
@@ -38,6 +52,7 @@ YOFF = (CH - GLYPH) // 2
 N = COLS * ROWS
 
 _SPACE = 32
+BIG_PAD = 2      # respiration au-dessus du texte agrandi
 
 
 class Grid:
@@ -332,17 +347,25 @@ class Grid:
         if self._gfx.get(key) == state:
             return
         self._gfx[key] = state
-        if path is None:
-            self.d.fill_rect(col * CW, row * CH, size, size, self.p.BG)
+        x, y = col * CW, row * CH
+        if path is None or not _readable(path, size * size * 2):
+            self._gfx.pop(key, None)     # on réessaiera quand il sera là
+            self.d.fill_rect(x, y, size, size, self.p.BG)
             return
         try:
-            self.d.draw_image_file(path, col * CW, row * CH, size, size)
-        except OSError as e:
-            # Fichier absent ou tronqué : on laisse la place vide plutôt que
-            # d'écrire du bruit, et on oublie le mémo pour réessayer.
+            self.d.draw_image_file(path, x, y, size, size)
+        except Exception as e:
+            # Le pilote abaisse CS avant d'ouvrir le fichier et ne le
+            # relève qu'à la fin : une exception au milieu laisse l'écran
+            # sélectionné pour toujours et bloque le bus. On le relève
+            # nous-mêmes plutôt que de figer l'afficheur.
             print("image:", e)
+            try:
+                self.d.cs.value(1)
+            except Exception:
+                pass
             self._gfx.pop(key, None)
-            self.d.fill_rect(col * CW, row * CH, size, size, self.p.BG)
+            self.d.fill_rect(x, y, size, size, self.p.BG)
 
     def _draw_image(self, col, row, buf, size, tag):
         # Le mémo retient AUSSI la présence du tampon. Sans ça, l'affichage
@@ -378,7 +401,9 @@ class Grid:
         if prev == (s, c, scale):
             return
 
-        x, y = col * CW, row * CH
+        # Deux pixels de respiration : sans eux, un texte agrandi placé
+        # juste sous un filet le touche, et l'écran semble tassé.
+        x, y = col * CW, row * CH + BIG_PAD
         gw = GLYPH * scale
         if prev is not None and len(prev[0]) > len(s):
             # Le texte a raccourci ou disparu : on efface l'ancienne emprise,

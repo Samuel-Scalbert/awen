@@ -122,11 +122,20 @@ class App:
     def wifi_rssi(self):
         """Puissance du signal en dBm, ou None si indisponible.
 
-        Tous les portages n'exposent pas status('rssi') ; on renvoie None
-        plutôt que de faire planter l'écran sur une carte qui ne sait pas.
+        LE isconnected() N'EST PAS UNE POLITESSE
+
+        Interroger status('rssi') sur une interface qui n'est pas associée
+        descend dans esp_wifi_sta_get_ap_info(), et selon l'état de la pile
+        celle-ci appelle abort() au niveau ESP-IDF. Ce n'est pas une
+        exception Python : aucun try/except ne la rattrape, le programme
+        meurt et la carte redémarre — c'est exactement le
+        « abort() was called on core 1 » qu'on voyait au premier affichage.
         """
+        w = self.wlan
+        if w is None or not w.isconnected():
+            return None
         try:
-            return self.wlan.status("rssi") if self.wlan else None
+            return w.status("rssi")
         except Exception:
             return None
 
