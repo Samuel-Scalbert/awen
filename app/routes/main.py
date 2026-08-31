@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template
 
-from ..services import charts
+from ..services import charts, coach
 from ..services.stats import overview
 
 bp = Blueprint("main", __name__)
@@ -17,4 +17,5 @@ def index():
     volume_chart = charts.line_chart(
         [(s["date"].strftime("%d/%m"), s["volume"]) for s in o["sessions"]],
         fmt=lambda v: f"{v / 1000:.1f} t".replace(".", ",") if v >= 1000 else f"{v:g} kg")
-    return render_template("index.html", o=o, volume_chart=volume_chart)
+    return render_template("index.html", o=o, volume_chart=volume_chart,
+                           headline=coach.headline(), recap=coach.weekly_recap())

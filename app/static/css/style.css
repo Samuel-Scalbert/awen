@@ -1216,3 +1216,44 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
 .prog input { width: 3.4rem; }
 .prog td { white-space: nowrap; }
 .prog td:nth-child(2) { white-space: normal; }
+
+/* ---------- Coach ------------------------------------------------------- */
+
+/* Reps en réserve : quatre cibles tactiles, jamais un menu déroulant —
+   ça se remplit entre deux séries, une main sur la machine. */
+.rir-pick { display: flex; align-items: center; gap: .35rem; flex: 1 1 100%; flex-wrap: wrap; }
+.rir-pick > span { font-size: .82rem; margin-right: .2rem; }
+.rir-pick button {
+  min-height: 2.2rem; min-width: 2.6rem; padding: .3rem .6rem;
+  background: var(--bg-sunken); color: var(--muted-strong);
+  border: 1px solid var(--border-strong); font-size: .9rem;
+}
+.rir-pick button.on {
+  background: var(--accent); color: var(--on-accent);
+  border-color: var(--accent); font-weight: 700;
+}
+
+.advice-list { list-style: none; padding: 0; margin: 0 0 var(--s-5); }
+.advice {
+  display: flex; gap: var(--s-3); align-items: flex-start;
+  margin-bottom: var(--s-3); padding: var(--s-4);
+  background: var(--card); border: 1px solid var(--border);
+  border-left-width: 3px; border-radius: var(--r);
+}
+.advice.alert { border-left-color: var(--danger); }
+.advice.warn  { border-left-color: var(--warn); }
+.advice.info  { border-left-color: var(--info); }
+.advice.good  { border-left-color: var(--accent); }
+.advice-icon { font-size: 1.4rem; line-height: 1.2; flex: none; }
+.advice-body { flex: 1; min-width: 0; }
+.advice-body p { margin: .3rem 0 .6rem; color: var(--muted-strong); font-size: .94rem; }
+.advice-body form { margin: 0; }
+
+/* Bandeau du coach sur l'accueil */
+.coach-banner {
+  display: flex; gap: var(--s-3); align-items: flex-start;
+  padding: var(--s-4); margin-bottom: var(--s-5);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 70%), var(--card);
+  border: 1px solid var(--accent-ring); border-radius: var(--r-lg);
+}
+.coach-banner .advice-icon { font-size: 1.6rem; }

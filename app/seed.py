@@ -3,7 +3,7 @@ import re
 
 from sqlalchemy import text as sqltext
 
-from .models import db, Recipe, ProgramExercise
+from .models import db, ExerciseSet, ProgramExercise, Recipe
 
 DEFAULT_RECIPES = [
     dict(
@@ -193,6 +193,16 @@ PLYO_BLOCK = [
 # source de vérité, utilisée par le seed comme par la migration — sinon une
 # base neuve et une base migrée finiraient avec des réglages différents.
 DURATION_SLUGS = {"plyo-corde"}
+
+
+def ensure_set_rir():
+    """Migration douce : ajoute la colonne `rir` aux séries existantes."""
+    cols = [row[1] for row in
+            db.session.execute(sqltext("PRAGMA table_info(exercise_sets)"))]
+    if "rir" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE exercise_sets ADD COLUMN rir INTEGER"))
+        db.session.commit()
 
 
 def ensure_program_block():

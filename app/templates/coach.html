@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% import "_charts.html" as chart %}
+{% block title %}Coach — Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>🧠 Coach</h2>
+  <p class="sub">Ce que tes données disent, et ce que je propose d'y changer.
+    Chaque conseil vient d'une règle explicite — tu peux l'appliquer ou l'ignorer.</p>
+  <div class="page-links">
+    <a href="{{ url_for('stats.dashboard') }}">📊 Statistiques</a>
+    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
+  </div>
+</div>
+
+<h3 class="section-title">Cette semaine</h3>
+<ul class="stats">
+  <li class="stat {{ 'accent' if recap.on_track }}">
+    <span class="stat-label">Séances</span>
+    <span class="stat-value">{{ recap.sessions }}<small>/ {{ recap.planned }}</small></span>
+    <span class="stat-note">{{ 'dans les temps' if recap.on_track else 'en retard sur le planning' }}</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Volume</span>
+    <span class="stat-value">{{ (recap.volume / 1000)|round(1) }}<small>t</small></span>
+    <span class="stat-note">soulevé depuis lundi</span>
+  </li>
+  <li class="stat">
+    <span class="stat-label">Ajustements</span>
+    <span class="stat-value">{{ recap.decisions|length }}</span>
+    <span class="stat-note">décisions appliquées cette semaine</span>
+  </li>
+</ul>
+
+<h3 class="section-title">Observations</h3>
+{% if not advice %}
+<p class="muted">Rien à signaler — continue comme ça.</p>
+{% endif %}
+<ul class="advice-list">
+  {% for a in advice %}
+  <li class="advice {{ a.level }}">
+    <span class="advice-icon">{{ a.icon }}</span>
+    <div class="advice-body">
+      <strong>{{ a.title }}</strong>
+      <p>{{ a.detail }}</p>
+      {% if a.action == 'set_weight' %}
+      <form method="post" action="{{ url_for('coach.apply') }}">
+        <input type="hidden" name="exercise_id" value="{{ a.exercise.id }}">
+        <input type="hidden" name="new_weight" value="{{ a.new_weight }}">
+        <input type="hidden" name="reason" value="{{ a.title }} — {{ a.detail }}">
+        <button type="submit">Appliquer : {{ '%g'|format(a.exercise.weight_kg) }}
+          → {{ '%g'|format(a.new_weight) }} kg</button>
+      </form>
+      {% elif a.action == 'weight' %}
+      <p class="muted"><small>Formulaire de pesée juste en dessous.</small></p>
+      {% elif a.action == 'jump' %}
+      <p class="muted"><small>Formulaire de test de détente juste en dessous.</small></p>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+
+<h3 class="section-title">Poids de corps</h3>
+<p class="muted">Une pesée par semaine, le matin à jeun, même jour même heure.
+  C'est ce qui permet de distinguer un problème de programme d'un problème
+  d'assiette.</p>
+<form class="form-grid" method="post" action="{{ url_for('coach.log_weight') }}">
+  <label class="field"><span>Date</span>
+    <input type="date" name="date" value="{{ today }}"></label>
+  <label class="field"><span>Poids (kg)</span>
+    <input name="weight_kg" type="number" step="0.1" min="30" max="200"
+           placeholder="64,5" required></label>
+  <label class="field field-wide"><span>Note (facultatif)</span>
+    <input name="note" placeholder="Après une semaine chargée…"></label>
+  <div class="full"><button type="submit">Enregistrer la pesée</button></div>
+</form>
+{{ chart.line(weight_chart, "Poids de corps") }}
+{% if weights %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Date</th><th>Poids</th><th>Note</th></tr></thead>
+    <tbody>
+      {% for w in weights|reverse %}
+      <tr><td>{{ w.date.strftime('%d/%m/%Y') }}</td>
+          <td><strong>{{ '%g'|format(w.weight_kg) }} kg</strong></td>
+          <td class="muted">{{ w.note or '—' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h3 class="section-title">Détente verticale</h3>
+<p class="muted">Le test qui mesure ton objectif volley. Dos au mur, bras tendu :
+  marque la hauteur atteinte debout, puis la plus haute touchée en saut — la
+  détente est la différence. Un test toutes les 4 semaines suffit.</p>
+<form class="form-grid" method="post" action="{{ url_for('coach.log_jump') }}">
+  <label class="field"><span>Date</span>
+    <input type="date" name="date" value="{{ today }}"></label>
+  <label class="field"><span>Détente (cm)</span>
+    <input name="height_cm" type="number" step="0.5" min="10" max="150"
+           placeholder="55" required></label>
+  <label class="field field-wide"><span>Note (facultatif)</span>
+    <input name="note" placeholder="Avec élan / sans élan…"></label>
+  <div class="full"><button type="submit">Enregistrer le test</button></div>
+</form>
+{{ chart.line(jump_chart, "Détente verticale") }}
+
+{% if decisions %}
+<h3 class="section-title">Journal des décisions</h3>
+<p class="muted">Toute charge modifiée automatiquement est tracée ici, avec sa
+  raison — une progression qu'on ne peut pas relire est une progression à
+  laquelle on ne peut pas se fier.</p>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Quand</th><th>Changement</th><th>Pourquoi</th></tr></thead>
+    <tbody>
+      {% for d in decisions %}
+      <tr>
+        <td>{{ d.created_at.strftime('%d/%m %H:%M') }}</td>
+        <td>{% if d.old_weight is not none %}{{ '%g'|format(d.old_weight) }}
+            → <strong>{{ '%g'|format(d.new_weight) }} kg</strong>{% else %}—{% endif %}</td>
+        <td class="muted">{{ d.reason }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

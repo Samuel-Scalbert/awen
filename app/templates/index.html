@@ -7,6 +7,17 @@
     hébergé à la maison.</p>
 </div>
 
+{% if headline %}
+<div class="coach-banner">
+  <span class="advice-icon">{{ headline.icon }}</span>
+  <div class="advice-body">
+    <strong>{{ headline.title }}</strong>
+    <p>{{ headline.detail }}</p>
+    <a class="cta small" href="{{ url_for('coach.dashboard') }}">🧠 Voir le coach</a>
+  </div>
+</div>
+{% endif %}
+
 {% if o.n_sessions %}
 <h3 class="section-title">Ta progression</h3>
 <ul class="stats">

@@ -25,6 +25,11 @@ class ExerciseSet(db.Model):
     set_number = db.Column(db.Integer)
     reps = db.Column(db.Integer)
     weight_kg = db.Column(db.Float)
+    # Reps en réserve : combien il en restait avant l'échec. C'est la seule
+    # mesure de l'effort réel — 12 reps à 3 en réserve et 12 reps à l'échec
+    # n'ont pas du tout la même signification, et sans ça l'app les confond.
+    # Facultatif : None = non renseigné, on retombe sur les règles de reps.
+    rir = db.Column(db.Integer)
 
 
 class ExerciseNote(db.Model):
@@ -79,3 +84,49 @@ class ProgramExercise(db.Model):
     active = db.Column(db.Boolean, default=True)
     notes = db.Column(db.String(200))
     sets_logged = db.relationship("ExerciseSet", backref="program_exercise")
+
+
+class BodyWeight(db.Model):
+    """Pesée hebdomadaire.
+
+    Sans elle, impossible de distinguer « le programme ne marche pas » de
+    « tu ne manges pas assez » : des charges qui stagnent alors que le poids
+    stagne aussi, c'est un problème d'assiette, pas de programmation.
+    """
+    __tablename__ = "body_weights"
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, unique=True)
+    weight_kg = db.Column(db.Float, nullable=False)
+    note = db.Column(db.String(200))
+
+
+class JumpTest(db.Model):
+    """Test de détente verticale — la mesure de l'objectif volley.
+
+    La pliométrie s'entraîne pour sauter plus haut ; sans mesure régulière,
+    aucune boucle de retour sur ce qu'on cherche réellement à améliorer.
+    """
+    __tablename__ = "jump_tests"
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False)
+    height_cm = db.Column(db.Float, nullable=False)
+    note = db.Column(db.String(200))
+
+
+class CoachDecision(db.Model):
+    """Journal des décisions du coach : quoi, quand, et surtout pourquoi.
+
+    Toute modification automatique de charge est tracée ici pour être
+    relisible et contestable — une progression qui change sans explication
+    est une progression à laquelle on ne peut pas faire confiance.
+    """
+    __tablename__ = "coach_decisions"
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    program_exercise_id = db.Column(db.Integer,
+                                    db.ForeignKey("program_exercises.id"))
+    workout_id = db.Column(db.Integer, db.ForeignKey("workouts.id"))
+    kind = db.Column(db.String(24))        # progression / deload / recalage…
+    reason = db.Column(db.String(300))
+    old_weight = db.Column(db.Float)
+    new_weight = db.Column(db.Float)

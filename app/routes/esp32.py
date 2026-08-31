@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from flask import Blueprint, abort, current_app, jsonify, request
 
 from ..models import Workout
+from ..services.coach import headline as coach_headline
 from ..services.job_watch import get_daily_reports
 from ..services.progression import (CYCLE, TRAINING_WEEKDAYS,
                                     next_session_type, plan_upcoming)
@@ -60,6 +61,7 @@ def summary():
             d += timedelta(days=1)
         missed = min(missed, 9)
 
+    top = coach_headline()
     reports = get_daily_reports(limit=1) or []
     jobs_today, job_titles = 0, []
     if reports and reports[0]["date"] == today:
@@ -85,5 +87,11 @@ def summary():
         "jobs": {
             "n": jobs_today,
             "titles": job_titles,
+        },
+        # Une seule phrase : l'ecran fait 240 px de large, il faut trancher.
+        "coach": {
+            "level": top["level"] if top else "",
+            "icon": top["icon"] if top else "",
+            "text": top["title"][:38] if top else "",
         },
     })

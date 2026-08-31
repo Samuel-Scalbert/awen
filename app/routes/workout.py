@@ -192,6 +192,8 @@ def log_set(workout_id):
         set_number=len(done) + 1,
         reps=int(request.form.get("reps") or 0),
         weight_kg=float((request.form.get("weight") or "0").replace(",", ".")),
+        # Facultatif : saisi seulement si l'utilisateur a tapé le bouton RIR.
+        rir=int(request.form["rir"]) if (request.form.get("rir") or "") != "" else None,
     )
     db.session.add(s)
     db.session.commit()

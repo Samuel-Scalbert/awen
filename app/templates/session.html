@@ -88,6 +88,19 @@
              value="{{ '%g'|format(pe.weight_kg) }}" placeholder="kg">
       {% endif %}
       <button type="submit">Valider la série</button>
+      {# Reps en réserve : facultatif, un seul tap. C'est la seule mesure de
+         l'effort réel — sans elle, 12 reps faciles et 12 reps à l'échec sont
+         indiscernables pour le coach. #}
+      {% if pe.block != 'plyo' %}
+      <div class="rir-pick" role="group" aria-label="Reps en réserve">
+        <span class="muted">Réserve :</span>
+        <button type="button" data-rir="0">0</button>
+        <button type="button" data-rir="1">1</button>
+        <button type="button" data-rir="2">2</button>
+        <button type="button" data-rir="3">3+</button>
+        <input type="hidden" name="rir" value="">
+      </div>
+      {% endif %}
     </form>
 
     <details class="note-box"{% if notes.get(pe.id) %} open{% endif %}>
@@ -329,6 +342,11 @@ document.querySelectorAll('form.log').forEach(form => {
       }
       const repsInput = form.querySelector('[name=reps]');
       if (repsInput) repsInput.value = d.unit === 'sec' ? d.repmax : '';
+      const rirGroup = form.querySelector('.rir-pick');
+      if (rirGroup) {   // la réserve se juge série par série
+        rirGroup.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+        rirGroup.querySelector('input[name=rir]').value = '';
+      }
 
       const doneCount = card.querySelectorAll('.sets li').length;
       if (doneCount >= j.total_sets) {
@@ -350,6 +368,21 @@ document.querySelectorAll('form.log').forEach(form => {
     // Le chrono démarre dans tous les cas : c'est le repos qui compte, pas
     // l'affichage. Hors du try pour qu'aucun souci de rendu ne l'empêche.
     startTimer(+j.rest_sec || 60);
+  });
+});
+
+/* ---------- reps en réserve (RIR) ---------- */
+document.querySelectorAll('.rir-pick').forEach(group => {
+  const hidden = group.querySelector('input[name=rir]');
+  group.querySelectorAll('button[data-rir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const already = btn.classList.contains('on');
+      group.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      // Deuxième tap sur le même bouton : on désélectionne, la valeur
+      // redevient vide plutôt que de rester bloquée sur un choix regretté.
+      btn.classList.toggle('on', !already);
+      hidden.value = already ? '' : btn.dataset.rir;
+    });
   });
 });
 
