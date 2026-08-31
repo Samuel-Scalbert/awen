@@ -85,7 +85,14 @@ def probe_data_line():
     Sans ce second essai, les deux se presentent identiquement et on cherche
     un capteur mort alors qu'un fil est simplement mal enfonce.
     """
-    p = Pin(DHT_PIN, Pin.IN)
+    # pull=None EXPLICITE. Pin(n, Pin.IN) sans le preciser laisse la broche
+    # avec la configuration qu'elle avait deja, et le balayage des broches
+    # libres vient justement d'y activer le tirage interne : la lecture « au
+    # repos » mesurerait alors ce tirage-la, pas la ligne. Les deux lignes du
+    # rapport diraient toujours la meme chose, et le test perdrait tout son
+    # pouvoir de discrimination sans que rien ne le signale.
+    p = Pin(DHT_PIN, Pin.IN, None)
+    time.sleep_ms(5)
     libre = sum(p.value() for _ in range(50))
     p = Pin(DHT_PIN, Pin.IN, Pin.PULL_UP)
     time.sleep_ms(5)
@@ -121,6 +128,14 @@ def scan_free_pins():
             line("  GPIO {:>2} : {}/20 a 1{}".format(gp, v, note))
         except Exception as e:
             line("  GPIO {:>2} : illisible — {}".format(gp, e))
+    # On relache les tirages : le test suivant lit la meme broche « au
+    # repos » et doit la trouver telle qu'elle est, pas telle qu'on l'a
+    # laissee.
+    for gp in (DHT_PIN, 4, 16, 19):
+        try:
+            Pin(gp, Pin.IN, None)
+        except Exception:
+            pass
     line("  -> GPIO {} a 0 et les autres a 20 : le defaut suit ce qui est".format(DHT_PIN))
     line("     branche la, pas la carte. Debranche les TROIS fils du module")
     line("     et relance : si GPIO {} remonte a 20, le module est mort.".format(DHT_PIN))
