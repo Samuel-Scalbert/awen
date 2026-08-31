@@ -152,7 +152,9 @@ class Home(Screen):
         g.right(14, str(missed) if missed else gym.get("last", ""),
                 g.p.ALERT if missed else g.p.FG)
 
-        _statusbar(g, "AWEN", "[OK] MENU")
+        # Pas de « [OK] MENU » : B ne fait rien ici, et annoncer une action
+        # inexistante est pire que de n'en annoncer aucune.
+        _statusbar(g, "AWEN", "A/C : ecrans")
 
 
 class Gym(Screen):
@@ -260,24 +262,23 @@ class Coach(Screen):
             # Pas de jauge de « confiance » : le moteur de règles n'en calcule
             # aucune, et un pourcentage inventé donnerait à une décoration
             # l'autorité d'une mesure.
-            _statusbar(g, "[A] APPLIQUER", "[B] IGNORER")
+            _statusbar(g, "[B] APPLIQUER", "sinon : ignore")
         else:
             _statusbar(g, "< PREC", "SUIV >")
 
     def on_input(self, ev, app):
+        """B applique. Ignorer, c'est simplement passer a l'ecran suivant.
+
+        Pas de bouton « ignorer » : il ne ferait rien de plus que partir, et
+        un bouton qui ne fait rien invite a se demander ce qu'il a fait.
+        """
         kind, arg = ev
-        if arg != SHORT:
+        if kind != BTN_B or arg != SHORT:
             return False
-        c = app.state.get("coach", {})
-        if c.get("to_kg") is None:
+        if app.state.get("coach", {}).get("to_kg") is None:
             return False
-        if kind == BTN_A:
-            app.apply_advice(True)
-            return True
-        if kind == BTN_B:
-            app.apply_advice(False)
-            return True
-        return False
+        app.apply_advice(True)
+        return True
 
 
 class Jobs(Screen):
@@ -379,21 +380,26 @@ class Spotify(Screen):
 
         _pot_hint(g, 17, app)
         playing = sp.get("playing")
-        _statusbar(g, "[A] << [B] {} [C] >>".format("||" if playing else " >"),
-                   sp.get("device", "")[:8])
+        # 30 colonnes en tout : « [B] PAUSE » tient a gauche, le rappel du
+        # geste piste a droite. Le nom de l'appareil ne rentre pas, et il
+        # importe moins que de savoir comment sauter une piste.
+        _statusbar(g, "[B] " + ("PAUSE" if playing else "LIRE"),
+                   "A/C tenu: piste")
 
     def on_input(self, ev, app):
+        """Piste precedente/suivante en MAINTENANT A ou C, pas en tapant.
+
+        L'appui court d'A et de C navigue entre les ecrans, partout et sans
+        exception. Les faire changer de piste ici enfermerait dans Spotify :
+        les trois boutons seraient pris, et seul l'appui long en sortirait.
+        Maintenir pour sauter une piste est en plus le geste des autoradios.
+        """
         kind, arg = ev
-        if arg != SHORT:
-            return False
-        if kind == BTN_A:
-            app.spotify("previous")
-            return True
-        if kind == BTN_B:
+        if kind == BTN_B and arg == SHORT:
             app.spotify("toggle")
             return True
-        if kind == BTN_C:
-            app.spotify("next")
+        if arg == REPEAT and kind in (BTN_A, BTN_C):
+            app.spotify("previous" if kind == BTN_A else "next")
             return True
         return False
 
@@ -429,7 +435,7 @@ class Settings(Screen):
             g.bar(1, r + 1, 28, self.values[i],
                   g.p.FG if focused else g.p.DIM)
         _pot_hint(g, 17, app)
-        _statusbar(g, "[OK] CHOISIR", "POTARD REGLE")
+        _statusbar(g, "[B] LIGNE SUIV", "POTARD : VALEUR")
 
     def on_input(self, ev, app):
         kind, arg = ev

@@ -40,42 +40,94 @@ glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 
 ## Câblage
 
-L'écran vient de `tft_setup.py`, qui est déjà « le seul endroit où vivent les
-numéros de broches ». Ce firmware l'importe au lieu de les redéclarer.
+Les boutons se câblent **entre le GPIO et la masse**, sans résistance : le
+tirage interne est activé dans `input.py`. Un bouton relâché lit donc 1, un
+bouton enfoncé lit 0. Aucune polarité à respecter, un bouton n'a pas de sens.
 
-| Entrée | GPIO | Rôle |
+Le potentiomètre est un diviseur de tension : ses deux **pattes extérieures**
+vont sur 3V3 et GND (dans l'ordre que tu veux — l'inverser inverse juste le
+sens de rotation), et sa **patte du milieu**, le curseur, sur GPIO 34.
+
+```
+        ESP32
+   ┌───────────────┐
+   │           3V3 ├──────────────┐
+   │               │              │  ┌───────────┐
+   │        GPIO34 ├──────────────┼──┤ curseur   │  POTENTIOMETRE
+   │               │              └──┤ exterieur │
+   │           GND ├──────────┬──────┤ exterieur │
+   │               │          │      └───────────┘
+   │        GPIO26 ├───[A]────┤        A = gauche
+   │        GPIO27 ├───[B]────┤        B = milieu
+   │        GPIO14 ├───[C]────┘        C = droite
+   └───────────────┘
+                             les 3 boutons partagent la meme masse
+```
+
+L'écran, lui, vient de `tft_setup.py`, déjà « le seul endroit où vivent les
+numéros de broches » : CS 5, DC 17, RST 21, rétroéclairage 22, SCK 18,
+MOSI 23, SPI 2 à 80 MHz. Ce firmware l'importe au lieu de le redéclarer.
+
+> ### GPIO 34 n'est pas négociable
+>
+> L'ESP32 a deux convertisseurs analogiques, et **ADC2 cesse de fonctionner
+> dès que le wifi est actif**. Un potard câblé sur GPIO 25 ou 26 marcherait
+> parfaitement au banc puis renverrait n'importe quoi une fois la carte
+> connectée — et des valeurs qui sautent au hasard ne ressemblent en rien à
+> « le wifi a pris le convertisseur ».
+>
+> Les broches **32 à 39** sont sur ADC1. Parmi elles, **34 à 39** sont en
+> entrée seule, donc sans tirage interne susceptible de fausser la mesure.
+> C'est le bon choix pour un potentiomètre.
+
+## Carte des boutons
+
+Une seule règle, valable partout, sans exception :
+
+```
+   [A] gauche          [B] milieu           [C] droite
+    GPIO 26             GPIO 27              GPIO 14
+
+   ecran precedent    action de l'ecran    ecran suivant
+                      ─────────────────
+                      maintenu : ACCUEIL
+```
+
+**A et C naviguent toujours.** C'est ce qui garantit qu'aucun écran ne peut
+te piéger. **B agit**, et maintenu il ramène à l'accueil depuis n'importe où.
+
+Le carrousel : **Accueil → Séance → Spotify → Coach → Jobs → Paramètres**,
+puis retour au début.
+
+### Ce que fait B, écran par écran
+
+| Écran | Appui court sur B | Le potentiomètre |
 | --- | --- | --- |
-| Bouton gauche | 26 | écran précédent · maintenu, défile |
-| Bouton sélection | 27 | valider · **appui long** = retour à l'accueil |
-| Bouton droite | 14 | écran suivant · maintenu, défile |
-| Potentiomètre | **34** | valeurs (extrémités sur 3V3 et GND, curseur sur 34) |
+| **Accueil** | — | — |
+| **Séance** | — *(lecture seule)* | fait défiler les exercices |
+| **Spotify** | lecture / pause | **le volume** |
+| **Coach** | applique le conseil | — |
+| **Jobs** | — | fait défiler les offres |
+| **Paramètres** | ligne suivante | la valeur de la ligne |
 
-Écran (rappel, défini dans `tft_setup.py`) : CS 5, DC 17, RST 21,
-rétroéclairage 22, SCK 18, MOSI 23, SPI 2 à 80 MHz.
+Deux gestes en plus, uniquement sur Spotify :
 
-> **GPIO 34 n'est pas négociable.** L'ESP32 a deux convertisseurs analogiques
-> et **ADC2 cesse de fonctionner dès que le wifi est actif**. Un potard câblé
-> sur GPIO 25 ou 26 lirait n'importe quoi une fois connecté — et le symptôme
-> (des valeurs qui sautent au hasard) ne ressemble pas du tout à sa cause.
-> Les broches 32–39 sont sur ADC1 ; 34–39 sont en entrée seule, donc sans
-> tirage interne parasite.
-
-## Navigation
-
-Six écrans en carrousel : **Accueil → Séance → Spotify → Coach → Jobs →
-Paramètres**, puis retour. L'amorçage ne s'affiche qu'au démarrage.
-
-Le potentiomètre agit **dans** l'écran courant, jamais entre les écrans :
-
-| Écran | Le potard règle |
+| Geste | Effet |
 | --- | --- |
-| Spotify | le volume — son usage le plus naturel |
-| Séance | la charge, de −10 à +10 kg par pas de 2,5 kg |
-| Paramètres | la valeur sélectionnée, de 0 à 100 % |
-| Jobs | l'offre affichée |
+| **A maintenu** | piste précédente |
+| **C maintenu** | piste suivante |
+
+Maintenir plutôt que taper, parce que l'appui court d'A et de C doit rester la
+navigation partout. Les faire changer de piste enfermerait dans Spotify : les
+trois boutons seraient pris et seul l'appui long en sortirait. C'est aussi le
+geste des autoradios.
+
+Sur le Coach, il n'y a **pas de bouton « ignorer »** : passer à l'écran
+suivant *est* l'ignorer. Un bouton qui ne fait rien de plus que partir laisse
+surtout se demander ce qu'il a fait.
 
 **Les boutons trient, le potard règle.** C'est ce partage qui rend trois
-boutons suffisants.
+boutons suffisants pour six écrans.
 
 ## Le rattrapage du potentiomètre
 

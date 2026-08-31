@@ -322,7 +322,7 @@ def s_spotify(p):
     s.right(14, " 64%", "hi", bold=True)
     s.bar(1, 15, 28, 64)
 
-    s.statusbar("[A] << [B] || [C] >>", "IPHONE")
+    s.statusbar("[B] PAUSE", "A/C tenu: piste")
     return s
 
 
