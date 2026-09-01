@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% set plyo_mode = mode == 'plyo' %}
-{% block title %}{{ 'Plyométrie' if mode == 'plyo' else 'Séance ' ~ workout.focus }} — Awen{% endblock %}
+{% set reprise_mode = mode == 'reprise' %}
+{% block title %}{{ 'Plyométrie' if plyo_mode else ('Reprise' if reprise_mode else 'Séance ' ~ workout.focus) }} — Awen{% endblock %}
 {% block content %}
 <div class="page-head">
   {% if plyo_mode %}
@@ -9,6 +10,15 @@
     À faire frais : dès que la hauteur baisse, la série ne sert plus à rien.</p>
   <div class="page-links">
     <a href="{{ url_for('workout.session') }}">← Séance {{ workout.focus }}</a>
+  </div>
+  {% elif reprise_mode %}
+  <h2>🔄 Reprise</h2>
+  <p class="sub">{{ workout.date.strftime('%d/%m/%Y') }} — tous les exercices du
+    programme, dans le désordre qui te plaît. Ouvre ce qui te tente, ignore le
+    reste, et termine quand tu veux : rien n'est attendu et
+    <strong>les charges du programme ne bougeront pas</strong>.</p>
+  <div class="page-links">
+    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
   </div>
   {% else %}
   <h2>Séance {{ workout.focus }}</h2>
@@ -28,12 +38,20 @@
 
 {% for pe in exercises %}
 {% set done = logged[pe.id] %}
+{# En reprise les exercices viennent des trois séances : sans ce repère on ne
+   sait plus où on est dans une liste de dix-huit blocs qui se ressemblent. #}
+{% if reprise_mode and (loop.first or pe.session_type != loop.previtem.session_type) %}
+<h3 class="section-title reprise-groupe">{{ pe.session_type|upper }}</h3>
+{% endif %}
 {# Chaque exercice est un menu déroulant : replié une fois terminé, pour
    ne pas avoir à faire défiler toute la séance entre deux séries. L'état
    n'est fixé qu'ici, au rendu — le JS n'ouvre ni ne ferme rien tout seul,
    sinon la page bougerait sous les doigts. #}
-<details class="exo{% if pe.block == 'plyo' %} plyo{% endif %}" id="exo-{{ pe.id }}"
-         {% if done|length < pe.sets %}open{% endif %}
+{# Tout est replié en reprise : dix-huit blocs ouverts feraient un mur, et
+   surtout OUVRIR EST LE CHOIX — c'est le geste qui dit « celui-là me tente ».
+   Un exercice déjà commencé reste ouvert, lui. #}
+<details class="exo{% if pe.block == 'plyo' %} plyo{% endif %}{% if reprise_mode %} reprise{% endif %}" id="exo-{{ pe.id }}"
+         {% if (reprise_mode and done) or (not reprise_mode and done|length < pe.sets) %}open{% endif %}
          data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
          data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
          data-rest="{{ pe.rest_sec }}" data-name="{{ pe.name }}"
@@ -121,11 +139,12 @@
     <textarea name="notes" id="session-note" rows="3"
       placeholder="Forme générale, sommeil, énergie, douleurs…">{{ workout.notes or '' }}</textarea></label>
   <span class="note-state" id="session-note-state" aria-live="polite"></span>
-  <button type="submit">✅ Terminer la séance (applique la progression)</button>
+  <button type="submit">{% if reprise_mode %}✅ Terminer la reprise (les charges ne bougent pas)
+    {%- else %}✅ Terminer la séance (applique la progression){% endif %}</button>
 </form>
 <form method="post" action="{{ url_for('workout.delete_session', workout_id=workout.id) }}"
       onsubmit="return confirm('Supprimer cette séance et ses séries ?')">
-  <button type="submit" class="danger">Annuler la séance</button>
+  <button type="submit" class="danger">Annuler la {{ 'reprise' if reprise_mode else 'séance' }}</button>
 </form>
 {% endif %}
 

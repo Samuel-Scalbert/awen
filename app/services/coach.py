@@ -17,6 +17,7 @@ from datetime import date, timedelta
 
 from ..models import (BodyWeight, CoachDecision, ExerciseSet, JumpTest,
                       ProgramExercise, Workout, db)
+from . import attendance
 from .progression import TRAINING_WEEKDAYS, working_sets
 
 # Seuils regroupés ici pour être discutables d'un coup d'œil, plutôt que
@@ -27,7 +28,8 @@ DELOAD_RATIO = 0.9     # -10 % pour casser un plateau
 EASY_RIR = 3           # RIR >= 3 : trop de réserve, c'est trop léger
 JUMP_TEST_DAYS = 28    # au-delà, le test de détente est à refaire
 WEIGH_IN_DAYS = 10     # au-delà, la pesée est trop ancienne pour juger
-IDLE_DAYS = 4          # au-delà, on relance sur l'assiduité
+MISSED_ALERT = 2       # séances ratées d'affilée avant de relancer
+MISSED_LONG = 4        # au-delà, l'arrêt a vraiment coûté quelque chose
 
 
 def _sessions_of(pe, completed):
@@ -54,28 +56,46 @@ def _sessions_of(pe, completed):
 
 
 def _adherence_advice(completed, today, advice):
+    """Assiduité comptée en SÉANCES RATÉES, jamais en jours calendaires.
+
+    Une absence déclarée ne compte pas, et un jour manqué non qualifié non
+    plus : le coach signale qu'il attend une réponse au lieu de supposer la
+    pire. C'est ce qui lui permet de rester crédible après des vacances.
+    """
     if not completed:
         return
-    last = max(completed.values())
-    idle = (today - last).days
-    days = sorted(completed.values())
-    long_gap = max((days[i] - days[i - 1]).days
-                   for i in range(1, len(days))) if len(days) > 1 else 0
 
-    if idle >= IDLE_DAYS:
+    st = attendance.summary(today)
+
+    if st["streak"] >= MISSED_ALERT:
         advice.append({
             "level": "alert", "icon": "📉",
-            "title": f"{idle} jours sans séance",
+            "title": f"{st['streak']} séances ratées d'affilée",
             "detail": "Le programme le mieux réglé ne rattrape pas les séances "
                       "manquées. Reprends même léger : une séance à 70 % vaut "
                       "infiniment mieux qu'une séance sautée.",
         })
-    if long_gap >= 14:
+    if st["longest"] >= MISSED_LONG:
         advice.append({
             "level": "warn", "icon": "📅",
-            "title": f"Ton plus long arrêt : {long_gap} jours",
+            "title": f"Ton plus long arrêt : {st['longest']} séances ratées",
             "detail": "C'est ce qui coûte le plus cher à ta progression, bien "
                       "plus que le choix des exercices ou la taille des paliers.",
+        })
+    if st["todo"]:
+        advice.append({
+            "level": "info", "icon": "❓",
+            "title": f"{st['todo']} séances manquées à qualifier",
+            "detail": "Dis-moi si tu étais absent ou si tu l'as sautée. Tant "
+                      "que ce n'est pas tranché, je ne compte rien : je "
+                      "préfère me taire que t'accuser à tort.",
+        })
+    if st["absent"] and not st["streak"]:
+        advice.append({
+            "level": "good", "icon": "🏖️",
+            "title": f"{st['absent']} séances en absence, non comptées",
+            "detail": "Vacances, déplacements, maladie : tu n'avais pas la "
+                      "main dessus, elles ne pèsent pas sur ton assiduité.",
         })
 
 
@@ -251,8 +271,13 @@ def _exercise_advice(pe, hist, advice):
 def analyse():
     """Toutes les observations du moment, les plus graves d'abord."""
     today = date.today()
+    # Les reprises sont exclues de l'historique qui pilote les charges : on y
+    # fait ce qui tente, à l'intensité qui vient, et une série légère y serait
+    # lue comme une régression. Elles comptent en revanche comme séances
+    # faites pour l'assiduité — voir attendance.py, qui les prend toutes.
     completed = {w.id: w.date.date()
-                 for w in Workout.query.filter_by(completed=True)}
+                 for w in Workout.query.filter_by(completed=True)
+                 if w.focus != "Reprise"}
     advice = []
 
     _adherence_advice(completed, today, advice)

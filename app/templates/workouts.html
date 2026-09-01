@@ -12,12 +12,19 @@
   </div>
 </div>
 
-{% if current %}
+{% if current and current.focus == 'Reprise' %}
+<a class="cta" href="{{ url_for('workout.reprise') }}">▶️ Reprendre la reprise
+  ({{ current.sets|length }} séries faites)</a>
+{% elif current %}
 <a class="cta" href="{{ url_for('workout.session') }}">▶️ Reprendre la séance
   {{ current.focus }} ({{ current.sets|length }} séries faites)</a>
 {% else %}
 <a class="cta" href="{{ url_for('workout.session') }}">▶️ Démarrer la séance du jour
   — {{ next_type }}</a>
+{# Hors cycle, et volontairement en second : la reprise sert à redémarrer,
+   pas à remplacer la séance du jour. #}
+<a class="cta secondary" href="{{ url_for('workout.reprise') }}">🔄 Séance de reprise
+  — tous les exercices, tu t'arrêtes quand tu veux</a>
 {% endif %}
 
 <h3 class="section-title">Historique</h3>

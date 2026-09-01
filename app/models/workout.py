@@ -86,6 +86,30 @@ class ProgramExercise(db.Model):
     sets_logged = db.relationship("ExerciseSet", backref="program_exercise")
 
 
+class MissedSession(db.Model):
+    """Un jour d'entraînement planifié qui n'a pas eu lieu, et POURQUOI.
+
+    Rater une séance et ne pas pouvoir y aller ne se valent pas : un été en
+    vacances n'est pas un relâchement, et un coach qui confond les deux
+    reproche une négligence qui n'existe pas.
+
+    Seuls les jours QUALIFIÉS ont une ligne ici. La liste des jours manqués
+    se déduit de TRAINING_WEEKDAYS et des séances faites : la matérialiser
+    créerait une ligne pour chaque lundi de l'histoire, dont la quasi-totalité
+    ne dirait rien. Un jour manqué sans ligne est donc « à qualifier », ce que
+    le coach signale sans en tirer de conclusion.
+    """
+    __tablename__ = "missed_sessions"
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False, unique=True)
+    # "absent" = je ne pouvais pas y être (vacances, déplacement, maladie).
+    # "rate"   = j'aurais pu, je n'y suis pas allé. C'est le seul des deux
+    #            que le coach a le droit de compter contre toi.
+    kind = db.Column(db.String(8), nullable=False, default="absent")
+    note = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class BodyWeight(db.Model):
     """Pesée hebdomadaire.
 

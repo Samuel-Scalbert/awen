@@ -4,7 +4,7 @@ from datetime import date
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ..models import BodyWeight, CoachDecision, JumpTest, db
-from ..services import charts, coach
+from ..services import attendance, charts, coach
 
 bp = Blueprint("coach", __name__, url_prefix="/coach")
 
@@ -25,6 +25,7 @@ def dashboard():
 
     return render_template(
         "coach.html", advice=advice, recap=recap,
+        attendance=attendance.summary(),
         weights=weights[-8:], jumps=jumps[-8:],
         weight_chart=weight_chart, jump_chart=jump_chart,
         decisions=CoachDecision.query.order_by(
@@ -41,6 +42,27 @@ def apply():
     if pe:
         flash(f"{pe.name} : charge réglée à {pe.weight_kg:g} kg.")
     return redirect(url_for("coach.dashboard"))
+
+
+@bp.route("/assiduite", methods=["POST"])
+def qualify_missed():
+    """Dit pourquoi une séance a été manquée : absent, ou ratée.
+
+    C'est la seule chose que l'app ne peut pas déduire toute seule. Le trou
+    dans le calendrier est identique dans les deux cas ; seul toi sais si tu
+    pouvais y être.
+    """
+    day = date.fromisoformat(request.form["date"])
+    kind = request.form["kind"]
+    joli = day.strftime("%d/%m/%Y")
+    if kind == "clear":
+        attendance.unqualify(day)
+        flash(f"{joli} : à qualifier de nouveau.")
+    else:
+        attendance.qualify(day, kind, request.form.get("note"))
+        flash(f"{joli} : {'absence' if kind == 'absent' else 'séance ratée'} "
+              "enregistrée.")
+    return redirect(url_for("coach.dashboard", _anchor="assiduite"))
 
 
 @bp.route("/poids", methods=["POST"])

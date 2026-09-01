@@ -9,6 +9,10 @@ from ..services.progression import (apply_progression, next_session_type,
 
 bp = Blueprint("workout", __name__, url_prefix="/workouts")
 
+# Le focus qui marque une séance hors cycle. Il n'est jamais dans CYCLE, ce
+# qui suffit à la faire ignorer par la rotation et par la progression.
+REPRISE = "Reprise"
+
 
 def _current_workout():
     return (Workout.query.filter_by(completed=False)
@@ -27,7 +31,26 @@ def session_exercises(focus, block="force"):
             .order_by(ProgramExercise.position, ProgramExercise.id).all())
 
 
+def reprise_exercises():
+    """Tous les exercices de force des trois séances, dans l'ordre du programme.
+
+    Aucune sélection, aucun ordre imposé : une reprise sert à retrouver ce
+    qu'on aime, et ce choix-là appartient au moment, pas au programme. La
+    pliométrie reste en dehors — elle se fait frais, ce qu'on n'est
+    précisément pas en rentrant de plusieurs semaines d'arrêt.
+    """
+    out = []
+    for st in ("push", "pull", "legs"):
+        out.extend(session_exercises(st, "force"))
+    return out
+
+
 def _last_focus(exclude_id=None):
+    """Dernière séance PPL, pour continuer la rotation.
+
+    Les reprises sont ignorées : elles n'appartiennent pas au cycle. Sans ça,
+    une reprise le lundi décalerait tout le programme de la semaine.
+    """
     q = Workout.query.order_by(Workout.date.desc(), Workout.id.desc())
     for w in q:
         if w.id == exclude_id:
@@ -114,6 +137,11 @@ def update_programme():
 def session():
     """Séance du jour : reprend la séance en cours ou en crée une."""
     workout = _current_workout()
+    # Une reprise ouverte n'a pas d'exercices sous son focus : la rendre ici
+    # afficherait une page vide au lieu de la séance qu'on est en train de
+    # faire.
+    if workout is not None and workout.focus == REPRISE:
+        return redirect(url_for("workout.reprise"))
     if workout is None:
         focus = next_session_type(_last_focus())
         workout = Workout(focus=focus, date=datetime.now())
@@ -140,6 +168,8 @@ def plyo():
     gabarit sert les deux pages, seul le mode change.
     """
     workout = _current_workout()
+    if workout is not None and workout.focus == REPRISE:
+        return redirect(url_for("workout.reprise"))
     if workout is None:
         focus = next_session_type(_last_focus())
         workout = Workout(focus=focus, date=datetime.now())
@@ -152,6 +182,39 @@ def plyo():
               for pe in exercises}
     notes = {n.program_exercise_id: n.text for n in workout.notes_by_exercise}
     return render_template("session.html", workout=workout, mode="plyo",
+                           exercises=exercises, logged=logged, notes=notes)
+
+
+@bp.route("/reprise")
+def reprise():
+    """Séance de reprise : tout le catalogue, et tu t'arrêtes quand tu veux.
+
+    Elle se lance n'importe quand, en dehors du cycle PPL. Le but n'est pas
+    d'en faire le maximum mais de retrouver les exercices qu'on aime après un
+    arrêt : rien n'est imposé, rien n'est attendu, et la séance se termine sur
+    décision — pas quand une liste est cochée.
+
+    Les exercices sont affichés repliés, contrairement à une séance normale.
+    Dix-huit blocs ouverts d'un coup transformeraient la page en mur ; ici on
+    ouvre ce qui tente, et ce geste EST le choix.
+    """
+    workout = _current_workout()
+    if workout is not None and workout.focus != REPRISE:
+        flash(f"Termine ou annule ta séance {workout.focus} avant "
+              "de lancer une reprise.")
+        return redirect(url_for("workout.session"))
+    if workout is None:
+        workout = Workout(focus=REPRISE, date=datetime.now())
+        db.session.add(workout)
+        db.session.commit()
+
+    exercises = reprise_exercises()
+    logged = {pe.id: sorted((s for s in workout.sets
+                             if s.program_exercise_id == pe.id),
+                            key=lambda s: s.set_number or 0)
+              for pe in exercises}
+    notes = {n.program_exercise_id: n.text for n in workout.notes_by_exercise}
+    return render_template("session.html", workout=workout, mode="reprise",
                            exercises=exercises, logged=logged, notes=notes)
 
 
@@ -224,9 +287,21 @@ def finish_session(workout_id):
     workout.completed = True
     if request.form.get("notes"):
         workout.notes = request.form["notes"]
-    changes = apply_progression(workout)
+
+    # UNE REPRISE NE TOUCHE PAS AUX CHARGES, ET C'EST LE POINT.
+    #
+    # On y fait ce qui tente, à l'intensité qui vient. Passer ça dans la
+    # double progression ferait lire une série légère comme une régression et
+    # déclencherait un deload sur un exercice qui n'a rien perdu — la reprise
+    # abîmerait le programme qu'elle est censée redémarrer.
+    changes = [] if workout.focus == REPRISE else apply_progression(workout)
     db.session.commit()
-    flash(f"Séance {workout.focus} terminée — {len(workout.sets)} séries. 💪")
+
+    if workout.focus == REPRISE:
+        flash(f"Reprise terminée — {len(workout.sets)} séries. "
+              "Les charges du programme n'ont pas bougé. 💪")
+    else:
+        flash(f"Séance {workout.focus} terminée — {len(workout.sets)} séries. 💪")
     for c in changes:
         flash(f"Progression : {c}")
     return redirect(url_for("workout.list_workouts"))

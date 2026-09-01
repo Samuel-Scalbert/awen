@@ -46,5 +46,10 @@ def create_app(config_class=Config):
         seed_program()
         seed_plyo_block()
         apply_pull_feedback()
+        # Rattrapage unique : la base est antérieure à la distinction entre
+        # « raté » et « absent », et tous ses trous venaient d'absences. Ne
+        # fait rien dès qu'une qualification existe — voir attendance.py.
+        from .services.attendance import backfill_absences
+        backfill_absences()
 
     return app

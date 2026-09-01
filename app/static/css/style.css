@@ -1257,3 +1257,58 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
   border: 1px solid var(--accent-ring); border-radius: var(--r-lg);
 }
 .coach-banner .advice-icon { font-size: 1.6rem; }
+
+/* --- Assiduité et reprise -------------------------------------------------
+ *
+ * Une séance manquée n'est pas un échec par défaut : les trois états ont donc
+ * des couleurs distinctes, et « à qualifier » est neutre — le seul qui appelle
+ * une action, pas un jugement.
+ */
+.cta.secondary {
+  background: transparent;
+  color: var(--muted-strong);
+  border: 1px solid var(--border-strong);
+  box-shadow: none;
+}
+.cta.secondary:hover { color: var(--text); border-color: var(--accent); }
+
+button.ghost {
+  background: transparent;
+  color: var(--muted-strong);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+.assiduite td { vertical-align: middle; }
+.assiduite .miss-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  justify-content: flex-end;
+}
+.assiduite .miss-actions form { margin: 0; }
+.assiduite .miss-actions button {
+  min-height: 2.1rem;
+  padding: .35rem .7rem;
+  font-size: .85rem;
+  border-radius: var(--r-sm);
+  box-shadow: none;
+}
+/* Une ligne encore à qualifier se repère sans être alarmante. */
+.assiduite tr.todo { background: var(--card-hover); }
+
+.tag {
+  display: inline-block;
+  padding: .15rem .5rem;
+  border-radius: var(--r-sm);
+  font-size: .82rem;
+  white-space: nowrap;
+}
+.tag.absent { background: var(--accent-soft); color: var(--accent); }
+.tag.rate   { background: var(--danger-soft); color: var(--danger); }
+.tag.todo   { background: transparent; color: var(--muted-strong);
+              border: 1px dashed var(--border-strong); }
+
+/* Le titre de groupe en reprise : il sépare Push, Pull et Legs dans une
+ * liste où tous les blocs se ressemblent. */
+.reprise-groupe { margin-top: var(--s-5); }

@@ -60,6 +60,63 @@
   {% endfor %}
 </ul>
 
+<h3 class="section-title" id="assiduite">Assiduité</h3>
+<p class="muted">Un trou dans le calendrier ne dit pas s'il est de ton fait.
+  Qualifie chaque séance manquée : les absences ne comptent pas contre toi,
+  et tant que tu n'as pas tranché le coach ne compte rien du tout.</p>
+
+{% if not attendance.missed %}
+<p class="muted">Aucune séance manquée. 👌</p>
+{% else %}
+<ul class="stats">
+  <li><span>Ratées</span><strong>{{ attendance.rate }}</strong></li>
+  <li><span>Absences</span><strong>{{ attendance.absent }}</strong></li>
+  <li><span>À qualifier</span><strong>{{ attendance.todo }}</strong></li>
+  <li><span>Série en cours</span><strong>{{ attendance.streak }}</strong></li>
+</ul>
+
+<div class="table-wrap">
+  <table class="assiduite">
+    <tbody>
+      {# Déjà trié par attendance.summary() : les non qualifiées d'abord. #}
+      {% for m in attendance.missed %}
+      <tr class="miss {{ m.kind or 'todo' }}">
+        <td>{{ m.date.strftime('%a %d/%m/%Y') }}</td>
+        <td>
+          {% if m.kind == 'absent' %}<span class="tag absent">🏖️ Absent</span>
+          {% elif m.kind == 'rate' %}<span class="tag rate">❌ Ratée</span>
+          {% else %}<span class="tag todo">❓ À qualifier</span>{% endif %}
+        </td>
+        <td class="miss-actions">
+          {% if m.kind != 'absent' %}
+          <form method="post" action="{{ url_for('coach.qualify_missed') }}">
+            <input type="hidden" name="date" value="{{ m.date.isoformat() }}">
+            <input type="hidden" name="kind" value="absent">
+            <button type="submit">🏖️ Je n'étais pas là</button>
+          </form>
+          {% endif %}
+          {% if m.kind != 'rate' %}
+          <form method="post" action="{{ url_for('coach.qualify_missed') }}">
+            <input type="hidden" name="date" value="{{ m.date.isoformat() }}">
+            <input type="hidden" name="kind" value="rate">
+            <button type="submit">❌ Je l'ai sautée</button>
+          </form>
+          {% endif %}
+          {% if m.kind %}
+          <form method="post" action="{{ url_for('coach.qualify_missed') }}">
+            <input type="hidden" name="date" value="{{ m.date.isoformat() }}">
+            <input type="hidden" name="kind" value="clear">
+            <button type="submit" class="ghost">Annuler</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <h3 class="section-title">Poids de corps</h3>
 <p class="muted">Une pesée par semaine, le matin à jeun, même jour même heure.
   C'est ce qui permet de distinguer un problème de programme d'un problème
