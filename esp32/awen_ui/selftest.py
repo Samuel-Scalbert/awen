@@ -19,6 +19,8 @@ LED_R, LED_G, LED_B = 32, 33, 13
 LED_COMMON = "cathode"
 DHT_PIN = 25
 ENC_CLK, ENC_DT = 4, 19
+CRANS_ATTENDUS = 10             # ce qu'on demande de tourner a la main
+STEPS_PER_DETENT_ACTUEL = 2     # doit refleter input.py
 BTN = {"A gauche": 26, "B selection": 27, "C droite": 14,
        "poussoir encodeur": 16}
 
@@ -212,14 +214,17 @@ def test_encoder():
     line("=== Encodeur (CLK {}, DT {}) ===".format(ENC_CLK, ENC_DT))
     clk = Pin(ENC_CLK, Pin.IN, Pin.PULL_UP)
     dt = Pin(ENC_DT, Pin.IN, Pin.PULL_UP)
-    line("  tourne-le doucement d'un tour complet pendant 10 secondes...")
+    line("  tourne EXACTEMENT {} crans vers la droite, doucement.".format(
+        CRANS_ATTENDUS))
+    line("  (les crans se sentent sous le doigt : compte-les)")
+    line("  tu as 15 secondes...")
 
     quad = (0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0)
     etat = (clk.value() << 1) | dt.value()
     acc = 0
     vus_clk = set()
     vus_dt = set()
-    fin = time.ticks_add(time.ticks_ms(), 10000)
+    fin = time.ticks_add(time.ticks_ms(), 15000)
     while time.ticks_diff(fin, time.ticks_ms()) > 0:
         a, b = clk.value(), dt.value()
         vus_clk.add(a)
@@ -232,8 +237,7 @@ def test_encoder():
 
     line("  CLK a pris les valeurs {} ; DT {}".format(
         sorted(vus_clk), sorted(vus_dt)))
-    line("  deplacement net : {} quarts de cran (~{} crans)".format(
-        acc, acc // 4))
+    line("  deplacement net : {} transitions".format(acc))
     if len(vus_clk) < 2:
         line("  -> CLK ne bouge jamais : fil absent, ou c'est le commun.")
     if len(vus_dt) < 2:
@@ -241,7 +245,23 @@ def test_encoder():
     if len(vus_clk) == 2 and len(vus_dt) == 2 and abs(acc) < 4:
         line("  -> les deux voies bougent mais rien ne compte : le commun")
         line("     n'est probablement pas au GND.")
-    line("  -> un tour complet doit donner une vingtaine de crans.")
+    elif acc < 0:
+        line("  -> compte a l'envers : intervertis CLK et DT dans main.py.")
+
+    # LA MESURE QUI COMPTE. Le firmware doit savoir combien de transitions
+    # separent deux crans, et ca depend du modele : tous les encodeurs ne
+    # font pas un cycle de quadrature complet entre deux crans. Une valeur
+    # trop haute demande deux crans pour un seul evenement, et la molette
+    # semble marcher une fois sur deux.
+    if abs(acc) >= CRANS_ATTENDUS:
+        mesure = abs(acc) / CRANS_ATTENDUS
+        proche = min((4, 2, 1), key=lambda v: abs(v - mesure))
+        line("  -> {:.1f} transitions par cran.".format(mesure))
+        line("     Mets STEPS_PER_DETENT = {} dans input.py".format(proche))
+        line("     (valeur actuelle : {})".format(STEPS_PER_DETENT_ACTUEL))
+    else:
+        line("  -> trop peu de transitions pour conclure : refais le test en")
+        line("     tournant bien {} crans.".format(CRANS_ATTENDUS))
     line()
 
 

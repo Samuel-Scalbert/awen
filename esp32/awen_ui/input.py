@@ -27,7 +27,7 @@ ce mécanisme a disparu avec le composant qui le rendait nécessaire — et
 avec lui la calibration automatique, la zone morte et le lissage du
 convertisseur, qui n'existaient que pour compenser un composant analogique.
 """
-from machine import Pin
+from machine import Pin, disable_irq, enable_irq
 import time
 
 # Événements. Des entiers plutôt que des chaînes : comparaison plus rapide,
@@ -99,13 +99,19 @@ class Button:
 class Encoder:
     """Encodeur rotatif en quadrature, lu par interruption.
 
-    On compte les quarts de cran dans l'interruption — qui doit rester
-    minuscule — et on convertit en crans dans poll(). La plupart des encodeurs
-    mécaniques font quatre transitions par cran ; ajuste STEPS_PER_DETENT si
-    le tien réagit deux fois trop ou deux fois trop peu.
+    On compte les transitions dans l'interruption — qui doit rester
+    minuscule — et on les convertit en crans dans poll().
+
+    STEPS_PER_DETENT DÉPEND DU MODÈLE, ET SE MESURE
+
+    Un encodeur ne fait pas forcément un cycle de quadrature complet entre
+    deux crans. Celui-ci en fait deux transitions, pas quatre : le self-test
+    (upload.ps1 -Test) mesure la valeur et l'affiche. Trop haut, il faut
+    deux crans pour que l'affichage bouge une fois — c'est exactement ce qui
+    donnait l'impression que la molette marchait une fois sur deux.
     """
 
-    STEPS_PER_DETENT = 4
+    STEPS_PER_DETENT = 2
 
     def __init__(self, clk_no, dt_no):
         self.clk = Pin(clk_no, Pin.IN, Pin.PULL_UP)
@@ -122,15 +128,25 @@ class Encoder:
         self._state = cur
 
     def poll(self, out):
-        acc = self._acc
         step = self.STEPS_PER_DETENT
-        while acc >= step:
-            acc -= step
-            out.append((TURN, 1))
-        while acc <= -step:
-            acc += step
-            out.append((TURN, -1))
-        self._acc = acc
+
+        # Lecture-modification-écriture ATOMIQUE, et c'est indispensable.
+        # _acc est écrit par l'interruption ; sans la masquer, un cran qui
+        # tombe entre la lecture et la réécriture est purement écrasé. On
+        # perdait donc des crans précisément pendant les rotations rapides,
+        # là où les interruptions sont les plus fréquentes.
+        irq = disable_irq()
+        acc = self._acc
+        # Division tronquée vers zéro, sans flottant : ce qui n'atteint pas
+        # un cran entier reste en réserve pour le prochain appel au lieu
+        # d'être arrondi et perdu.
+        crans = acc // step if acc >= 0 else -((-acc) // step)
+        self._acc = acc - crans * step
+        enable_irq(irq)
+
+        sens = 1 if crans > 0 else -1
+        for _ in range(abs(crans)):
+            out.append((TURN, sens))
 
 
 class Input:

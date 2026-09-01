@@ -144,8 +144,13 @@ def _coach_block():
 def _spotify_block():
     """L'état de lecture, tronqué aux 28 colonnes utiles de l'écran."""
     sp = spotify_svc.now_playing()
-    if sp is None:
-        return {"device": ""}          # non configuré : l'écran le dira
+    # now_playing() renvoie None si Spotify n'est pas configuré, mais aussi
+    # un {"device": ""} nu quand rien ne joue ou que l'API a échoué. Ne
+    # tester que None faisait lever un KeyError sur sp["title"] dès que la
+    # lecture s'arrêtait, et c'est tout /summary qui retournait alors une
+    # erreur 500 — l'afficheur restait figé sur ses dernières données.
+    if not sp or not sp.get("device"):
+        return {"device": ""}          # l'écran sait dire « aucun appareil »
     # Un identifiant court de pochette plutôt que l'URL : l'ESP32 s'en sert
     # uniquement pour savoir si l'image a changé, et une URL Spotify fait
     # 64 caractères qu'il transporterait toutes les cinq secondes pour rien.
