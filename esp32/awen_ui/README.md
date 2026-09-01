@@ -51,15 +51,17 @@ glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 | **Bouton A** gauche | 26 | vers **GND** |
 | **Bouton B** sélection | 27 | vers **GND** |
 | **Bouton C** droite | 14 | vers **GND** |
-| **Potentiomètre** curseur | **34** | extrémités sur **3V3** et **GND** |
+| **Encodeur** CLK | 4 | commun (patte du milieu) vers **GND** |
+| Encodeur DT | 19 | |
+| Encodeur poussoir | 16 | l'autre patte vers **GND** |
 | **LED RGB** rouge | 32 | ⚠️ **220 Ω en série** |
 | LED RGB verte | 33 | ⚠️ **220 Ω en série** |
 | LED RGB bleue | 13 | ⚠️ **220 Ω en série** |
 | LED RGB commun | — | **GND** (cathode commune) ou **3V3** (anode) |
-| **DHT11** DATA | 25 | **3V3** et **GND** |
+| **DHT11** DATA | 25 | ⚠️ **10 kΩ vers VCC**, plus **3V3** et **GND** |
 
-Broches encore libres et sûres : **4, 15, 16, 19**, plus **35** en entrée
-seule. Un encodeur rotatif irait sur 4 et 19.
+Broches encore libres et sûres : **15** et **35** (celle-ci en entrée seule),
+plus **34** que le potentiomètre libère.
 
 ### Où est le 5 V, et pourquoi tu n'en as pas besoin
 

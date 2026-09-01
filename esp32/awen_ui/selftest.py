@@ -18,8 +18,10 @@ from machine import ADC, Pin, PWM
 LED_R, LED_G, LED_B = 32, 33, 13
 LED_COMMON = "cathode"
 DHT_PIN = 25
-POT_PIN = 34
-BTN = {"A gauche": 26, "B selection": 27, "C droite": 14}
+POT_PIN = 34            # laisse pour le potard ; ignore si absent
+ENC_CLK, ENC_DT = 4, 19
+BTN = {"A gauche": 26, "B selection": 27, "C droite": 14,
+       "poussoir encodeur": 16}
 
 DUTY_MAX = 1023
 
@@ -186,6 +188,49 @@ def test_dht():
     line()
 
 
+def test_encoder():
+    """Compte les crans reels, et verifie que les deux voies bougent.
+
+    Un encodeur dont une seule voie est cablee « marche » a moitie : il
+    compte, mais toujours dans le meme sens. Ce test regarde donc les deux
+    lignes separement avant de compter.
+    """
+    line("=== Encodeur (CLK {}, DT {}) ===".format(ENC_CLK, ENC_DT))
+    clk = Pin(ENC_CLK, Pin.IN, Pin.PULL_UP)
+    dt = Pin(ENC_DT, Pin.IN, Pin.PULL_UP)
+    line("  tourne-le doucement d'un tour complet pendant 10 secondes...")
+
+    quad = (0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0)
+    etat = (clk.value() << 1) | dt.value()
+    acc = 0
+    vus_clk = set()
+    vus_dt = set()
+    fin = time.ticks_add(time.ticks_ms(), 10000)
+    while time.ticks_diff(fin, time.ticks_ms()) > 0:
+        a, b = clk.value(), dt.value()
+        vus_clk.add(a)
+        vus_dt.add(b)
+        cur = (a << 1) | b
+        if cur != etat:
+            acc += quad[(etat << 2) | cur]
+            etat = cur
+        time.sleep_ms(1)
+
+    line("  CLK a pris les valeurs {} ; DT {}".format(
+        sorted(vus_clk), sorted(vus_dt)))
+    line("  deplacement net : {} quarts de cran (~{} crans)".format(
+        acc, acc // 4))
+    if len(vus_clk) < 2:
+        line("  -> CLK ne bouge jamais : fil absent, ou c'est le commun.")
+    if len(vus_dt) < 2:
+        line("  -> DT ne bouge jamais : fil absent, ou c'est le commun.")
+    if len(vus_clk) == 2 and len(vus_dt) == 2 and abs(acc) < 4:
+        line("  -> les deux voies bougent mais rien ne compte : le commun")
+        line("     n'est probablement pas au GND.")
+    line("  -> un tour complet doit donner une vingtaine de crans.")
+    line()
+
+
 def test_pot():
     line("=== Potentiometre (GPIO {}) ===".format(POT_PIN))
     adc = ADC(Pin(POT_PIN))
@@ -240,6 +285,7 @@ def main():
     test_led()
     scan_free_pins()
     test_dht()
+    test_encoder()
     test_pot()
     test_buttons()
     line("=== fin ===")

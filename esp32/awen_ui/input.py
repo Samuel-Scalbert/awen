@@ -254,7 +254,7 @@ class Input:
     """Toutes les entrées derrière un seul poll()."""
 
     def __init__(self, pin_a=26, pin_b=27, pin_c=14, pot=34,
-                 clk=None, dt=None):
+                 clk=None, dt=None, pin_push=None):
         """Potard OU encodeur, jamais les deux.
 
         Renseigner clk et dt bascule sur l'encodeur et ignore le potard. Les
@@ -265,11 +265,18 @@ class Input:
         # A et C se répètent quand on les maintient : c'est ce qui permet de
         # faire défiler sans toucher au potard. B ne se répète pas — son
         # appui long a un sens à lui.
-        self.buttons = (
+        buttons = [
             Button(pin_a, BTN_A, repeats=True),
             Button(pin_b, BTN_B),
             Button(pin_c, BTN_C, repeats=True),
-        )
+        ]
+        # Le poussoir de l'encodeur emet le MEME evenement que le bouton B.
+        # Tourner puis appuyer sans deplacer la main est le geste naturel ;
+        # lui donner un role a lui obligerait a en retenir un de plus pour
+        # rien.
+        if pin_push is not None:
+            buttons.append(Button(pin_push, BTN_B))
+        self.buttons = tuple(buttons)
         if clk is not None and dt is not None:
             self.pot = _EncoderAsPot(clk, dt)
             # Un encodeur n'a pas de position physique : rien ne peut être

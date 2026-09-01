@@ -25,11 +25,21 @@ STALE_MS = 120000         # au-delà, la mesure ne vaut plus rien
 
 
 class Dht:
-    def __init__(self, pin_no, kind="dht11"):
+    def __init__(self, pin_no, kind="dht11", pullup=True):
         from machine import Pin
         import dht
         cls = dht.DHT22 if kind == "dht22" else dht.DHT11
-        self.d = cls(Pin(pin_no))
+        # Le tirage interne de l'ESP32 (~45 kOhm) est bien plus faible que
+        # les 10 kOhm que reclame un DHT nu, mais sur vingt centimetres de
+        # fil il suffit souvent. On l'active donc : ca ne coute rien et ca
+        # peut eviter d'attendre une resistance.
+        #
+        # Ce n'est PAS un remplacement. Si les lectures echouent une fois
+        # sur trois ou tombent en checksum, c'est ce tirage trop faible qui
+        # est en cause, et il faut la vraie resistance de 10 kOhm entre DATA
+        # et VCC.
+        pin = Pin(pin_no, Pin.IN, Pin.PULL_UP) if pullup else Pin(pin_no)
+        self.d = cls(pin)
         self.t = None
         self.h = None
         self.at = 0
@@ -89,7 +99,7 @@ class NoSensor:
         return "absent"
 
 
-def make(pin=None, kind="dht11"):
+def make(pin=None, kind="dht11", pullup=True):
     """Fabrique le capteur, ou un objet inerte s'il manque ou refuse.
 
     Un capteur absent ou mal câblé ne doit pas empêcher l'afficheur de
@@ -98,7 +108,7 @@ def make(pin=None, kind="dht11"):
     if pin is None:
         return NoSensor()
     try:
-        return Dht(pin, kind)
+        return Dht(pin, kind, pullup)
     except Exception as e:
         print("dht:", e)
         return NoSensor()
