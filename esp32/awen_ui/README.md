@@ -214,12 +214,19 @@ déplace un curseur dans la liste sans rien changer, **B applique** la teinte
 visée et l'enregistre dans un fichier sur la carte, qui survit donc à une
 coupure de courant.
 
-L'aperçu du bas est peint aux couleurs de la teinte **visée**, pas de la
-teinte active, et le nom en grand prend lui aussi sa couleur. C'est ce qui
-permet le geste en deux temps sans rien perdre : on juge quand même la
-couleur avant de s'engager, et l'écran entier ne clignote plus à chaque cran.
-La ligne déjà en place porte la mention `ACTIF` — sans elle, rien ne
-distinguerait la teinte qu'on vise de celle qui est déjà appliquée.
+**Rien ne change de couleur avant l'appui.** Le nom en grand annonce la
+teinte visée, mais dans l'encre de la teinte *active* : c'est un libellé, pas
+un échantillon. La ligne déjà en place porte la mention `ACTIF` — sans elle,
+rien ne distinguerait ce qu'on vise de ce qui est appliqué.
+
+Il n'y a donc plus d'aperçu, et c'est le prix assumé : un échantillon ne peut
+pas montrer une teinte sans la peindre. On applique pour voir, et on retourne
+d'un cran si ça ne plaît pas.
+
+C'est aussi ce qui rend le curseur fluide. Appliquer à chaque cran appelait
+`set_palette()`, donc `wipe()`, donc un repaint complet des 240×320 : la
+molette traînait d'un demi-tour. Déplacer le curseur ne touche plus que
+**32 cellules sur 600**, que le redessin partiel pousse seules.
 
 Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
 valeur mise en avant, alerte. `DIM` est toujours la teinte principale

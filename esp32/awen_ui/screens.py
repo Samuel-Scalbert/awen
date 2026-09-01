@@ -553,13 +553,15 @@ class Settings(Screen):
 class Theme(Screen):
     """Choix de la palette en deux temps : viser, puis appliquer.
 
-    La molette déplace un curseur dans la liste sans rien changer à
-    l'affichage ; B applique la teinte visée et l'enregistre.
+    RIEN NE CHANGE DE COULEUR TANT QU'ON N'A PAS APPUYÉ
 
-    L'aperçu du bas est peint aux couleurs de la teinte VISÉE, pas de la
-    teinte active. C'est ce qui permet de garder le geste en deux temps sans
-    rien perdre : on juge quand même la couleur avant de s'engager, et
-    l'écran entier ne se repeint plus à chaque cran.
+    La molette ne fait que déplacer un curseur ; B applique la teinte visée
+    et l'enregistre. C'est aussi ce qui rend le curseur fluide : appliquer à
+    chaque cran appelait set_palette(), donc wipe(), donc un repaint complet
+    des 240x320 — la molette semblait alors traîner d'un demi-tour.
+
+    Déplacer le curseur ne touche plus que deux lignes et le nom en grand,
+    et le redessin partiel de grid.py ne pousse que ces cellules-là.
     """
 
     NAME = "theme"
@@ -592,8 +594,10 @@ class Theme(Screen):
         actif = self._active(app)
         vise = theme.PALETTES[sel]
 
-        # Le nom en grand prend la couleur qu'il annonce.
-        g.big(1, 3, vise.name[:10], 2, vise.HI)
+        # Le nom visé en grand, mais dans la couleur ACTIVE : c'est un
+        # libellé, pas un échantillon. Le peindre dans la teinte visée
+        # reviendrait à changer le thème avant qu'on l'ait choisi.
+        g.big(1, 3, vise.name[:10], 2, g.p.HI)
         g.right(3, "{}/{}".format(sel + 1, len(theme.PALETTES)), g.p.DIM)
 
         for i, p in enumerate(theme.PALETTES):
@@ -608,23 +612,19 @@ class Theme(Screen):
             if i == actif:
                 g.right(r, "ACTIF", g.p.DIM)
 
-        # Les cinq rôles dans les couleurs de la teinte visée : on juge une
-        # palette sur pièce, pas sur son nom.
+        # Il n'y a plus d'aperçu, et c'est le prix assumé du geste en deux
+        # temps : un échantillon ne peut pas montrer une teinte sans la
+        # peindre. On applique pour voir, et on retourne d'un cran si ça ne
+        # plaît pas — B est juste à côté.
         g.rule(12)
-        g.text(1, 13, "APERCU", g.p.DIM)
-        g.text(1, 14, "valeur", vise.HI)
-        g.text(9, 14, "donnee", vise.FG)
-        g.text(17, 14, "etiquette", vise.DIM)
-        g.text(1, 15, "alerte", vise.ALERT)
-        g.bar(9, 15, 20, 64, vise.FG)
 
         # Rien n'est affiché quand il n'y a rien de sûr à dire : au démarrage
         # la palette vient bien du fichier, mais l'écran ne l'a pas écrite et
         # n'a donc aucun titre à s'en attribuer le mérite.
         if sel != actif:
-            g.text(1, 17, "[B] pour appliquer", g.p.DIM)
+            g.text(1, 13, "[B] pour appliquer", g.p.DIM)
         elif self.saved:
-            g.text(1, 17, "applique et enregistre", g.p.DIM)
+            g.text(1, 13, "applique et enregistre", g.p.DIM)
 
         _statusbar(g, "[B] APPLIQUER", "MOLETTE : CHOIX")
 
