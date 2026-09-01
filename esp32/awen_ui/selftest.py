@@ -164,6 +164,12 @@ def test_dht():
             line("     instable, c'est bien le capteur.")
     elif etat == "instable":
         line("  -> la ligne flotte : DATA n'est reliee a rien.")
+    if etat == "bas" and tire < 45:
+        line("     A VERIFIER AUSSI : la resistance de 10 kOhm va-t-elle bien")
+        line("     de DATA vers VCC ? Branchee de DATA vers la MASSE elle")
+        line("     devient un tirage vers le bas, gagne contre les 45 kOhm")
+        line("     internes, et donne exactement ce resultat — avec un")
+        line("     capteur parfaitement sain.")
 
     try:
         import dht

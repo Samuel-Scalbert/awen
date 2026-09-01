@@ -51,17 +51,31 @@ glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 | **Bouton A** gauche | 26 | vers **GND** |
 | **Bouton B** sélection | 27 | vers **GND** |
 | **Bouton C** droite | 14 | vers **GND** |
-| **Encodeur** CLK | 4 | commun (patte du milieu) vers **GND** |
-| Encodeur DT | 19 | |
-| Encodeur poussoir | 16 | l'autre patte vers **GND** |
+| **Encodeur** CLK | 4 — marqué `D4` | commun (patte du milieu) vers **GND** |
+| Encodeur DT | 19 — marqué `D19` | |
+| Encodeur poussoir | 16 — marqué **`RX2`** | l'autre patte vers **GND** |
 | **LED RGB** rouge | 32 | ⚠️ **220 Ω en série** |
 | LED RGB verte | 33 | ⚠️ **220 Ω en série** |
 | LED RGB bleue | 13 | ⚠️ **220 Ω en série** |
 | LED RGB commun | — | **GND** (cathode commune) ou **3V3** (anode) |
 | **DHT11** DATA | 25 | ⚠️ **10 kΩ vers VCC**, plus **3V3** et **GND** |
 
-Broches encore libres et sûres : **15** et **35** (celle-ci en entrée seule),
-plus **34** que le potentiomètre libère.
+Broches encore libres et sûres : **15** (`D15`) et **35** (`D35`, en entrée
+seule et sans tirage interne — jamais pour un bouton), plus **34** que le
+potentiomètre libère.
+
+### La sérigraphie ne dit pas toujours le numéro
+
+Sur la DevKit 30 broches, deux GPIO ne portent pas de nom en `D` :
+
+| GPIO | Marqué sur la carte |
+| --- | --- |
+| **16** | `RX2` |
+| **17** | `TX2` — déjà pris, c'est le DC de l'écran |
+
+Ce sont des GPIO comme les autres : MicroPython n'ouvre pas UART2 de
+lui-même. Chercher « D16 » sur la carte ne donne rien, et fait conclure à
+tort que la broche n'existe pas.
 
 ### Où est le 5 V, et pourquoi tu n'en as pas besoin
 

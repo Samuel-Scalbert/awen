@@ -6,7 +6,7 @@ broches » — le dupliquer ici garantirait qu'un jour les deux divergent.
 
     Ecran   CS 5, DC 17, RST 21, retroeclairage 22, SCK 18, MOSI 23
     Boutons gauche 26, selection 27, droite 14   (buttons.py)
-    Encodeur CLK 4, DT 19, poussoir 16, commun au GND
+    Encodeur CLK 4 (D4), DT 19 (D19), poussoir 16 (marque RX2), commun GND
     LED      32 R, 33 V, 13 B   (+ commun, + 3 resistances 220R)
     DHT11    25 DATA (+ 10k vers VCC)
 
@@ -46,6 +46,16 @@ BTN_LEFT, BTN_SELECT, BTN_RIGHT = 26, 27, 14
 # L'Adafruit 377 fait un cycle de quadrature complet par cran, ce qui
 # correspond au STEPS_PER_DETENT = 4 par defaut. Si un cran fait avancer de
 # deux, c'est un modele different : ajuste cette valeur dans input.py.
+# ATTENTION AUX ETIQUETTES DE LA CARTE
+#
+# La DevKit 30 broches melange deux conventions de serigraphie. GPIO 16 et
+# GPIO 17 n'y sont PAS marques « D16 » et « D17 » : ils portent les noms de
+# la deuxieme liaison serie.
+#
+#     GPIO 16  ->  broche marquee  RX2
+#     GPIO 17  ->  broche marquee  TX2   (deja prise : DC de l'ecran)
+#
+# Ce sont des GPIO ordinaires : MicroPython n'ouvre pas UART2 tout seul.
 ENC_CLK, ENC_DT, ENC_PUSH = 4, 19, 16
 
 # Le poussoir de l'encodeur double le bouton B : tourner puis appuyer sans
