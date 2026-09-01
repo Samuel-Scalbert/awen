@@ -551,67 +551,91 @@ class Settings(Screen):
 
 
 class Theme(Screen):
-    """Choix de la palette, avec aperçu immédiat.
+    """Choix de la palette en deux temps : viser, puis appliquer.
 
-    La molette parcourt les teintes et l'écran se repeint à chaque cran : on
-    juge une couleur en la voyant, pas en lisant son nom. B enregistre, et
-    le choix survit à une coupure de courant.
+    La molette déplace un curseur dans la liste sans rien changer à
+    l'affichage ; B applique la teinte visée et l'enregistre.
 
+    L'aperçu du bas est peint aux couleurs de la teinte VISÉE, pas de la
+    teinte active. C'est ce qui permet de garder le geste en deux temps sans
+    rien perdre : on juge quand même la couleur avant de s'engager, et
+    l'écran entier ne se repeint plus à chaque cran.
     """
 
     NAME = "theme"
 
     def __init__(self):
+        # La palette active ne se lit qu'à travers app, qui n'existe pas
+        # encore ici : le curseur se cale au premier affichage.
+        self.sel = None
         self.saved = False
 
-    def _index(self, app):
+    def _active(self, app):
         for i, p in enumerate(theme.PALETTES):
             if p.name == app.g.p.name:
                 return i
         return 0
 
+    def _cursor(self, app):
+        if self.sel is None:
+            self.sel = self._active(app)
+        return self.sel
+
     def on_turn(self, delta, app):
-        n = len(theme.PALETTES)
-        idx = (self._index(app) + delta) % n
-        # set_palette() vit sur la grille, pas sur l'app : c'est elle qui
-        # tient les couleurs et qui doit tout repeindre.
-        app.g.set_palette(theme.PALETTES[idx])
+        self.sel = (self._cursor(app) + delta) % len(theme.PALETTES)
         app.dirty = True
-        self.saved = False
 
     def draw(self, g, st, app):
         _header(g, "THEME", st, app)
 
-        cur = self._index(app)
-        g.big(1, 3, g.p.name[:10], 2)
-        g.right(3, "{}/{}".format(cur + 1, len(theme.PALETTES)), g.p.DIM)
+        sel = self._cursor(app)
+        actif = self._active(app)
+        vise = theme.PALETTES[sel]
+
+        # Le nom en grand prend la couleur qu'il annonce.
+        g.big(1, 3, vise.name[:10], 2, vise.HI)
+        g.right(3, "{}/{}".format(sel + 1, len(theme.PALETTES)), g.p.DIM)
 
         for i, p in enumerate(theme.PALETTES):
             r = 5 + i
-            mark = ">" if i == cur else " "
-            g.text(0, r, mark, g.p.FG)
-            g.text(2, r, p.name, g.p.HI if i == cur else g.p.DIM)
-            if i == cur:
+            ici = i == sel
+            g.text(0, r, ">" if ici else " ", g.p.FG)
+            g.text(2, r, p.name, g.p.HI if ici else g.p.DIM)
+            if ici:
                 g.cursor(2 + len(p.name) + 1, r, st.get("blink", True))
+            # Sans ce repère, rien ne distinguerait la teinte qu'on vise de
+            # celle qui est déjà en place, et B semblerait sans effet.
+            if i == actif:
+                g.right(r, "ACTIF", g.p.DIM)
 
-        # Un echantillon des cinq roles, pour juger la palette sur piece
-        # plutot que sur son nom.
+        # Les cinq rôles dans les couleurs de la teinte visée : on juge une
+        # palette sur pièce, pas sur son nom.
         g.rule(12)
         g.text(1, 13, "APERCU", g.p.DIM)
-        g.text(1, 14, "valeur", g.p.HI)
-        g.text(9, 14, "donnee", g.p.FG)
-        g.text(17, 14, "etiquette", g.p.DIM)
-        g.text(1, 15, "alerte", g.p.ALERT)
-        g.bar(9, 15, 20, 64)
+        g.text(1, 14, "valeur", vise.HI)
+        g.text(9, 14, "donnee", vise.FG)
+        g.text(17, 14, "etiquette", vise.DIM)
+        g.text(1, 15, "alerte", vise.ALERT)
+        g.bar(9, 15, 20, 64, vise.FG)
 
-        g.text(1, 17, "enregistre" if self.saved else "non enregistre",
-               g.p.DIM)
-        _statusbar(g, "[B] GARDER", "MOLETTE : TEINTE")
+        # Rien n'est affiché quand il n'y a rien de sûr à dire : au démarrage
+        # la palette vient bien du fichier, mais l'écran ne l'a pas écrite et
+        # n'a donc aucun titre à s'en attribuer le mérite.
+        if sel != actif:
+            g.text(1, 17, "[B] pour appliquer", g.p.DIM)
+        elif self.saved:
+            g.text(1, 17, "applique et enregistre", g.p.DIM)
+
+        _statusbar(g, "[B] APPLIQUER", "MOLETTE : CHOIX")
 
     def on_input(self, ev, app):
         kind, arg = ev
         if kind == BTN_B and arg == SHORT:
-            self.saved = theme.save(app.g.p)
+            pal = theme.PALETTES[self._cursor(app)]
+            # set_palette() vit sur la grille, pas sur l'app : c'est elle qui
+            # tient les couleurs et qui doit tout repeindre.
+            app.g.set_palette(pal)
+            self.saved = theme.save(pal)
             app.dirty = True
             return True
         return False

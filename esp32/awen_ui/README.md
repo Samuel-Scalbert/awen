@@ -181,7 +181,7 @@ Thème**, puis retour au début.
 | **Coach** | applique le conseil | — |
 | **Jobs** | — | fait défiler les offres |
 | **Paramètres** | ligne suivante | la valeur de la ligne |
-| **Thème** | enregistre la teinte | **la teinte**, en direct |
+| **Thème** | applique et enregistre la teinte visée | déplace le curseur |
 
 B est inactif sur trois écrans, et c'est assumé : y coller une action pour
 qu'il « serve » créerait des gestes qu'on déclenche par erreur. Un bouton
@@ -209,10 +209,17 @@ boutons suffisants pour sept écrans.
 ## Thèmes
 
 Six palettes : **ambre** (la teinte de TARS), **vert**, **bleu**, **violet**,
-**rubis**, **papier**. L'écran Thème les fait défiler à la molette et
-repeint tout à chaque cran — on juge une couleur en la voyant, pas en lisant
-son nom. B enregistre le choix dans un fichier sur la carte, qui survit donc à
-une coupure de courant.
+**rubis**, **papier**. Le choix se fait **en deux temps** : la molette
+déplace un curseur dans la liste sans rien changer, **B applique** la teinte
+visée et l'enregistre dans un fichier sur la carte, qui survit donc à une
+coupure de courant.
+
+L'aperçu du bas est peint aux couleurs de la teinte **visée**, pas de la
+teinte active, et le nom en grand prend lui aussi sa couleur. C'est ce qui
+permet le geste en deux temps sans rien perdre : on juge quand même la
+couleur avant de s'engager, et l'écran entier ne clignote plus à chaque cran.
+La ligne déjà en place porte la mention `ACTIF` — sans elle, rien ne
+distinguerait la teinte qu'on vise de celle qui est déjà appliquée.
 
 Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
 valeur mise en avant, alerte. `DIM` est toujours la teinte principale
