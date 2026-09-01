@@ -105,10 +105,14 @@ class Encoder:
     STEPS_PER_DETENT DÉPEND DU MODÈLE, ET SE MESURE
 
     Un encodeur ne fait pas forcément un cycle de quadrature complet entre
-    deux crans. Celui-ci en fait deux transitions, pas quatre : le self-test
-    (upload.ps1 -Test) mesure la valeur et l'affiche. Trop haut, il faut
-    deux crans pour que l'affichage bouge une fois — c'est exactement ce qui
-    donnait l'impression que la molette marchait une fois sur deux.
+    deux crans : beaucoup ont un cran là où les deux contacts sont ouverts
+    ET un autre là où ils sont fermés, ce qui n'en fait que deux.
+
+    Mesuré sur celui-ci : 53 transitions pour un tour, 25 crans sentis sous
+    le doigt, soit 2,1 — donc 2. La valeur par défaut de 4 exigeait deux
+    crans par événement, et c'est ce qui faisait « marcher la molette une
+    fois sur deux ». Le self-test (upload.ps1 -Test) refait la mesure et
+    affiche la valeur à mettre ici.
     """
 
     STEPS_PER_DETENT = 2
