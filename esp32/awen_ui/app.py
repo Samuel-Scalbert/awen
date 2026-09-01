@@ -13,16 +13,11 @@ Les mélanger dans une seule cadence est le moyen le plus sûr d'obtenir une
 interface qui rame : on redessinerait tout à chaque image, ou on lirait les
 boutons une fois par seconde.
 
-LE RATTRAPAGE DU POTENTIOMÈTRE
+LA MOLETTE ENVOIE UN DÉPLACEMENT
 
-Un potard a une position physique que le firmware ne peut pas changer. En
-passant d'un écran où la valeur est à 75 % à un écran où elle est à 30 %, le
-curseur reste à 75 % : appliquer sa position telle quelle écraserait le
-volume sans que personne n'ait rien touché.
-
-Le potard ne prend donc la main qu'après avoir traversé la valeur courante,
-comme sur une console de mixage. Tant qu'il ne l'a pas rattrapée, l'écran
-affiche vers où tourner.
+Un TURN vaut ±1 cran, jamais une valeur absolue : l'écran courant l'ajoute
+à ce qu'il affiche. Rien ne saute en changeant d'écran, et il n'y a donc
+aucun mécanisme de rattrapage ici. Le pourquoi est dans input.py.
 """
 import gc
 import time
@@ -31,7 +26,7 @@ import network
 import urequests
 
 from grid import Grid
-from input import BTN_A, BTN_B, BTN_C, Input, LONG, POT, REPEAT, SHORT
+from input import BTN_A, BTN_B, BTN_C, Input, LONG, REPEAT, SHORT, TURN
 import led as led_mod
 import screens
 import sensor as sensor_mod
@@ -45,7 +40,6 @@ RETRY_MS = 4000
 FRAME_MS = 16            # lecture des entrées
 BLINK_MS = 530           # demi-période du curseur
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
-POT_TOLERANCE = 3        # % d'écart sous lequel le potard reprend la main
 COVER = 112              # côté de la pochette, doit égaler COVER_SIZE serveur
 COVER_FILE = "/cover.bin"   # 25 Ko : sur la flash, jamais en RAM
 
@@ -56,7 +50,7 @@ BOOT_STEP_MS = 300       # apparition d'une ligne d'amorçage
 BOOT_HOLD_MS = 900       # pause finale, pour lire l'écran complet
 SWEEP_MS = 14            # une ligne du balayage de transition
 
-# Temps d'immobilité du potard avant d'envoyer le volume. Chaque envoi est
+# Temps d'immobilité de la molette avant d'envoyer le volume. Chaque envoi est
 # une requête HTTP bloquante vers le serveur, qui en fait une autre vers
 # Spotify : en tirer une par cran ferait une centaine d'appels sur une seule
 # rotation, tous mis à la queue leu leu pendant que l'écran attend. On
@@ -98,9 +92,6 @@ class App:
         self.t_poll = 0
         self.t_blink = 0
 
-        self.pot_raw = self.io.pot.value() if self.io.pot else 0
-        self.pot_target = None
-        self.pot_armed = False
         self.wlan = None
         self._vol_pending = None
         self._vol_at = 0
@@ -195,7 +186,7 @@ class App:
 
         # Spotify met une seconde ou deux à refléter un changement de volume.
         # Sans ce garde-fou, un rafraîchissement qui tombe pendant qu'on
-        # tourne ramènerait la jauge à l'ancienne valeur, et le potard
+        # tourne ramènerait la jauge à l'ancienne valeur, et la molette
         # semblerait lutter contre l'écran.
         if time.ticks_diff(self._vol_hold, time.ticks_ms()) > 0:
             sp = data.get("spotify")
@@ -345,18 +336,8 @@ class App:
     def current(self):
         return self.boot if self.in_boot else self.screens[self.index]
 
-    def rearm_pot(self):
-        """Oblige le potard à retraverser la valeur avant de reprendre la main."""
-        self.pot_armed = False
-
-    def set_palette(self, palette):
-        """Change de teinte à chaud, depuis l'écran Theme."""
-        self.g.set_palette(palette)
-        self.dirty = True
-
     def go(self, step):
         self.index = (self.index + step) % len(self.screens)
-        self.rearm_pot()
         self.g.sweep(SWEEP_MS)       # au lieu d'un flash noir
         self.dirty = True
 
@@ -366,12 +347,8 @@ class App:
 
         kind, arg = ev
 
-        if kind == POT:
-            self.pot_raw = arg
-            if self.pot_armed:
-                self.current().on_pot(arg, self)
-            else:
-                self.dirty = True    # le repère de rattrapage doit suivre
+        if kind == TURN:
+            self.current().on_turn(arg, self)
             return
 
         if self.current().on_input(ev, self):
@@ -379,7 +356,6 @@ class App:
 
         if kind == BTN_B and arg == LONG:
             self.index = 0           # retour à l'accueil
-            self.rearm_pot()
             self.g.sweep(SWEEP_MS)
             self.dirty = True
         elif kind == BTN_A and arg in (SHORT, REPEAT):
@@ -407,32 +383,6 @@ class App:
             # s'imposer, et la couleur reste lisible en permanence.
             color = tuple(c // 2 for c in color)
         self.led.show(color)
-
-    def _update_pot_arming(self):
-        """Le potard reprend la main dès qu'il traverse la valeur courante."""
-        screen = self.current()
-        # Un encodeur n'a rien à rattraper : il est relatif par nature.
-        if not self.io.absolute or screen.POT_FREE:
-            # Écran qui parcourt une liste : il n'y a aucune valeur à écraser
-            # par accident, donc pas de rattrapage. Sans ce cas, un
-            # pot_target() à None désarmerait le potard et l'écran ne
-            # recevrait plus rien — c'est ce qui empêchait de changer de thème.
-            self.pot_armed = True
-            if self.pot_target is not None:
-                self.pot_target = None
-                self.dirty = True
-            return
-
-        target = screen.pot_target(self.state)
-        if target != self.pot_target:
-            self.pot_target = target
-            self.dirty = True
-        if target is None:
-            self.pot_armed = False
-            return
-        if not self.pot_armed and abs(self.pot_raw - target) <= POT_TOLERANCE:
-            self.pot_armed = True
-            self.dirty = True
 
     # ------------------------------------------------------------ boucle
 
@@ -512,7 +462,6 @@ class App:
         if self.sensor.poll(now):
             self.dirty = True
 
-        self._update_pot_arming()
         self._update_led()
         self._flush_volume(now)
 

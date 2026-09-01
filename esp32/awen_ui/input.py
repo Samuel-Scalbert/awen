@@ -1,4 +1,4 @@
-"""Trois boutons et un potentiomètre, ramenés à une file d'événements.
+"""Trois boutons et un encodeur rotatif, ramenés à une file d'événements.
 
 Le reste du firmware ne voit jamais un GPIO : il appelle poll() et reçoit des
 événements déjà interprétés. Toute la logique d'anti-rebond et de filtrage
@@ -10,25 +10,31 @@ tirage interne est activé, un bouton relâché lit donc 1 et enfoncé 0.
     A (gauche)  GPIO 26     precedent            \
     B (select)  GPIO 27     valider / appui long  > repris de buttons.py
     C (droite)  GPIO 14     suivant              /
-    potard      GPIO 34     valeurs  (extremes sur 3V3 et GND, curseur ici)
+    encodeur    CLK 4, DT 19, poussoir 16 (marque RX2), commun au GND
 
-GPIO 34 n'est pas un choix esthétique. L'ESP32 a deux convertisseurs
-analogiques et **ADC2 cesse de fonctionner dès que le wifi est actif** : un
-potentiomètre câblé sur GPIO 25 ou 26 lirait n'importe quoi une fois connecté.
-Les broches 32 à 39 sont sur ADC1 ; 34 à 39 sont en entrée seule, donc sans
-tirage interne parasite. C'est exactement ce qu'on veut pour un potard.
+L'ENCODEUR ÉMET UN DÉPLACEMENT, PAS UNE POSITION
+
+Le firmware a longtemps été bâti autour d'un potentiomètre, et donc autour
+d'un mécanisme de « rattrapage » : un potard a une position physique, et
+passer d'un écran où la valeur vaut 75 % à un écran où elle vaut 30 %
+aurait écrasé la seconde. Il fallait attendre que le curseur traverse la
+valeur courante avant de lui rendre la main, et l'écran affichait vers où
+tourner en attendant.
+
+Un encodeur n'a pas de position. Il dit « un cran vers la droite », les
+écrans appliquent ce ±1 à ce qu'ils affichent, et rien ne peut sauter. Tout
+ce mécanisme a disparu avec le composant qui le rendait nécessaire — et
+avec lui la calibration automatique, la zone morte et le lissage du
+convertisseur, qui n'existaient que pour compenser un composant analogique.
 """
-from machine import ADC, Pin
+from machine import Pin
 import time
 
 # Événements. Des entiers plutôt que des chaînes : comparaison plus rapide,
 # et aucune allocation dans la boucle principale.
 BTN_A, BTN_B, BTN_C = 0, 1, 2
 SHORT, LONG, REPEAT = 0, 1, 2
-POT = 9                        # (POT, valeur) où valeur va de 0 à 100
-# L'encodeur émet le même marqueur : ce qui compte pour les écrans est la
-# valeur, pas la nature du composant qui l'a produite.
-TURN = POT
+TURN = 9                       # (TURN, delta) où delta vaut -1 ou +1
 
 DEBOUNCE_MS = 25               # sous 25 ms, c'est du rebond mécanique
 LONG_MS = 600                  # au-delà, l'intention est claire
@@ -90,101 +96,6 @@ class Button:
             out.append((self.id, LONG))
 
 
-class Pot:
-    """Potentiomètre lu sur ADC1, filtré et débruité.
-
-    Un convertisseur d'ESP32 est bruyant : à curseur immobile, les lectures
-    brutes sautent d'une trentaine de points sur 4095. Sans filtrage, une
-    valeur à l'écran tremblerait en permanence et chaque tremblement
-    déclencherait un redessin.
-
-    Deux protections, dans cet ordre :
-
-      1. une moyenne glissante exponentielle, qui lisse le bruit sans garder
-         d'historique en mémoire ;
-      2. une zone morte : on ne signale un changement qu'au-delà d'un point
-         de pourcentage, sinon le lissage tremblerait plus lentement, mais
-         il tremblerait quand même.
-
-    L'ÉCHELLE SE CALIBRE TOUTE SEULE
-
-    Une borne écrite en dur ne peut pas savoir jusqu'où TON potard va. Le
-    convertisseur de l'ESP32 est non linéaire près de 0 V et sature avant
-    3,3 V, à une valeur qui dépend de la puce, de l'alimentation et des
-    tolérances de la piste résistive. Fixer le maximum à 4000 alors que le
-    tien plafonne à 3600, c'est un potard qui ne monte jamais au-delà de
-    90 % — sans que rien ne l'indique.
-
-    On mémorise donc les extrêmes réellement vus et on tend l'échelle
-    dessus. Le premier balayage complet suffit à calibrer ; avant ça, une
-    plage par défaut évite les valeurs absurdes.
-
-    Les 2 % de chaque bout sont collés à 0 et 100. Sans cette marge, la
-    dernière fraction de course serait injoignable dès que le bruit dépasse
-    d'un point ce qui a été observé.
-    """
-
-    RAW_MIN, RAW_MAX = 120, 4000   # plage supposée tant que rien n'est vu
-    ALPHA_NUM, ALPHA_DEN = 1, 4    # lissage : 1/4 de la nouvelle mesure
-    DEADBAND = 1                   # en pourcents
-    EDGE = 2                       # % collés aux extrêmes
-    # Un potard correctement câblé entre 3V3 et GND balaie près de 3800
-    # points. En deçà de 1500, ce n'est pas « pas encore assez tourné » :
-    # c'est un câblage incomplet — une extrémité en l'air, ou le curseur
-    # confondu avec un bord.
-    #
-    # Le seuil était à 300, et c'était le vrai défaut : une course de 561
-    # points passait pour valide, l'échelle l'étirait sur 0-100 %, et le
-    # moindre frémissement du convertisseur faisait bondir la valeur de
-    # sept pour cent. Le potard ne « buguait » pas, on amplifiait son bruit
-    # par sept.
-    MIN_SPAN = 1500
-
-    def __init__(self, pin_no):
-        self.adc = ADC(Pin(pin_no))
-        self.adc.atten(ADC.ATTN_11DB)   # pleine échelle 0-3,3 V
-        self.ema = self.adc.read()
-        # Bornes impossibles : la première mesure les remplace toutes deux.
-        self.lo, self.hi = 4095, 0
-        self.last = self._pct()
-
-    def _pct(self):
-        raw = self.ema
-        if raw < self.lo:
-            self.lo = raw
-        if raw > self.hi:
-            self.hi = raw
-
-        lo, hi = self.lo, self.hi
-        if hi - lo < self.MIN_SPAN:
-            # Pas encore assez de course observée : on s'en remet à la plage
-            # supposée plutôt que d'amplifier le bruit sur trois points.
-            lo, hi = self.RAW_MIN, self.RAW_MAX
-
-        if raw <= lo:
-            return 0
-        if raw >= hi:
-            return 100
-        pct = ((raw - lo) * 100) // (hi - lo)
-        if pct <= self.EDGE:
-            return 0
-        if pct >= 100 - self.EDGE:
-            return 100
-        return pct
-
-    def value(self):
-        """Position courante en pourcents, sans passer par la file."""
-        return self.last
-
-    def poll(self, out):
-        self.ema += (self.adc.read() - self.ema) * self.ALPHA_NUM \
-            // self.ALPHA_DEN
-        pct = self._pct()
-        if abs(pct - self.last) >= self.DEADBAND:
-            self.last = pct
-            out.append((POT, pct))
-
-
 class Encoder:
     """Encodeur rotatif en quadrature, lu par interruption.
 
@@ -222,48 +133,13 @@ class Encoder:
         self._acc = acc
 
 
-class _EncoderAsPot:
-    """Fait passer un encodeur pour un potard, vu des écrans.
-
-    L'encodeur est relatif ; le reste du firmware raisonne en position de 0
-    à 100. On accumule donc les crans dans un compteur borné. C'est le seul
-    endroit qui connaît la différence — et comme un encodeur n'a aucune
-    position physique à trahir, il n'a jamais besoin de rattrapage.
-    """
-
-    STEP = 4                        # % gagnés par cran
-
-    def __init__(self, clk, dt):
-        self.enc = Encoder(clk, dt)
-        self.last = 50              # on démarre au milieu, faute de mieux
-
-    def value(self):
-        return self.last
-
-    def poll(self, out):
-        moves = []
-        self.enc.poll(moves)
-        if not moves:
-            return
-        for _kind, delta in moves:
-            self.last = max(0, min(100, self.last + delta * self.STEP))
-        out.append((POT, self.last))
-
-
 class Input:
     """Toutes les entrées derrière un seul poll()."""
 
-    def __init__(self, pin_a=26, pin_b=27, pin_c=14, pot=34,
+    def __init__(self, pin_a=26, pin_b=27, pin_c=14,
                  clk=None, dt=None, pin_push=None):
-        """Potard OU encodeur, jamais les deux.
-
-        Renseigner clk et dt bascule sur l'encodeur et ignore le potard. Les
-        deux produisent le même événement POT avec une valeur de 0 à 100 :
-        les écrans ne savent pas lequel est branché, et n'ont pas à le
-        savoir.
-        """
         # A et C se répètent quand on les maintient : c'est ce qui permet de
-        # faire défiler sans toucher au potard. B ne se répète pas — son
+        # faire défiler sans lâcher la molette. B ne se répète pas — son
         # appui long a un sens à lui.
         buttons = [
             Button(pin_a, BTN_A, repeats=True),
@@ -277,17 +153,8 @@ class Input:
         if pin_push is not None:
             buttons.append(Button(pin_push, BTN_B))
         self.buttons = tuple(buttons)
-        if clk is not None and dt is not None:
-            self.pot = _EncoderAsPot(clk, dt)
-            # Un encodeur n'a pas de position physique : rien ne peut être
-            # écrasé par accident, donc aucun rattrapage n'a de sens.
-            self.absolute = False
-        elif pot is not None:
-            self.pot = Pot(pot)
-            self.absolute = True
-        else:
-            self.pot = None
-            self.absolute = False
+        self.enc = (Encoder(clk, dt)
+                    if clk is not None and dt is not None else None)
 
     def poll(self):
         """Renvoie la liste des événements survenus depuis le dernier appel."""
@@ -295,6 +162,6 @@ class Input:
         now = time.ticks_ms()
         for b in self.buttons:
             b.poll(now, out)
-        if self.pot is not None:
-            self.pot.poll(out)
+        if self.enc is not None:
+            self.enc.poll(out)
         return out

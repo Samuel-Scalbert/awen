@@ -61,12 +61,6 @@ ENC_CLK, ENC_DT, ENC_PUSH = 4, 19, 16
 # Le poussoir de l'encodeur double le bouton B : tourner puis appuyer sans
 # deplacer la main. Les trois boutons cables restent actifs.
 
-# POTENTIOMETRE — remplace par l'encodeur, garde pour reference.
-# Pour y revenir : remettre "pot": 34 a la place de "clk"/"dt"/"pin_push".
-# Il DOIT etre sur ADC1 (GPIO 32-39) : ADC2 cesse de fonctionner des que le
-# wifi est actif, et un potard sur GPIO 25 lirait n'importe quoi.
-POT = 34
-
 # LED RGB a 4 broches : une patte par couleur, plus le commun.
 #
 # UNE RESISTANCE DE 220 OHMS SUR CHAQUE PATTE DE COULEUR. Sans elle la LED

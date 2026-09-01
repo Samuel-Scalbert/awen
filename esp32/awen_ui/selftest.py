@@ -12,13 +12,12 @@ bride : un test doit lever le doute, pas menager les yeux.
 """
 import time
 
-from machine import ADC, Pin, PWM
+from machine import Pin, PWM
 
 # Doivent correspondre a main.py.
 LED_R, LED_G, LED_B = 32, 33, 13
 LED_COMMON = "cathode"
 DHT_PIN = 25
-POT_PIN = 34            # laisse pour le potard ; ignore si absent
 ENC_CLK, ENC_DT = 4, 19
 BTN = {"A gauche": 26, "B selection": 27, "C droite": 14,
        "poussoir encodeur": 16}
@@ -179,18 +178,27 @@ def test_dht():
     d = dht.DHT11(Pin(DHT_PIN))
     # Le composant refuse d'etre interroge plus d'une fois toutes les deux
     # secondes, et rate frequemment la premiere lecture apres l'alimentation.
+    reussites = 0
     for essai in range(1, 6):
         try:
             d.measure()
             line("  essai {} : {} C, {} %".format(
                 essai, d.temperature(), d.humidity()))
+            reussites += 1
         except Exception as e:
             line("  essai {} : echec — {}".format(essai, e))
         time.sleep(2.5)
-    line("  -> ETIMEDOUT a chaque fois : mauvaise broche, DATA non reliee,")
-    line("     ou resistance de tirage absente (10 kOhm entre DATA et 3V3).")
-    line("  -> checksum : cablage correct mais signal bruite ; rapproche le")
-    line("     module ou raccourcis le fil.")
+    # Les pistes de depannage ne s'affichent que s'il y a eu un echec.
+    # Les imprimer apres cinq lectures reussies faisait douter d'un capteur
+    # qui marchait parfaitement.
+    if reussites == 5:
+        line("  -> capteur OK.")
+    elif reussites:
+        line("  -> {}/5 seulement : tirage trop faible. Mets la vraie".format(reussites))
+        line("     resistance de 10 kOhm entre DATA et VCC, ou raccourcis le fil.")
+    else:
+        line("  -> aucune lecture : mauvaise broche, DATA non reliee, ou")
+        line("     resistance de tirage absente (10 kOhm entre DATA et VCC).")
     line()
 
 
@@ -237,34 +245,6 @@ def test_encoder():
     line()
 
 
-def test_pot():
-    line("=== Potentiometre (GPIO {}) ===".format(POT_PIN))
-    adc = ADC(Pin(POT_PIN))
-    adc.atten(ADC.ATTN_11DB)
-    line("  tourne-le a fond dans les deux sens pendant 8 secondes...")
-    lo, hi = 4095, 0
-    fin = time.ticks_add(time.ticks_ms(), 8000)
-    while time.ticks_diff(fin, time.ticks_ms()) > 0:
-        v = adc.read()
-        lo = min(lo, v)
-        hi = max(hi, v)
-        time.sleep_ms(50)
-    span = hi - lo
-    line("  lu : {} a {}  (course de {} points sur 4095)".format(lo, hi, span))
-    if span < 300:
-        line("  -> quasi immobile : le curseur n'est relie a rien, ou le")
-        line("     potard n'est plus la du tout.")
-    elif span < 1500:
-        line("  -> COURSE TROP FAIBLE. Un potard cable entre 3V3 et GND")
-        line("     balaie pres de 3800 points. Verifie que ses DEUX pattes")
-        line("     exterieures sont bien l'une au 3V3 et l'autre au GND, et")
-        line("     que le fil du milieu part vers GPIO {}.".format(POT_PIN))
-        line("     Une extremite en l'air donne exactement ce resultat.")
-    else:
-        line("  -> course correcte.")
-    line()
-
-
 def test_buttons():
     line("=== Boutons ===")
     pins = {n: Pin(p, Pin.IN, Pin.PULL_UP) for n, p in BTN.items()}
@@ -292,7 +272,6 @@ def main():
     scan_free_pins()
     test_dht()
     test_encoder()
-    test_pot()
     test_buttons()
     line("=== fin ===")
 

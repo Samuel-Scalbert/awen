@@ -297,7 +297,6 @@ def s_gym(p):
         s.right(r, detail, "fg")
 
     s.text(1, 16, "dernier : Legs ven 28/08", "dim")
-    s.text(1, 17, "TOURNE >  50%", "dim")     # rattrapage du potard
     s.statusbar("< PREC", "1/1")
     return s
 
@@ -347,7 +346,7 @@ def s_settings(p):
         s.right(r, "{:>3}%".format(val), "hi", bold=True)
         s.bar(1, r + 1, 28, val, "fg" if focused else "dim")
 
-    s.statusbar("[B] LIGNE", "POTARD : VALEUR")
+    s.statusbar("[B] LIGNE", "MOLETTE : VALEUR")
     return s
 
 
@@ -377,14 +376,15 @@ def s_jobs(p):
 
 
 def s_spotify(p):
-    """Ce qui joue, pochette comprise, et le volume au potard.
+    """Ce qui joue, pochette comprise, et le volume a la molette.
 
     La pochette est reduite a 64x64 par le serveur et envoyee en pixels
     bruts : un ESP32 ne sait pas decoder un JPEG. Elle occupe 8 colonnes sur
     4 lignes, le texte prend les 20 colonnes restantes.
 
-    Le volume est l'usage le plus naturel d'un potentiometre de tout le
-    firmware : il a une position absolue, exactement comme le curseur.
+    Le volume est l'usage le plus naturel de la molette de tout le firmware :
+    un cran vers la droite, un pas de plus, sans quitter la pochette des
+    yeux.
     """
     s = Screen(p, active=2)
     s.header("> SPOTIFY", "21:47")
@@ -437,7 +437,7 @@ def s_theme(p):
     s.bar(9, 15, 20, 64)
 
     s.text(1, 17, "non enregistre", "dim")
-    s.statusbar("[B] GARDER", "POTARD : TEINTE")
+    s.statusbar("[B] GARDER", "MOLETTE : TEINTE")
     return s
 
 

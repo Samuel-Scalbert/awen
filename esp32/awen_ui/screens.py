@@ -4,29 +4,20 @@ Chaque écran expose :
     NAME              libellé court, pour la trace série
     draw(g, st, app)  compose la grille ; ne dessine jamais en pixels directs
     on_input(ev, app) renvoie True si l'événement a été absorbé
-    pot_target(st)    valeur logique actuelle en %, ou None si l'écran
-                      n'utilise pas le potentiomètre
-    on_pot(pct, app)  appelé seulement une fois le potard « rattrapé »
+    on_turn(delta, app)  un cran d'encodeur : delta vaut -1 ou +1
 
-LE POTENTIOMÈTRE EST ABSOLU, ET C'EST TOUT LE PROBLÈME
+L'ENCODEUR EMET UN DEPLACEMENT
 
-Un encodeur envoie « +1 » ou « -1 » : il n'a pas de position. Un potard, si.
-Quand tu quittes les Paramètres avec HUMOUR à 75 % pour aller sur Spotify où
-le volume est à 30 %, le curseur est toujours physiquement à 75 %. Sans
-précaution, l'écran Spotify collerait le volume à 75 % à la première lecture,
-sans que tu aies rien touché.
-
-La parade est celle des consoles de mixage : le potard ne prend la main
-qu'après être passé par la valeur courante. Tant qu'il ne l'a pas rattrapée,
-l'écran affiche vers où tourner. C'est App qui arbitre (voir app.py), les
-écrans se contentent de déclarer leur valeur via pot_target().
+Il n'a pas de position : il dit « un cran vers la droite ». Les écrans
+reçoivent donc un ±1 et l'appliquent à ce qu'ils affichent. Rien à
+annoncer, rien à rattraper, aucun saut possible en changeant d'écran.
 
 Texte en ASCII majuscule sans accents : voir grid.py.
 """
 import time
 
 from grid import COLS, ROWS
-from input import BTN_A, BTN_B, BTN_C, POT, SHORT, LONG, REPEAT
+from input import BTN_A, BTN_B, BTN_C, SHORT, LONG, REPEAT
 import theme
 
 
@@ -67,18 +58,6 @@ def _statusbar(g, left, right):
     g.right(ROWS - 1, right, g.p.DIM)
 
 
-def _pot_hint(g, row, app):
-    """Affiche vers où tourner tant que le potard n'a pas rattrapé la valeur.
-
-    Sans ce repère, l'utilisateur tourne et ne voit rien bouger : il croit le
-    potard cassé alors qu'il est simplement en attente de rattrapage.
-    """
-    if app.pot_armed or app.pot_target is None:
-        return
-    arrow = "TOURNE >" if app.pot_raw < app.pot_target else "< TOURNE"
-    g.text(1, row, "{} {:>3}%".format(arrow, app.pot_target), g.p.DIM)
-
-
 def _wrap(text, width):
     """Coupe aux espaces, jamais au milieu d'un mot."""
     lines, line = [], ""
@@ -101,13 +80,9 @@ def _mmss(seconds):
 
 
 class Screen:
-    """Base commune. Par défaut, un écran n'absorbe rien et ignore le potard."""
+    """Base commune. Par défaut, un écran n'absorbe rien et ignore la molette."""
 
     NAME = "?"
-    # Vrai quand le potard agit sans rattrapage. À distinguer d'un
-    # pot_target() qui renvoie None : celui-là veut dire « cet écran ignore le
-    # potard », et le désarme donc entièrement.
-    POT_FREE = False
 
     def draw(self, g, st, app):
         raise NotImplementedError
@@ -115,10 +90,7 @@ class Screen:
     def on_input(self, ev, app):
         return False
 
-    def pot_target(self, st):
-        return None
-
-    def on_pot(self, pct, app):
+    def on_turn(self, delta, app):
         pass
 
 
@@ -296,7 +268,7 @@ class Gym(Screen):
     série saisie ici n'aurait aucun sens. Ce que tu veux en rentrant, c'est
     savoir ce qui t'attend et à quelle charge.
 
-    Le potard fait défiler la liste — cinq exercices tiennent à l'écran.
+    La molette fait défiler la liste — cinq exercices tiennent à l'écran.
     """
 
     NAME = "gym"
@@ -308,15 +280,10 @@ class Gym(Screen):
     def _rows(self, st):
         return st.get("gym", {}).get("exercises") or []
 
-    def pot_target(self, st):
-        extra = max(0, len(self._rows(st)) - self.VISIBLE)
-        return (self.top * 100) // extra if extra else None
-
-    def on_pot(self, pct, app):
+    def on_turn(self, delta, app):
         extra = max(0, len(self._rows(app.state)) - self.VISIBLE)
-        if extra:
-            self.top = (pct * extra + 50) // 100
-            app.dirty = True
+        self.top = max(0, min(extra, self.top + delta))
+        app.dirty = True
 
     def draw(self, g, st, app):
         gym = st.get("gym", {})
@@ -349,7 +316,6 @@ class Gym(Screen):
         else:
             g.text(1, 16, "dernier : {}".format(gym.get("last", "")), g.p.DIM)
 
-        _pot_hint(g, 17, app)
         _statusbar(g, "< PREC", "{}/{}".format(
             self.top + 1, max(1, len(rows) - self.VISIBLE + 1)))
 
@@ -424,17 +390,10 @@ class Jobs(Screen):
     def _offers(self, st):
         return st.get("jobs", {}).get("offers") or []
 
-    def pot_target(self, st):
-        extra = max(0, len(self._offers(st)) - 3)
-        if not extra:
-            return None
-        return (self.top * 100) // extra
-
-    def on_pot(self, pct, app):
+    def on_turn(self, delta, app):
         extra = max(0, len(self._offers(app.state)) - 3)
-        if extra:
-            self.top = (pct * extra + 50) // 100
-            app.dirty = True
+        self.top = max(0, min(extra, self.top + delta))
+        app.dirty = True
 
     def draw(self, g, st, app):
         jobs = st.get("jobs", {})
@@ -458,31 +417,28 @@ class Jobs(Screen):
             for k, line in enumerate((offers[j].get("title") or [])[:3]):
                 g.text(2, r + k, line.upper(), g.p.HI if k == 0 else g.p.DIM)
 
-        _pot_hint(g, 17, app)
         _statusbar(g, "PIPELINE 09:00",
                    "{}/{}".format(self.top + 1, max(1, len(offers) - 2))
                    if len(offers) > 3 else "")
 
 
 class Spotify(Screen):
-    """Ce qui joue, et le volume au potard.
+    """Ce qui joue, et le volume à la molette.
 
-    C'est l'usage le plus naturel d'un potentiomètre de tout le firmware : un
-    volume a une position absolue, exactement comme le curseur. Là où un
-    encodeur oblige à tourner longtemps depuis une valeur inconnue, le potard
-    donne le volume au premier coup d'œil, sans rien afficher.
+    Un cran vaut deux pour cent : un tour complet couvre toute l'échelle,
+    et le geste reste assez fin pour ajuster sans viser.
     """
 
     NAME = "spotify"
 
-    def pot_target(self, st):
-        sp = st.get("spotify", {})
-        if not sp.get("device"):
-            return None
-        return sp.get("volume", 50)
+    VOL_STEP = 2                 # % par cran ; un tour couvre l'echelle
 
-    def on_pot(self, pct, app):
-        app.set_volume(pct)
+    def on_turn(self, delta, app):
+        sp = app.state.get("spotify") or {}
+        if not sp.get("device"):
+            return
+        v = max(0, min(100, sp.get("volume", 0) + delta * self.VOL_STEP))
+        app.set_volume(v)
 
     def draw(self, g, st, app):
         sp = st.get("spotify", {})
@@ -524,17 +480,10 @@ class Spotify(Screen):
         g.bar(4, 17, 21, sp.get("volume", 0))
         g.right(17, "{:>3}%".format(sp.get("volume", 0)), g.p.HI)
 
-        # Le repere de rattrapage prend la place de l'artiste : il n'apparait
-        # qu'avec un potard non rattrape, et savoir ou tourner compte alors
-        # plus que de relire un nom deja lu.
-        if not app.pot_armed and app.pot_target is not None:
-            g.text(1, 14, " " * 28)
-            _pot_hint(g, 14, app)
-        playing = sp.get("playing")
         # 30 colonnes en tout : « [B] PAUSE » tient a gauche, le rappel du
         # geste piste a droite. Le nom de l'appareil ne rentre pas, et il
         # importe moins que de savoir comment sauter une piste.
-        _statusbar(g, "[B] " + ("PAUSE" if playing else "LIRE"),
+        _statusbar(g, "[B] " + ("PAUSE" if sp.get("playing") else "LIRE"),
                    "A/C tenu: piste")
 
     def on_input(self, ev, app):
@@ -569,11 +518,11 @@ class Settings(Screen):
         self.sel = 1                     # HUMOUR, comme dans le film
         self.values = [95, 75, 60, 40]
 
-    def pot_target(self, st):
-        return self.values[self.sel]
+    STEP = 5                     # % par cran
 
-    def on_pot(self, pct, app):
-        self.values[self.sel] = pct
+    def on_turn(self, delta, app):
+        v = self.values[self.sel] + delta * self.STEP
+        self.values[self.sel] = max(0, min(100, v))
         app.dirty = True
 
     def draw(self, g, st, app):
@@ -582,7 +531,7 @@ class Settings(Screen):
             r = 4 + i * 3
             focused = i == self.sel
             g.text(1, r, name, g.p.HI if focused else g.p.FG)
-            # Le curseur marque la ligne que le potard commande. Une simple
+            # Le curseur marque la ligne que la molette commande. Une simple
             # mise en surbrillance ne suffirait pas : sur cet ecran quatre
             # lignes se ressemblent, et rien d'autre ne bouge.
             if focused:
@@ -590,14 +539,12 @@ class Settings(Screen):
             g.right(r, "{:>3}%".format(self.values[i]), g.p.HI)
             g.bar(1, r + 1, 28, self.values[i],
                   g.p.FG if focused else g.p.DIM)
-        _pot_hint(g, 17, app)
-        _statusbar(g, "[B] LIGNE", "POTARD : VALEUR")
+        _statusbar(g, "[B] LIGNE", "MOLETTE : VALEUR")
 
     def on_input(self, ev, app):
         kind, arg = ev
         if kind == BTN_B and arg == SHORT:
             self.sel = (self.sel + 1) % len(self.KEYS)
-            app.rearm_pot()          # nouvelle valeur : il faut la rattraper
             app.dirty = True
             return True
         return False
@@ -606,18 +553,13 @@ class Settings(Screen):
 class Theme(Screen):
     """Choix de la palette, avec aperçu immédiat.
 
-    Le potard parcourt les teintes et l'écran se repeint à chaque cran : on
+    La molette parcourt les teintes et l'écran se repeint à chaque cran : on
     juge une couleur en la voyant, pas en lisant son nom. B enregistre, et
     le choix survit à une coupure de courant.
 
-    Le rattrapage du potard est neutralisé ici — il n'y a pas de valeur
-    existante à écraser par accident, seulement une liste à parcourir, et
-    devoir « rattraper » la teinte courante avant de pouvoir en essayer une
-    autre serait absurde.
     """
 
     NAME = "theme"
-    POT_FREE = True              # rien à écraser : le potard agit tout de suite
 
     def __init__(self):
         self.saved = False
@@ -628,15 +570,14 @@ class Theme(Screen):
                 return i
         return 0
 
-    def pot_target(self, st):
-        return None                  # pas de rattrapage : voir le docstring
-
-    def on_pot(self, pct, app):
+    def on_turn(self, delta, app):
         n = len(theme.PALETTES)
-        idx = min(n - 1, (pct * n) // 100)
-        if theme.PALETTES[idx].name != app.g.p.name:
-            app.set_palette(theme.PALETTES[idx])
-            self.saved = False
+        idx = (self._index(app) + delta) % n
+        # set_palette() vit sur la grille, pas sur l'app : c'est elle qui
+        # tient les couleurs et qui doit tout repeindre.
+        app.g.set_palette(theme.PALETTES[idx])
+        app.dirty = True
+        self.saved = False
 
     def draw(self, g, st, app):
         _header(g, "THEME", st, app)
@@ -665,7 +606,7 @@ class Theme(Screen):
 
         g.text(1, 17, "enregistre" if self.saved else "non enregistre",
                g.p.DIM)
-        _statusbar(g, "[B] GARDER", "POTARD : TEINTE")
+        _statusbar(g, "[B] GARDER", "MOLETTE : TEINTE")
 
     def on_input(self, ev, app):
         kind, arg = ev

@@ -7,7 +7,7 @@ police 8×8 sur un pas de 16, redessin partiel.
 ```
 theme.py     palettes RGB565 (ambre, phosphore, glacier)
 grid.py      grille 30x20 + redessin partiel  <- le coeur
-input.py     3 boutons + potentiometre
+input.py     3 boutons + encodeur rotatif
 screens.py   les 7 ecrans
 app.py       navigation, reseau, boucle principale
 main.py      cablage materiel  <- le seul fichier a adapter
@@ -61,8 +61,8 @@ glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 | **DHT11** DATA | 25 | ⚠️ **10 kΩ vers VCC**, plus **3V3** et **GND** |
 
 Broches encore libres et sûres : **15** (`D15`) et **35** (`D35`, en entrée
-seule et sans tirage interne — jamais pour un bouton), plus **34** que le
-potentiomètre libère.
+seule et sans tirage interne — jamais pour un bouton), plus **34** (`D34`)
+que le retrait du potentiomètre a libéré.
 
 ### La sérigraphie ne dit pas toujours le numéro
 
@@ -114,41 +114,43 @@ Les boutons se câblent **entre le GPIO et la masse**, sans résistance : le
 tirage interne est activé dans `input.py`. Un bouton relâché lit donc 1, un
 bouton enfoncé lit 0. Aucune polarité à respecter, un bouton n'a pas de sens.
 
-Le potentiomètre est un diviseur de tension : ses deux **pattes extérieures**
-vont sur 3V3 et GND (dans l'ordre que tu veux — l'inverser inverse juste le
-sens de rotation), et sa **patte du milieu**, le curseur, sur GPIO 34.
+L'encodeur se câble comme trois boutons de plus : **CLK**, **DT** et le
+poussoir vers leurs GPIO, le **commun** vers la masse. Aucune résistance,
+aucune alimentation — les tirages internes sont activés dans `input.py`, et
+un encodeur mécanique n'est qu'une paire de contacts. Sur l'Adafruit, le
+commun est la patte du milieu du côté à trois pattes ; les deux autres sont
+CLK et DT, et les intervertir ne fait qu'inverser le sens de rotation.
 
 ```
-        ESP32
-   ┌───────────────┐
-   │           3V3 ├──────────────┐
-   │               │              │  ┌───────────┐
-   │        GPIO34 ├──────────────┼──┤ curseur   │  POTENTIOMETRE
-   │               │              └──┤ exterieur │
-   │           GND ├──────────┬──────┤ exterieur │
-   │               │          │      └───────────┘
-   │        GPIO26 ├───[A]────┤        A = gauche
-   │        GPIO27 ├───[B]────┤        B = milieu
-   │        GPIO14 ├───[C]────┘        C = droite
+        ESP32                        ENCODEUR
+   ┌───────────────┐            ┌──────────────────┐
+   │         GPIO4 ├────────────┤ CLK              │
+   │        GPIO19 ├────────────┤ DT               │
+   │        GPIO16 ├────────────┤ poussoir         │
+   │           GND ├────┬───────┤ commun + l'autre │
+   │               │    │       │ patte du poussoir│
+   │               │    │       └──────────────────┘
+   │        GPIO26 ├───[A]───┤     A = gauche
+   │        GPIO27 ├───[B]───┤     B = milieu
+   │        GPIO14 ├───[C]───┘     C = droite
    └───────────────┘
-                             les 3 boutons partagent la meme masse
+                        tout partage la meme masse
 ```
 
 L'écran, lui, vient de `tft_setup.py`, déjà « le seul endroit où vivent les
 numéros de broches » : CS 5, DC 17, RST 21, rétroéclairage 22, SCK 18,
 MOSI 23, SPI 2 à 80 MHz. Ce firmware l'importe au lieu de le redéclarer.
 
-> ### GPIO 34 n'est pas négociable
+> ### Pourquoi 4, 19 et 16 pour l'encodeur
 >
-> L'ESP32 a deux convertisseurs analogiques, et **ADC2 cesse de fonctionner
-> dès que le wifi est actif**. Un potard câblé sur GPIO 25 ou 26 marcherait
-> parfaitement au banc puis renverrait n'importe quoi une fois la carte
-> connectée — et des valeurs qui sautent au hasard ne ressemblent en rien à
-> « le wifi a pris le convertisseur ».
+> CLK et DT doivent être lus **par interruption** et avoir un **tirage
+> interne** : cela exclut d'emblée 34 à 39, qui sont en entrée seule. Il faut
+> aussi éviter les broches de démarrage — **GPIO 12** fixe la tension de la
+> flash au reset, et un encodeur qui la maintient au niveau haut pendant que
+> tu rallumes la carte peut la rendre muette.
 >
-> Les broches **32 à 39** sont sur ADC1. Parmi elles, **34 à 39** sont en
-> entrée seule, donc sans tirage interne susceptible de fausser la mesure.
-> C'est le bon choix pour un potentiomètre.
+> GPIO 4 et 19 sont libres, tirables et sans rôle au boot. Le poussoir va
+> sur **16**, qui n'a pas de nom en `D` sur la carte : cherche `RX2`.
 
 ## Carte des boutons
 
@@ -171,7 +173,7 @@ Thème**, puis retour au début.
 
 ### Ce que fait B, écran par écran
 
-| Écran | Appui court sur B | Le potentiomètre |
+| Écran | Appui court sur B | La molette |
 | --- | --- | --- |
 | **Accueil** | — | — |
 | **Séance** | — *(lecture seule)* | fait défiler les exercices |
@@ -201,13 +203,13 @@ Sur le Coach, il n'y a **pas de bouton « ignorer »** : passer à l'écran
 suivant *est* l'ignorer. Un bouton qui ne fait rien de plus que partir laisse
 surtout se demander ce qu'il a fait.
 
-**Les boutons trient, le potard règle.** C'est ce partage qui rend trois
+**Les boutons trient, la molette règle.** C'est ce partage qui rend trois
 boutons suffisants pour sept écrans.
 
 ## Thèmes
 
 Six palettes : **ambre** (la teinte de TARS), **vert**, **bleu**, **violet**,
-**rubis**, **papier**. L'écran Thème les fait défiler au potentiomètre et
+**rubis**, **papier**. L'écran Thème les fait défiler à la molette et
 repeint tout à chaque cran — on juge une couleur en la voyant, pas en lisant
 son nom. B enregistre le choix dans un fichier sur la carte, qui survit donc à
 une coupure de courant.
@@ -216,9 +218,6 @@ Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
 valeur mise en avant, alerte. `DIM` est toujours la teinte principale
 assombrie, jamais un gris — un gris casserait l'unité et donnerait l'air d'un
 défaut d'affichage.
-
-Le rattrapage du potard est désactivé sur cet écran : il n'y a pas de valeur
-à écraser par accident, seulement une liste à parcourir.
 
 ## Animations
 
@@ -244,7 +243,7 @@ temps mais raconte ce qui se passe.
 titre, sur tous les écrans. C'est le seul mouvement permanent : sans lui, un
 écran qui ne change qu'une fois par minute ne se distingue pas d'un écran
 gelé. Sur Paramètres et Thème, un second curseur marque la ligne que le
-potentiomètre commande — quatre lignes qui se ressemblent ont besoin d'un
+molette commande — quatre lignes qui se ressemblent ont besoin d'un
 repère qui bouge, la surbrillance seule ne suffit pas.
 
 Il ne coûte qu'une cellule par battement grâce au redessin partiel. Ce détail
@@ -255,28 +254,25 @@ seconde et l'écran scintillerait. Seul un changement d'écran purge ce mémo.
 Si le rythme ne te convient pas, ces trois constantes sont les seules à
 toucher. Monter `SWEEP_MS` à 25 donne une transition nettement plus posée.
 
-## Le rattrapage du potentiomètre
+## La molette n'envoie qu'un déplacement
 
-Un potard a une position physique que le firmware ne peut pas changer. C'est
-toute la différence avec un encodeur, qui n'envoie que des « +1 » et des
-« −1 » sans jamais avoir de position.
+`input.py` émet `(TURN, +1)` ou `(TURN, -1)`, jamais une position. L'écran
+courant reçoit ce cran et l'applique à ce qu'il affiche déjà.
 
-Concrètement : tu règles HUMOUR à 75 %, tu passes sur Spotify où le volume est
-à 30 %. Le curseur est resté à 75 %. Appliquer sa position telle quelle
-collerait le volume à 75 % sans que tu aies rien touché.
+C'est ce qui rend le firmware plus simple qu'avec le potentiomètre qu'il y
+avait avant. Un potard a une position physique que le firmware ne peut pas
+changer : réglé à 75 % sur les Paramètres, il aurait collé le volume de
+Spotify à 75 % dès l'arrivée sur l'écran, sans que tu touches rien. Il avait
+donc fallu un mécanisme de rattrapage — le curseur ne reprenait la main
+qu'après avoir traversé la valeur courante — plus un repère `TOURNE >` pour
+qu'on ne croie pas la molette cassée, plus un réarmement à chaque changement
+d'écran et à chaque changement de ligne.
 
-La parade est celle des consoles de mixage : **le potard ne prend la main
-qu'après avoir traversé la valeur courante.** Tant qu'il ne l'a pas
-rattrapée, l'écran affiche vers où tourner :
-
-```
-TOURNE >  30%
-```
-
-Sans ce repère, on tourne, rien ne bouge, et on croit le potard cassé.
-
-`App.rearm_pot()` réarme le rattrapage à chaque changement d'écran — et aussi
-quand on change de ligne dans les Paramètres, puisque la valeur cible change.
+Tout cela a disparu avec le composant. Et avec lui la calibration
+automatique, la zone morte et le lissage : trois filtres qui n'existaient
+que pour dompter une tension analogique. Un contact mécanique n'a besoin que
+de la table de quadrature, qui absorbe les rebonds en ignorant les
+transitions impossibles.
 
 ## Installation
 
