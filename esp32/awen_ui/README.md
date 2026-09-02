@@ -7,6 +7,7 @@ police 8×8 sur un pas de 16, redessin partiel.
 ```
 theme.py     palettes RGB565 (ambre, phosphore, glacier)
 grid.py      grille 30x20 + redessin partiel  <- le coeur
+backlight.py luminosite du panneau (PWM) + extinction
 input.py     3 boutons + encodeur rotatif
 screens.py   les 7 ecrans
 app.py       navigation, reseau, boucle principale
@@ -45,7 +46,7 @@ glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 | **Écran** CS | 5 | **3V3** |
 | Écran DC | 17 | |
 | Écran RST | 21 | |
-| Écran rétroéclairage | 22 | |
+| Écran rétroéclairage | 22 | piloté en PWM par `backlight.py` (luminosité + veille) |
 | Écran SCK | 18 | |
 | Écran MOSI | 23 | |
 | **Bouton A** gauche | 26 | vers **GND** |
@@ -267,6 +268,34 @@ C'est aussi ce qui rend le curseur fluide. Appliquer à chaque cran appelait
 `set_palette()`, donc `wipe()`, donc un repaint complet des 240×320 : la
 molette traînait d'un demi-tour. Déplacer le curseur ne touche plus que
 **32 cellules sur 600**, que le redessin partiel pousse seules.
+
+### La luminosité est la 7e ligne de la même liste
+
+Une palette bien contrastée ne sauve pas un panneau trop sombre en plein
+jour : le contraste et la quantité de lumière sont deux réglages différents.
+Mais on les cherche au même endroit — quand l'écran se lit mal — donc la
+luminosité vit sur l'écran Thème, une ligne sous les six teintes.
+
+Elle ne casse pas la règle du geste : **B agit sur la ligne visée.** Sur une
+teinte il l'applique, sur `LUMIERE` il passe au palier suivant. Aucun mode,
+aucun second sens à retenir.
+
+```
+ > LUMIERE _ [##########]  100%
+```
+
+Quatre paliers — **15, 40, 70, 100 %** — plutôt qu'un pourcentage libre : on
+ne saurait pas viser une valeur qu'on ne sait pas nommer, alors que quatre
+crans couvrent la nuit, la pièce éclairée, la journée et le plein soleil.
+
+**Zéro n'est pas dans la liste.** Un écran éteint par un appui de trop
+ressemblerait à une panne, et on en chercherait la cause au lieu du bouton.
+L'extinction complète appartient à la veille, qui a une raison de la
+déclencher et sait la défaire — `Backlight` garde d'ailleurs son niveau
+pendant l'extinction, pour y revenir au réveil.
+
+Le réglage est enregistré dans `awen_backlight.txt`, comme le thème dans
+`awen_theme.txt`.
 
 Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
 valeur mise en avant, alerte. `DIM` est toujours la teinte principale

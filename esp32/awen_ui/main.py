@@ -88,10 +88,17 @@ LED_COMMON = "cathode"
 # faible.
 DHT_PIN = 25
 
+# Retroeclairage du panneau. tft_setup.py le met simplement au niveau haut ;
+# on le reprend en PWM pour pouvoir en regler la luminosite, et l'eteindre
+# sans eteindre la carte. L'ordre compte : tft_setup est importe plus haut,
+# donc notre PWM est cree apres et prend la main sur la broche.
+BACKLIGHT_PIN = 22
+
 app = App(tft, {
     "led": {"kind": "rgb", "pin_r": LED_R, "pin_g": LED_G,
             "pin_b": LED_B, "common": LED_COMMON},
     "sensor": {"kind": "dht11", "pin": DHT_PIN},
+    "backlight": BACKLIGHT_PIN,
     "ssid": SSID,
     "password": PASSWORD,
     "base_url": awen_config.AWEN_URL,

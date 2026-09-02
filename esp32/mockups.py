@@ -413,7 +413,15 @@ def s_spotify(p):
 
 
 def s_theme(p):
-    """Choix de la palette, avec un apercu des cinq roles."""
+    """Teinte et luminosite, dans une seule liste.
+
+    Pas d'apercu des cinq roles ici : montrer une teinte oblige a la
+    peindre, ce qui reviendrait a l'appliquer avant qu'on l'ait choisie. On
+    applique pour voir, et on revient d'un cran si ca ne plait pas.
+
+    La luminosite est la 7e ligne de la meme liste. B agit sur la ligne
+    visee : il applique une teinte, ou passe au palier de lumiere suivant.
+    """
     current = PALETTE_NAMES.index(p["name"])
     s = Screen(p, active=6)
     s.header("THEME", "21:47")
@@ -427,17 +435,18 @@ def s_theme(p):
         s.text(2, r, name, "hi" if i == current else "dim")
         if i == current:
             s.cursor(2 + len(name) + 1, r)
+        if i == 0:
+            s.right(r, "ACTIF", "dim")
+
+    rl = 5 + len(PALETTE_NAMES)
+    s.text(0, rl, " ", "fg")
+    s.text(2, rl, "LUMIERE", "dim")
+    s.bar(12, rl, 12, 100, "dim")
+    s.right(rl, "100%", "dim")
 
     s.rule(12)
-    s.text(1, 13, "APERCU", "dim")
-    s.text(1, 14, "valeur", "hi", bold=True)
-    s.text(9, 14, "donnee", "fg")
-    s.text(17, 14, "etiquette", "dim")
-    s.text(1, 15, "alerte", "alert")
-    s.bar(9, 15, 20, 64)
-
-    s.text(1, 17, "non enregistre", "dim")
-    s.statusbar("[B] GARDER", "MOLETTE : TEINTE")
+    s.text(1, 13, "[B] pour appliquer", "dim")
+    s.statusbar("[B] APPLIQUER", "MOLETTE : CHOIX")
     return s
 
 

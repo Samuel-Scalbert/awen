@@ -16,6 +16,7 @@ Texte en ASCII majuscule sans accents : voir grid.py.
 """
 import time
 
+import backlight as backlight_mod
 from grid import COLS, ROWS
 from input import BTN_A, BTN_B, BTN_C, SHORT, LONG, REPEAT
 import theme
@@ -562,6 +563,17 @@ class Theme(Screen):
 
     Déplacer le curseur ne touche plus que deux lignes et le nom en grand,
     et le redessin partiel de grid.py ne pousse que ces cellules-là.
+
+    LA LUMINOSITÉ EST UNE LIGNE DE PLUS DANS LA MÊME LISTE
+
+    Teinte et quantité de lumière sont deux réglages distincts — une
+    palette contrastée ne sauve pas un panneau trop sombre en plein jour
+    — mais on les cherche au même endroit : quand l'écran se lit mal.
+
+    Elle ne casse pas la règle du geste : B agit sur la ligne visée. Sur
+    une teinte il l'applique, sur la luminosité il passe au palier
+    suivant. Aucun mode, aucun second sens à retenir, et l'effet se voit
+    pendant l'appui — c'est le seul réglage qui se juge instantanément.
     """
 
     NAME = "theme"
@@ -583,8 +595,17 @@ class Theme(Screen):
             self.sel = self._active(app)
         return self.sel
 
+    # Une entrée de plus que les palettes : la dernière ligne est la
+    # luminosité. Les garder dans une seule liste évite d'inventer une
+    # navigation à deux dimensions pour un seul réglage de plus.
+    def _rows(self):
+        return len(theme.PALETTES) + 1
+
+    def _on_light(self, app):
+        return self._cursor(app) == len(theme.PALETTES)
+
     def on_turn(self, delta, app):
-        self.sel = (self._cursor(app) + delta) % len(theme.PALETTES)
+        self.sel = (self._cursor(app) + delta) % self._rows()
         app.dirty = True
 
     def draw(self, g, st, app):
@@ -592,13 +613,18 @@ class Theme(Screen):
 
         sel = self._cursor(app)
         actif = self._active(app)
-        vise = theme.PALETTES[sel]
+        light = self._on_light(app)
+        niveau = app.backlight.level
 
         # Le nom visé en grand, mais dans la couleur ACTIVE : c'est un
         # libellé, pas un échantillon. Le peindre dans la teinte visée
         # reviendrait à changer le thème avant qu'on l'ait choisi.
-        g.big(1, 3, vise.name[:10], 2, g.p.HI)
-        g.right(3, "{}/{}".format(sel + 1, len(theme.PALETTES)), g.p.DIM)
+        if light:
+            g.big(1, 3, "{}%".format(niveau), 2, g.p.HI)
+            g.right(3, "LUMIERE", g.p.DIM)
+        else:
+            g.big(1, 3, theme.PALETTES[sel].name[:10], 2, g.p.HI)
+            g.right(3, "{}/{}".format(sel + 1, len(theme.PALETTES)), g.p.DIM)
 
         for i, p in enumerate(theme.PALETTES):
             r = 5 + i
@@ -612,30 +638,49 @@ class Theme(Screen):
             if i == actif:
                 g.right(r, "ACTIF", g.p.DIM)
 
-        # Il n'y a plus d'aperçu, et c'est le prix assumé du geste en deux
-        # temps : un échantillon ne peut pas montrer une teinte sans la
-        # peindre. On applique pour voir, et on retourne d'un cran si ça ne
-        # plaît pas — B est juste à côté.
+        # La luminosité, dernière ligne de la même liste. Une jauge plutôt
+        # qu'un nombre seul : c'est une quantité de lumière, pas une valeur
+        # qu'on saisit.
+        rl = 5 + len(theme.PALETTES)
+        g.text(0, rl, ">" if light else " ", g.p.FG)
+        g.text(2, rl, "LUMIERE", g.p.HI if light else g.p.DIM)
+        if light:
+            g.cursor(10, rl, st.get("blink", True))
+        g.bar(12, rl, 12, niveau, g.p.FG if light else g.p.DIM)
+        g.right(rl, "{:>3}%".format(niveau), g.p.HI if light else g.p.DIM)
+
+        # Il n'y a plus d'aperçu de teinte, et c'est le prix assumé du
+        # geste en deux temps : un échantillon ne peut pas montrer une
+        # couleur sans la peindre. La luminosité, elle, se juge à l'appui.
         g.rule(12)
 
         # Rien n'est affiché quand il n'y a rien de sûr à dire : au démarrage
         # la palette vient bien du fichier, mais l'écran ne l'a pas écrite et
         # n'a donc aucun titre à s'en attribuer le mérite.
-        if sel != actif:
+        if light:
+            g.text(1, 13, "[B] palier suivant", g.p.DIM)
+        elif sel != actif:
             g.text(1, 13, "[B] pour appliquer", g.p.DIM)
         elif self.saved:
             g.text(1, 13, "applique et enregistre", g.p.DIM)
 
-        _statusbar(g, "[B] APPLIQUER", "MOLETTE : CHOIX")
+        _statusbar(g, "[B] " + ("LUMIERE" if light else "APPLIQUER"),
+                   "MOLETTE : CHOIX")
 
     def on_input(self, ev, app):
         kind, arg = ev
         if kind == BTN_B and arg == SHORT:
-            pal = theme.PALETTES[self._cursor(app)]
-            # set_palette() vit sur la grille, pas sur l'app : c'est elle qui
-            # tient les couleurs et qui doit tout repeindre.
-            app.g.set_palette(pal)
-            self.saved = theme.save(pal)
+            if self._on_light(app):
+                # Le palier s'applique tout de suite — c'est l'intérêt, on
+                # le juge en le voyant — et s'enregistre dans la foulée :
+                # rien à confirmer sur un réglage réversible d'un appui.
+                backlight_mod.save(app.backlight.next_level())
+            else:
+                pal = theme.PALETTES[self._cursor(app)]
+                # set_palette() vit sur la grille, pas sur l'app : c'est
+                # elle qui tient les couleurs et doit tout repeindre.
+                app.g.set_palette(pal)
+                self.saved = theme.save(pal)
             app.dirty = True
             return True
         return False

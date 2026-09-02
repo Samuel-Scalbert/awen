@@ -25,6 +25,7 @@ import time
 import network
 import urequests
 
+import backlight as backlight_mod
 from grid import Grid
 from input import BTN_A, BTN_B, BTN_C, Input, LONG, REPEAT, SHORT, TURN
 import led as led_mod
@@ -79,6 +80,7 @@ class App:
         self.io = Input(**config.get("pins", {}))
         self.led = led_mod.make(**config.get("led", {}))
         self.sensor = sensor_mod.make(**config.get("sensor", {}))
+        self.backlight = backlight_mod.make(config.get("backlight"))
         self.cfg = config
 
         self.screens = [cls() for cls in screens.CAROUSEL]
