@@ -14,6 +14,11 @@ CYCLE = ["Pull", "Push", "Legs"]
 # sacrifier définitivement un groupe musculaire.
 TRAINING_WEEKDAYS = [0, 2, 4]
 
+# Le focus des séances hors cycle. Il n'est jamais dans CYCLE, ce qui suffit à
+# le faire ignorer par la rotation — mais PAS par les fonctions qui lisent
+# l'historique, qui doivent l'exclure explicitement.
+REPRISE = "Reprise"
+
 
 def next_session_type(last_focus):
     """Séance suivante dans la rotation continue Push → Pull → Legs."""
@@ -114,7 +119,12 @@ def recompute_from_history():
     """
     from ..models import ExerciseSet, ProgramExercise, Workout
 
-    completed = {w.id: w.date for w in Workout.query.filter_by(completed=True)}
+    # Les reprises sont exclues. On y fait ce qui tente, à l'intensité qui
+    # vient : recaler le programme sur une séance de reprise remplacerait les
+    # charges réelles par celles d'une remise en route. C'est précisément ce
+    # que la séance de reprise promet de ne jamais faire.
+    completed = {w.id: w.date for w in Workout.query.filter_by(completed=True)
+                 if w.focus != REPRISE}
     changes = []
 
     for pe in ProgramExercise.query.filter(ProgramExercise.active.is_(True)):

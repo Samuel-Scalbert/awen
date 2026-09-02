@@ -15,10 +15,10 @@ Gravité des observations :
 from collections import defaultdict
 from datetime import date, timedelta
 
-from ..models import (BodyWeight, CoachDecision, ExerciseSet, JumpTest,
-                      ProgramExercise, Workout, db)
+from ..models import (BodyWeight, CoachDecision, ExerciseNote, ExerciseSet,
+                      JumpTest, ProgramExercise, Workout, db)
 from . import attendance
-from .progression import TRAINING_WEEKDAYS, working_sets
+from .progression import REPRISE, TRAINING_WEEKDAYS, working_sets
 
 # Seuils regroupés ici pour être discutables d'un coup d'œil, plutôt que
 # disséminés au fil des règles.
@@ -30,6 +30,14 @@ JUMP_TEST_DAYS = 28    # au-delà, le test de détente est à refaire
 WEIGH_IN_DAYS = 10     # au-delà, la pesée est trop ancienne pour juger
 MISSED_ALERT = 2       # séances ratées d'affilée avant de relancer
 MISSED_LONG = 4        # au-delà, l'arrêt a vraiment coûté quelque chose
+PAIN_DAYS = 45         # au-delà, une douleur notée n'est plus d'actualité
+
+# Ce qui, dans un commentaire d'exercice, mérite de remonter au lieu de
+# dormir dans la base. Volontairement large : un faux positif coûte une ligne
+# à lire, un faux négatif coûte une épaule.
+PAIN_WORDS = ("douleur", "douloureu", "mal ", "fait mal", "gene", "gêne",
+              "pincement", "blessure", "tendinite", "craque", "elance",
+              "élance", "inflamm")
 
 
 def _sessions_of(pe, completed):
@@ -96,6 +104,50 @@ def _adherence_advice(completed, today, advice):
             "title": f"{st['absent']} séances en absence, non comptées",
             "detail": "Vacances, déplacements, maladie : tu n'avais pas la "
                       "main dessus, elles ne pèsent pas sur ton assiduité.",
+        })
+
+
+def _pain_advice(today, advice):
+    """Remonte les commentaires d'exercice qui signalent une douleur.
+
+    Un commentaire écrit en salle est la seule information que l'app ne peut
+    pas déduire : « douleur épaule » vaut plus que n'importe quelle règle de
+    reps. Le laisser dormir dans la base, c'est demander à quelqu'un de noter
+    quelque chose puis n'en rien faire.
+
+    LES REPRISES COMPTENT ICI, contrairement au reste du coach. Leurs charges
+    sont ignorées parce qu'elles ne disent rien du niveau réel — mais une
+    douleur ressentie pendant une reprise est une douleur tout court.
+    """
+    notes = (ExerciseNote.query
+             .order_by(ExerciseNote.updated_at.desc()).all())
+    if not notes:
+        return
+
+    dates = {w.id: w.date for w in Workout.query.filter_by(completed=True)}
+    vus = set()
+    for n in notes:
+        texte = (n.text or "").strip()
+        quand = dates.get(n.workout_id)
+        if not texte or quand is None or n.program_exercise_id in vus:
+            continue
+        if (today - quand.date()).days > PAIN_DAYS:
+            continue
+        bas = texte.lower()
+        if not any(w in bas for w in PAIN_WORDS):
+            continue
+        pe = db.session.get(ProgramExercise, n.program_exercise_id)
+        if pe is None:
+            continue
+        vus.add(n.program_exercise_id)
+        advice.append({
+            "level": "alert", "icon": "🩹",
+            "title": f"{pe.name} : douleur signalée",
+            "detail": f"Le {quand.strftime('%d/%m')} tu as noté « {texte} ». "
+                      "Une douleur articulaire ne se contourne pas en serrant "
+                      "les dents : réduis l'amplitude ou la charge, et si elle "
+                      "revient, retire l'exercice du programme plutôt que de "
+                      "le subir.",
         })
 
 
@@ -277,10 +329,11 @@ def analyse():
     # faites pour l'assiduité — voir attendance.py, qui les prend toutes.
     completed = {w.id: w.date.date()
                  for w in Workout.query.filter_by(completed=True)
-                 if w.focus != "Reprise"}
+                 if w.focus != REPRISE}
     advice = []
 
     _adherence_advice(completed, today, advice)
+    _pain_advice(today, advice)
     _bodyweight_advice(today, advice)
     _jump_advice(today, advice)
 

@@ -4,14 +4,11 @@ from flask import (Blueprint, flash, jsonify, redirect, render_template,
                    request, url_for)
 
 from ..models import db, ExerciseNote, ExerciseSet, ProgramExercise, Workout
-from ..services.progression import (apply_progression, next_session_type,
-                                    recompute_from_history)
+from ..services.progression import (REPRISE, apply_progression,
+                                    next_session_type, recompute_from_history)
 
 bp = Blueprint("workout", __name__, url_prefix="/workouts")
 
-# Le focus qui marque une séance hors cycle. Il n'est jamais dans CYCLE, ce
-# qui suffit à la faire ignorer par la rotation et par la progression.
-REPRISE = "Reprise"
 
 
 def _current_workout():
