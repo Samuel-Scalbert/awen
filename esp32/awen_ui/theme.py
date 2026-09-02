@@ -33,28 +33,38 @@ class Palette:
 # distingue un instrument d'un écran d'ordinateur. DIM est toujours la teinte
 # principale assombrie, jamais un gris — un gris casserait l'unité de la
 # palette et donnerait l'air d'une erreur d'affichage.
+#
+# DIM SE LIT EN PLEIN JOUR, C'EST UNE CONTRAINTE PAS UN GOÛT
+#
+# Il portait 3,3:1 de contraste sur fond noir, sous le seuil de 4,5:1 des
+# textes courants : parfait dans une pièce sombre, illisible en journée. Or
+# DIM porte 47 éléments des écrans — étiquettes, unités, barres de statut.
+# Chaque palette le remonte donc au-dessus de 4,5:1, en gardant sa teinte
+# (DIM reste FG multiplié, jamais un gris) et en restant entre 41 et 58 % de
+# la luminance de FG : la hiérarchie visuelle tient toujours, elle est juste
+# lisible. Les mesures sont dans le journal git de ce fichier.
 AMBER = Palette("AMBRE",
-                rgb(0, 0, 0), rgb(255, 176, 0), rgb(128, 88, 0),
+                rgb(0, 0, 0), rgb(255, 176, 0), rgb(199, 137, 0),
                 rgb(255, 232, 180), rgb(255, 64, 32))
 
 PHOSPHOR = Palette("VERT",
-                   rgb(0, 0, 0), rgb(0, 255, 128), rgb(0, 112, 56),
+                   rgb(0, 0, 0), rgb(0, 255, 128), rgb(0, 173, 87),
                    rgb(200, 255, 224), rgb(255, 96, 0))
 
 ICE = Palette("BLEU",
-              rgb(2, 6, 10), rgb(120, 200, 255), rgb(40, 78, 104),
+              rgb(2, 6, 10), rgb(120, 200, 255), rgb(94, 156, 199),
               rgb(230, 245, 255), rgb(255, 96, 96))
 
 VIOLET = Palette("VIOLET",
-                 rgb(4, 0, 8), rgb(198, 130, 255), rgb(88, 52, 120),
+                 rgb(4, 0, 8), rgb(198, 130, 255), rgb(154, 101, 199),
                  rgb(238, 220, 255), rgb(255, 96, 128))
 
 RUBIS = Palette("RUBIS",
-                rgb(6, 0, 0), rgb(255, 96, 96), rgb(120, 40, 40),
+                rgb(6, 0, 0), rgb(255, 96, 96), rgb(199, 75, 75),
                 rgb(255, 214, 214), rgb(255, 176, 0))
 
 PAPIER = Palette("PAPIER",
-                 rgb(0, 0, 0), rgb(226, 226, 222), rgb(104, 106, 104),
+                 rgb(0, 0, 0), rgb(226, 226, 222), rgb(151, 151, 149),
                  rgb(255, 255, 255), rgb(255, 96, 64))
 
 # L'ordre du sélecteur. L'ambre en tête : c'est la teinte de TARS.

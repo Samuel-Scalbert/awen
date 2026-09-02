@@ -34,17 +34,17 @@ FONT_BOLD = r"C:\Windows\Fonts\consolab.ttf"
 # Doivent rester identiques a celles de esp32/awen_ui/theme.py : ces maquettes
 # ne valent que si elles montrent les couleurs que la carte affichera.
 PALETTES = {
-    "amber":    {"name": "AMBRE", "bg": (0, 0, 0), "fg": (255, 176, 0), "dim": (128, 88, 0),
+    "amber":    {"name": "AMBRE", "bg": (0, 0, 0), "fg": (255, 176, 0), "dim": (199, 137, 0),
                  "hi": (255, 232, 180), "alert": (255, 64, 32)},
-    "phosphor": {"name": "VERT", "bg": (0, 0, 0), "fg": (0, 255, 128), "dim": (0, 112, 56),
+    "phosphor": {"name": "VERT", "bg": (0, 0, 0), "fg": (0, 255, 128), "dim": (0, 173, 87),
                  "hi": (200, 255, 224), "alert": (255, 96, 0)},
-    "ice":      {"name": "BLEU", "bg": (2, 6, 10), "fg": (120, 200, 255), "dim": (40, 78, 104),
+    "ice":      {"name": "BLEU", "bg": (2, 6, 10), "fg": (120, 200, 255), "dim": (94, 156, 199),
                  "hi": (230, 245, 255), "alert": (255, 96, 96)},
-    "violet":   {"name": "VIOLET", "bg": (4, 0, 8), "fg": (198, 130, 255), "dim": (88, 52, 120),
+    "violet":   {"name": "VIOLET", "bg": (4, 0, 8), "fg": (198, 130, 255), "dim": (154, 101, 199),
                  "hi": (238, 220, 255), "alert": (255, 96, 128)},
-    "rubis":    {"name": "RUBIS", "bg": (6, 0, 0), "fg": (255, 96, 96), "dim": (120, 40, 40),
+    "rubis":    {"name": "RUBIS", "bg": (6, 0, 0), "fg": (255, 96, 96), "dim": (199, 75, 75),
                  "hi": (255, 214, 214), "alert": (255, 176, 0)},
-    "papier":   {"name": "PAPIER", "bg": (0, 0, 0), "fg": (226, 226, 222), "dim": (104, 106, 104),
+    "papier":   {"name": "PAPIER", "bg": (0, 0, 0), "fg": (226, 226, 222), "dim": (151, 151, 149),
                  "hi": (255, 255, 255), "alert": (255, 96, 64)},
 }
 
