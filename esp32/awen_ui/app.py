@@ -13,6 +13,18 @@ Les mélanger dans une seule cadence est le moyen le plus sûr d'obtenir une
 interface qui rame : on redessinerait tout à chaque image, ou on lirait les
 boutons une fois par seconde.
 
+LA VEILLE N'ÉTEINT QUE CE QUI ÉCLAIRE
+
+Personne devant le bureau pendant dix minutes : le rétroéclairage et la LED
+s'éteignent. Le reste continue — le wifi, les relevés serveur, l'horloge.
+C'est délibéré : au réveil l'écran doit être JUSTE, pas rafraîchi sous les
+yeux. Un afficheur qui montre l'heure d'il y a dix minutes le temps de se
+recharger serait pire que celui qui n'aurait jamais dormi.
+
+Ce qu'on cesse de faire, c'est de DESSINER. Pousser des pixels sur un
+panneau noir ne sert personne, et le panneau garde son image : au réveil, le
+redessin partiel n'envoie que ce qui a réellement changé.
+
 LA MOLETTE ENVOIE UN DÉPLACEMENT
 
 Un TURN vaut ±1 cran, jamais une valeur absolue : l'écran courant l'ajoute
@@ -29,6 +41,7 @@ import backlight as backlight_mod
 from grid import Grid
 from input import BTN_A, BTN_B, BTN_C, Input, LONG, REPEAT, SHORT, TURN
 import led as led_mod
+import presence as presence_mod
 import screens
 import sensor as sensor_mod
 import theme
@@ -81,6 +94,8 @@ class App:
         self.led = led_mod.make(**config.get("led", {}))
         self.sensor = sensor_mod.make(**config.get("sensor", {}))
         self.backlight = backlight_mod.make(config.get("backlight"))
+        self.sonar = presence_mod.make(**config.get("presence", {}))
+        self.awake = True
         self.cfg = config
 
         self.screens = [cls() for cls in screens.CAROUSEL]
@@ -373,6 +388,13 @@ class App:
         qui remplacerait celle de l'ecran — ferait perdre le reperage au
         moment ou il sert le plus.
         """
+        # Une LED qui brille encore devant un ecran noir est la seule chose
+        # qu'on verra dans la piece : elle s'eteint avec lui, sinon la veille
+        # ne veille rien.
+        if not self.awake:
+            self.led.show((0, 0, 0))
+            return
+
         color = theme.SCREEN_RGB[self.index % len(theme.SCREEN_RGB)]
         alert = (self.state.get("coach", {}).get("level") == "alert"
                  or not self.state.get("online", True))
@@ -385,6 +407,49 @@ class App:
             # s'imposer, et la couleur reste lisible en permanence.
             color = tuple(c // 2 for c in color)
         self.led.show(color)
+
+    def _update_presence(self, now):
+        """Endort et reveille l'afficheur selon ce que voit le sonar.
+
+        Le reveil est immediat des qu'une presence est confirmee ; le
+        sommeil attend le delai complet. L'asymetrie est voulue : se tromper
+        en rallumant coute une lampe allumee pour rien, se tromper en
+        eteignant coupe l'ecran sous le nez de quelqu'un.
+        """
+        revenu = self.sonar.poll(now)
+
+        if not self.awake:
+            if revenu:
+                self.awake = True
+                self.backlight.wake()
+                # L'ecran a garde son image, mais le contenu a vieilli : on
+                # force un redessin, que le suivi cellule par cellule reduira
+                # a ce qui a reellement change.
+                self.dirty = True
+                self.t_blink = now
+            return
+
+        if self.sonar.expired(now):
+            self.awake = False
+            self.backlight.sleep()
+
+    def _wake_on_input(self, now):
+        """Un appui rallume, meme sans passer devant le capteur.
+
+        Le sonar peut rater quelqu'un d'immobile ou assis de biais. Sans
+        cette porte de sortie, l'ecran resterait noir sous les doigts de son
+        proprietaire — le genre de defaut qui fait debrancher l'objet.
+        """
+        if self.awake:
+            return False
+        self.awake = True
+        self.backlight.wake()
+        self.dirty = True
+        self.t_blink = now
+        # Sans ca, _update_presence rendormirait l'ecran a l'image suivante :
+        # le chronometre du sonar aurait toujours dix minutes de retard.
+        self.sonar.seen(now)
+        return True
 
     # ------------------------------------------------------------ boucle
 
@@ -456,7 +521,13 @@ class App:
         """
         now = time.ticks_ms()
 
-        for ev in self.io.poll():
+        events = self.io.poll()
+        if events and self._wake_on_input(now):
+            # Le geste qui reveille ne fait QUE reveiller. L'appliquer en
+            # plus changerait d'ecran ou lancerait une piste au moment ou on
+            # cherchait juste a voir l'heure.
+            events = []
+        for ev in events:
             self.handle(ev)
 
         # Le capteur se lit toutes les dix secondes, pas a chaque image : sa
@@ -464,10 +535,13 @@ class App:
         if self.sensor.poll(now):
             self.dirty = True
 
+        self._update_presence(now)
         self._update_led()
         self._flush_volume(now)
 
-        if time.ticks_diff(now, self.t_blink) >= BLINK_MS:
+        # Le curseur ne bat pas dans le noir : ce battement force un redessin
+        # deux fois par seconde, et il n'a rien a dire a personne.
+        if self.awake and time.ticks_diff(now, self.t_blink) >= BLINK_MS:
             self.t_blink = now
             self.state["blink"] = not self.state.get("blink", True)
             self.dirty = True
@@ -482,7 +556,7 @@ class App:
                 self.fetch_cover(self.state.get("spotify", {}).get("cover", ""))
             self._watch_memory()
 
-        if self.dirty:
+        if self.dirty and self.awake:
             self.dirty = False
             self.g.clear()
             self.current().draw(self.g, self.state, self)

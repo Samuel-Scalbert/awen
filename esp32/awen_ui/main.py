@@ -94,11 +94,27 @@ DHT_PIN = 25
 # donc notre PWM est cree apres et prend la main sur la broche.
 BACKLIGHT_PIN = 22
 
+# HC-SR04, pour eteindre l'ecran quand personne n'est la.
+#
+# ECHO SORT DU 5 V : il passe par un pont diviseur 1k / 2k avant GPIO 34,
+# qui n'en tolere que 3,6. En direct la broche s'abime — pas d'un coup, ce
+# qui est pire, car la panne arrive des semaines plus tard.
+#
+# Le seuil se MESURE, il ne se devine pas : il depend d'ou le capteur est
+# pose et de la profondeur du bureau. Ici, assis 70-75 cm, bureau vide
+# 235 cm, donc 120 cm tombe largement entre les deux. `upload.ps1 -Test`
+# refait la mesure et propose la valeur.
+US_TRIG, US_ECHO = 15, 34
+PRESENCE_CM = 120
+PRESENCE_IDLE_MS = 600000        # 10 minutes sans personne avant l'extinction
+
 app = App(tft, {
     "led": {"kind": "rgb", "pin_r": LED_R, "pin_g": LED_G,
             "pin_b": LED_B, "common": LED_COMMON},
     "sensor": {"kind": "dht11", "pin": DHT_PIN},
     "backlight": BACKLIGHT_PIN,
+    "presence": {"trig": US_TRIG, "echo": US_ECHO,
+                 "threshold_cm": PRESENCE_CM, "idle_ms": PRESENCE_IDLE_MS},
     "ssid": SSID,
     "password": PASSWORD,
     "base_url": awen_config.AWEN_URL,

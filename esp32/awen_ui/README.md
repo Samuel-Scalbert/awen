@@ -8,6 +8,7 @@ police 8×8 sur un pas de 16, redessin partiel.
 theme.py     palettes RGB565 (ambre, phosphore, glacier)
 grid.py      grille 30x20 + redessin partiel  <- le coeur
 backlight.py luminosite du panneau (PWM) + extinction
+presence.py  sonar HC-SR04 : quelqu'un est-il la ?
 input.py     3 boutons + encodeur rotatif
 screens.py   les 7 ecrans
 app.py       navigation, reseau, boucle principale
@@ -301,6 +302,59 @@ Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
 valeur mise en avant, alerte. `DIM` est toujours la teinte principale
 assombrie, jamais un gris — un gris casserait l'unité et donnerait l'air d'un
 défaut d'affichage.
+
+## La veille
+
+Personne devant le bureau pendant **dix minutes** : le rétroéclairage et la
+LED s'éteignent. Quelqu'un revient : tout se rallume immédiatement.
+
+```python
+PRESENCE_CM      = 120      # sous ce seuil, quelqu'un est là
+PRESENCE_IDLE_MS = 600000   # 10 minutes de vide avant l'extinction
+```
+
+**Le seuil se mesure, il ne se devine pas.** Il dépend d'où le capteur est
+posé et de la profondeur du bureau. Relevé ici : assis **70 à 75 cm**, bureau
+vide **235 cm**. 120 cm tombe largement entre les deux. `upload.ps1 -Test`
+refait la mesure et propose la valeur.
+
+### Deux lectures d'accord, jamais une seule
+
+Un sonar renvoie des aberrations — un écho sur le bord du bureau, une salve
+perdue dans un angle. Une mesure isolée ne décide donc de rien : il en faut
+deux consécutives qui disent la même chose. Sans ce filtre, un faux
+« présent » relancerait le compte à rebours en boucle et l'écran ne
+s'éteindrait jamais.
+
+Une mesure **ratée** (aucun écho) n'est pas une absence : le capteur peut
+manquer un vêtement sombre ou une surface oblique. On ne conclut rien plutôt
+que de conclure faux.
+
+### L'asymétrie est voulue
+
+Le réveil est immédiat, le sommeil attend le délai complet. Se tromper en
+rallumant coûte une lampe allumée pour rien ; se tromper en éteignant coupe
+l'écran sous le nez de quelqu'un.
+
+**Un appui sur n'importe quel bouton réveille aussi**, et ce geste-là ne fait
+*que* réveiller — il ne change pas d'écran et ne lance pas de piste. Le sonar
+peut rater quelqu'un d'immobile ou assis de biais ; sans cette porte de
+sortie, l'écran resterait noir sous les doigts de son propriétaire.
+
+### Ce que la veille n'arrête pas
+
+Le wifi, les relevés serveur et l'horloge continuent. Au réveil, l'écran doit
+être **juste**, pas se rafraîchir sous les yeux : un afficheur qui montre
+l'heure d'il y a dix minutes le temps de se recharger serait pire que celui
+qui n'aurait jamais dormi.
+
+Ce qui s'arrête, c'est le **dessin**. Pousser des pixels sur un panneau noir
+ne sert personne, et le curseur cesse de battre — son clignotement force un
+redessin deux fois par seconde pour rien. Le panneau garde son image : au
+réveil, le redessin partiel n'envoie que ce qui a réellement changé.
+
+`Backlight` conserve son niveau pendant l'extinction, pour y revenir au
+réveil au lieu d'un palier arbitraire.
 
 ## Animations
 
