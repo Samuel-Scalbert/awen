@@ -26,8 +26,28 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Files = @('theme.py', 'grid.py', 'input.py', 'led.py', 'sensor.py',
-           'screens.py', 'app.py', 'main.py', 'awen_config.py')
+# LA LISTE SE DECOUVRE, ELLE NE S'ECRIT PAS.
+#
+# Elle etait codee en dur, et chaque nouveau module etait donc oublie en
+# silence : backlight.py et presence.py ont ete televerses zero fois, et la
+# panne est arrivee au demarrage de la carte sous la forme d'un
+# ImportError — loin de sa cause, qui etait ce fichier-ci.
+#
+# On prend donc tous les .py du dossier, moins ceux qui n'ont rien a faire
+# sur la carte. Un module ajoute part tout seul ; un module oublie n'existe
+# plus.
+$Exclus = @('selftest.py', 'awen_config.example.py')
+$Modules = Get-ChildItem -Path $PSScriptRoot -Filter '*.py' |
+           Where-Object { $Exclus -notcontains $_.Name } |
+           Select-Object -ExpandProperty Name
+
+# main.py en dernier : c'est lui qui demarre l'application, et il ne doit
+# arriver qu'une fois ses dependances en place. awen_config.py le suit de
+# pres pour la meme raison.
+$Ordre = @{ 'main.py' = 2; 'awen_config.py' = 1 }
+$Files = @($Modules | Sort-Object @{ Expression = {
+    if ($Ordre.ContainsKey($_)) { $Ordre[$_] } else { 0 } } }, @{ Expression = { $_ } })
+
 $Required = @('st7789_min.py', 'tft_setup.py', 'wifi.py', 'wifi_config.py')
 
 # --- trouver mpremote -------------------------------------------------------
