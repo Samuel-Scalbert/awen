@@ -72,22 +72,34 @@ Broche encore libre : **35** (`D35`, en entrée seule et sans tirage interne
 > toujours d'un coup, ce qui est pire, car la panne arrive des semaines plus
 > tard et ne ressemble plus à sa cause.
 >
-> Un pont diviseur avec trois résistances de 10 kΩ :
+> Un pont diviseur, **1 kΩ et 2 kΩ** :
 >
 > ```
->    ECHO (5V) ──[10k]──┬── GPIO 34
->                       │
->                    [10k]
->                       │
->                    [10k]
->                       │
->                      GND
+>    ECHO (5V) ──[1k]──┬── GPIO 34
+>                      │
+>                    [2k]
+>                      │
+>                     GND
 > ```
 >
-> Les deux du bas en série font 20 kΩ, la broche voit donc
-> `5 × 20/(10+20) = 3,33 V`. **Pas 10k + 10k** : ça donnerait 2,5 V, juste
-> sous le seuil haut de l'ESP32 (~2,48 V) — ça marcherait un jour sur deux,
-> et rien n'est plus long à diagnostiquer.
+> `5 × 2/(1+2) = 3,33 V`, pour 1,7 mA. **5k + 10k** donne exactement la même
+> tension en tirant cinq fois moins de courant, si ces valeurs-là sont plus
+> faciles à trouver dans le tiroir.
+>
+> Deux pièges dans les combinaisons qui ont l'air raisonnables :
+>
+> | Pont | Sortie | Verdict |
+> | --- | --- | --- |
+> | 1k + 2k | 3,33 V | ✅ |
+> | 5k + 10k | 3,33 V | ✅ |
+> | 2k + 5k | 3,57 V | ⚠️ à 30 mV du maximum toléré |
+> | 10k + 10k | 2,50 V | ❌ 25 mV au-dessus du seuil haut |
+> | 100k + 200k | 3,33 V | ❌ fronts trop mous, impédance trop haute |
+>
+> Le 10k + 10k est le plus tentant et le pire : 2,50 V passe le seuil de 2,475 V
+> avec 25 mV de marge, donc ça marche au banc puis un jour sur deux une fois
+> le fil rallongé. Rien n'est plus long à diagnostiquer qu'un montage qui
+> marche presque.
 >
 > La variante **HC-SR04P** (ou RCWL-1601) accepte 3,3 V et se branche sans
 > rien autour. Vérifie la sérigraphie avant de sortir les résistances.
