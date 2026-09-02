@@ -12,13 +12,17 @@ bride : un test doit lever le doute, pas menager les yeux.
 """
 import time
 
-from machine import Pin, PWM
+from machine import Pin, PWM, time_pulse_us
 
 # Doivent correspondre a main.py.
 LED_R, LED_G, LED_B = 32, 33, 13
 LED_COMMON = "cathode"
 DHT_PIN = 25
 ENC_CLK, ENC_DT = 4, 19
+# HC-SR04. ECHO sort du 5 V : il DOIT passer par un pont diviseur avant
+# GPIO 34 (10k vers ECHO, 20k vers GND). En direct, la broche prend 5 V sur
+# une entree prevue pour 3,3.
+US_TRIG, US_ECHO = 15, 34
 CRANS_ATTENDUS = 10             # ce qu'on demande de tourner a la main
 STEPS_PER_DETENT_ACTUEL = 2     # doit refleter input.py
 BTN = {"A gauche": 26, "B selection": 27, "C droite": 14,
@@ -265,6 +269,66 @@ def test_encoder():
     line()
 
 
+def _mesure_us(trig, echo, timeout_us=30000):
+    """Une mesure brute, en microsecondes d'aller-retour. -1 si rien.
+
+    time_pulse_us renvoie -2 si l'echo n'est jamais monte (module muet ou
+    TRIG non cable) et -1 s'il n'est jamais redescendu (obstacle trop loin,
+    ou ECHO bloque en haut). On distingue les deux : ils n'ont pas la meme
+    cause et pas le meme depannage.
+    """
+    trig.value(0)
+    time.sleep_us(5)
+    trig.value(1)
+    time.sleep_us(10)          # la salve se declenche sur 10 us exactement
+    trig.value(0)
+    try:
+        return time_pulse_us(echo, 1, timeout_us)
+    except OSError:
+        return -1
+
+
+def test_ultrason():
+    line("=== HC-SR04 (TRIG {}, ECHO {}) ===".format(US_TRIG, US_ECHO))
+    trig = Pin(US_TRIG, Pin.OUT)
+    echo = Pin(US_ECHO, Pin.IN)
+
+    line("  pointe le capteur vers un mur, puis passe la main devant.")
+    line("  10 mesures, une toutes les 400 ms...")
+    lues, muettes, perdues = [], 0, 0
+    for i in range(10):
+        d = _mesure_us(trig, echo)
+        if d == -2:
+            muettes += 1
+            line("  {:2}. aucun echo".format(i + 1))
+        elif d < 0:
+            perdues += 1
+            line("  {:2}. hors portee".format(i + 1))
+        else:
+            # 58 us par centimetre aller-retour : le son fait 343 m/s, donc
+            # 29,1 us/cm, double par le trajet retour.
+            cm = d / 58
+            lues.append(cm)
+            line("  {:2}. {:.1f} cm".format(i + 1, cm))
+        time.sleep_ms(400)
+
+    if lues:
+        line("  -> {}/10 mesures, de {:.1f} a {:.1f} cm.".format(
+            len(lues), min(lues), max(lues)))
+        if max(lues) - min(lues) < 1:
+            line("     La distance ne bouge pas : as-tu bien passe la main ?")
+        else:
+            line("     Capteur OK.")
+    elif muettes:
+        line("  -> AUCUN ECHO. Le module est muet :")
+        line("     - VCC sur 5 V (VIN), pas sur 3V3 ;")
+        line("     - TRIG bien sur GPIO {} ;".format(US_TRIG))
+        line("     - GND commun avec la carte.")
+    else:
+        line("  -> echo bloque en haut : verifie le pont diviseur sur ECHO.")
+    line()
+
+
 def test_buttons():
     line("=== Boutons ===")
     pins = {n: Pin(p, Pin.IN, Pin.PULL_UP) for n, p in BTN.items()}
@@ -292,6 +356,7 @@ def main():
     scan_free_pins()
     test_dht()
     test_encoder()
+    test_ultrason()
     test_buttons()
     line("=== fin ===")
 

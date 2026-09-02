@@ -59,10 +59,38 @@ glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
 | LED RGB bleue | 13 | ⚠️ **220 Ω en série** |
 | LED RGB commun | — | **GND** (cathode commune) ou **3V3** (anode) |
 | **DHT11** DATA | 25 | ⚠️ **10 kΩ vers VCC**, plus **3V3** et **GND** |
+| **HC-SR04** TRIG | 15 | VCC sur **VIN (5 V)**, pas 3V3 |
+| HC-SR04 ECHO | 34 | ⚠️ **pont diviseur obligatoire** — voir plus bas |
 
-Broches encore libres et sûres : **15** (`D15`) et **35** (`D35`, en entrée
-seule et sans tirage interne — jamais pour un bouton), plus **34** (`D34`)
-que le retrait du potentiomètre a libéré.
+Broche encore libre : **35** (`D35`, en entrée seule et sans tirage interne
+— jamais pour un bouton).
+
+> ### L'ECHO du HC-SR04 sort du 5 V
+>
+> Le module s'alimente en 5 V, et son `ECHO` ressort donc à 5 V. Les GPIO de
+> l'ESP32 ne tolèrent pas plus de 3,6 V : en direct, la broche s'abîme — pas
+> toujours d'un coup, ce qui est pire, car la panne arrive des semaines plus
+> tard et ne ressemble plus à sa cause.
+>
+> Un pont diviseur avec trois résistances de 10 kΩ :
+>
+> ```
+>    ECHO (5V) ──[10k]──┬── GPIO 34
+>                       │
+>                    [10k]
+>                       │
+>                    [10k]
+>                       │
+>                      GND
+> ```
+>
+> Les deux du bas en série font 20 kΩ, la broche voit donc
+> `5 × 20/(10+20) = 3,33 V`. **Pas 10k + 10k** : ça donnerait 2,5 V, juste
+> sous le seuil haut de l'ESP32 (~2,48 V) — ça marcherait un jour sur deux,
+> et rien n'est plus long à diagnostiquer.
+>
+> La variante **HC-SR04P** (ou RCWL-1601) accepte 3,3 V et se branche sans
+> rien autour. Vérifie la sérigraphie avant de sortir les résistances.
 
 ### La sérigraphie ne dit pas toujours le numéro
 
