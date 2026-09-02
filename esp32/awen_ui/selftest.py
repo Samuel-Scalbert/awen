@@ -23,6 +23,10 @@ ENC_CLK, ENC_DT = 4, 19
 # GPIO 34 (10k vers ECHO, 20k vers GND). En direct, la broche prend 5 V sur
 # une entree prevue pour 3,3.
 US_TRIG, US_ECHO = 15, 34
+# Retroeclairage de l'ecran. Il vit normalement dans tft_setup.py, qui est
+# sur la carte et pas dans ce depot ; on le repique ici parce qu'un test doit
+# pouvoir eteindre l'ecran sans initialiser tout le pilote.
+BACKLIGHT = 22
 CRANS_ATTENDUS = 10             # ce qu'on demande de tourner a la main
 STEPS_PER_DETENT_ACTUEL = 4     # doit refleter input.py
 BTN = {"A gauche": 26, "B selection": 27, "C droite": 14,
@@ -375,6 +379,107 @@ def test_ultrason():
     line()
 
 
+def _led_channels():
+    """Les trois voies PWM de la LED, ou None si elle n'existe pas."""
+    invert = LED_COMMON == "anode"
+    try:
+        return ({n: PWM(Pin(pp), freq=1000, duty=(DUTY_MAX if invert else 0))
+                 for n, pp in (("r", LED_R), ("g", LED_G), ("b", LED_B))},
+                DUTY_MAX if invert else 0,          # eteint
+                0 if invert else DUTY_MAX)          # allume
+    except Exception:
+        return None, 0, 0
+
+
+def test_veille():
+    """Ecran et LED s'eteignent ENSEMBLE, et se rallument ensemble.
+
+    C'est le geste que la detection de presence declenchera. Le verifier a la
+    main d'abord evite de deboguer deux choses en meme temps : si l'ecran
+    reste allume ici, ce n'est pas le capteur qu'il faudra soupconner.
+
+    La LED est le point facile a oublier. Un afficheur "eteint" dont la LED
+    continue de briller dans le noir n'est pas eteint — c'est meme la seule
+    chose qu'on verra encore.
+    """
+    line("=== Veille : ecran + LED (retroeclairage GPIO {}) ===".format(BACKLIGHT))
+    bl = Pin(BACKLIGHT, Pin.OUT)
+    ch, off, on = _led_channels()
+
+    line("  allumage : ecran + LED bleue, 3 secondes...")
+    bl.value(1)
+    if ch:
+        ch["b"].duty(on)
+    time.sleep(3)
+
+    line("  EXTINCTION : les DEUX doivent s'eteindre, 4 secondes...")
+    bl.value(0)
+    if ch:
+        for c in ch.values():
+            c.duty(off)
+    time.sleep(4)
+
+    line("  rallumage.")
+    bl.value(1)
+    if ch:
+        ch["b"].duty(on)
+    time.sleep(2)
+    if ch:
+        for c in ch.values():
+            c.duty(off)
+            c.deinit()
+
+    line("  -> l'ecran est reste allume ? Le retroeclairage n'est pas sur")
+    line("     GPIO {}, ou il est cable en direct sur le 3V3.".format(BACKLIGHT))
+    line("  -> la LED est restee allumee ? Voir la section LED plus haut.")
+    line()
+
+
+def test_distance_bureau():
+    """Releve la distance a laquelle tu te tiens vraiment, assis.
+
+    Le seuil de presence ne se devine pas depuis un bureau qu'on ne voit
+    pas : il depend de ou est pose le capteur, de la profondeur du plan de
+    travail et de la facon de s'asseoir. On mesure, on ne suppose pas.
+    """
+    line("=== Distance de travail ===")
+    trig = Pin(US_TRIG, Pin.OUT)
+    echo = Pin(US_ECHO, Pin.IN)
+    line("  ASSIEDS-TOI normalement devant l'ecran, comme tous les jours,")
+    line("  et ne bouge plus. 15 secondes de mesure...")
+    time.sleep(3)
+
+    lues = []
+    for _ in range(30):
+        d = _mesure_us(trig, echo)
+        if d > 0:
+            lues.append(d / 58)
+        time.sleep_ms(400)
+
+    if len(lues) < 5:
+        line("  -> trop peu de mesures valides ({}) pour conclure.".format(
+            len(lues)))
+        line()
+        return
+
+    lues.sort()
+    med = lues[len(lues) // 2]
+    line("  {} mesures : de {:.0f} a {:.0f} cm, mediane {:.0f} cm.".format(
+        len(lues), lues[0], lues[-1], med))
+
+    # Le seuil se pose au-dessus de la plus grande distance observee assis,
+    # avec de la marge pour un dos qui se redresse ou une chaise qui recule.
+    # Trop juste, l'ecran s'eteindrait pendant qu'on travaille — le pire
+    # defaut possible pour cette fonction.
+    seuil = int((lues[-1] * 1.5 + 9) // 10 * 10)
+    line("  -> Seuil conseille : PRESENCE_CM = {}".format(seuil))
+    line("     (50 % au-dessus de ta position la plus reculee)")
+    if lues[-1] - lues[0] > 40:
+        line("  -> mesures tres dispersees : le capteur voit sans doute autre")
+        line("     chose que toi par moments (chaise, mur, ecran). Reoriente-le.")
+    line()
+
+
 def test_buttons():
     line("=== Boutons ===")
     pins = {n: Pin(p, Pin.IN, Pin.PULL_UP) for n, p in BTN.items()}
@@ -403,6 +508,8 @@ def main():
     test_dht()
     test_encoder()
     test_ultrason()
+    test_distance_bureau()
+    test_veille()
     test_buttons()
     line("=== fin ===")
 
