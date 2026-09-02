@@ -53,6 +53,10 @@ POLL_SPOTIFY_MS = 5000   # une piste change trop souvent pour attendre 30 s
 RETRY_MS = 4000
 FRAME_MS = 16            # lecture des entrées
 BLINK_MS = 530           # demi-période du curseur
+# Huit positions a 150 ms : un tour de logo en 1,2 seconde. Plus vite,
+# il se lirait comme un sablier — donc comme une attente. Plus lent, on
+# ne verrait plus qu'il tourne.
+SPIN_MS = 150
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
 COVER = 112              # côté de la pochette, doit égaler COVER_SIZE serveur
 COVER_FILE = "/cover.bin"   # 25 Ko : sur la flash, jamais en RAM
@@ -104,10 +108,12 @@ class App:
         self.in_boot = True
 
         # `online` distingue « pas encore de données » de « serveur injoignable ».
-        self.state = {"online": False, "time": "--:--", "ip": "", "blink": True}
+        self.state = {"online": False, "time": "--:--", "ip": "",
+                      "blink": True, "spin": 0}
         self.dirty = True
         self.t_poll = 0
         self.t_blink = 0
+        self.t_spin = 0
 
         self.wlan = None
         self._vol_pending = None
@@ -539,8 +545,14 @@ class App:
         self._update_led()
         self._flush_volume(now)
 
-        # Le curseur ne bat pas dans le noir : ce battement force un redessin
-        # deux fois par seconde, et il n'a rien a dire a personne.
+        # Ni le logo ni le curseur ne tournent dans le noir : ils forcent
+        # un redessin plusieurs fois par seconde et n'ont rien a dire a
+        # personne quand le panneau est eteint.
+        if self.awake and time.ticks_diff(now, self.t_spin) >= SPIN_MS:
+            self.t_spin = now
+            self.state["spin"] = self.state.get("spin", 0) + 1
+            self.dirty = True
+
         if self.awake and time.ticks_diff(now, self.t_blink) >= BLINK_MS:
             self.t_blink = now
             self.state["blink"] = not self.state.get("blink", True)

@@ -58,6 +58,21 @@ $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At $start `
     -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) `
     -RepetitionDuration (New-TimeSpan -Hours ($ToHour - $FromHour))).Repetition
 
+# SANS CE PRINCIPAL, UNE FENETRE CLIGNOTE TOUTES LES 30 MINUTES.
+#
+# Par defaut la tache s'enregistre en LogonType Interactive : Windows lance
+# alors powershell.exe DANS la session de bureau, et cree son hote de console
+# avant que -WindowStyle Hidden n'ait le moindre effet. On voit donc une
+# fenetre noire apparaitre et disparaitre, sans rapport apparent avec quoi
+# que ce soit — le genre de symptome qu'on met des semaines a rattacher a sa
+# cause.
+#
+# S4U (« Service For User ») execute la tache hors session interactive, et
+# sans mot de passe a stocker, contrairement a Password. Le profil de
+# l'utilisateur reste accessible, donc la cle SSH de ~/.ssh aussi.
+$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME `
+    -LogonType S4U -RunLevel Limited
+
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -AllowStartIfOnBatteries `
@@ -66,13 +81,14 @@ $settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances IgnoreNew
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
-    -Settings $settings -Force `
+    -Settings $settings -Principal $principal -Force `
     -Description ('Pousse la veille emploi du pipeline Claude vers le ' +
                   'serveur Awen. Ne transfere que si le dossier a change.') | Out-Null
 
 Write-Host "Tache « $TaskName » installee."
 Write-Host ("Toutes les $EveryMinutes min, de ${FromHour}h a ${ToHour}h, " +
             'rattrapage si le PC etait eteint.')
+Write-Host 'Elle tourne hors session : aucune fenetre ne doit apparaitre.'
 Write-Host ''
 Write-Host "Verifier    : Get-ScheduledTask -TaskName '$TaskName'"
 Write-Host "Lancer      : Start-ScheduledTask -TaskName '$TaskName'"

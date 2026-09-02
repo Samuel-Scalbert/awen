@@ -67,6 +67,22 @@ PAPIER = Palette("PAPIER",
                  rgb(0, 0, 0), rgb(226, 226, 222), rgb(151, 151, 149),
                  rgb(255, 255, 255), rgb(255, 96, 64))
 
+# LE LOGO GARDE SES COULEURS, QUELLE QUE SOIT LA PALETTE
+#
+# C'est la seule entorse à la règle des cinq rôles, et elle est assumée :
+# une marque qui change de couleur avec le thème n'est plus une marque.
+# Le bleu-violet est celui du 🌀 du site — le même objet des deux côtés.
+#
+# Huit teintes en dégradé, du violet clair au bleu de nuit. Le curseur ne
+# fait que décaler l'index dans cet anneau : la traînée tourne sans qu'on
+# recalcule quoi que ce soit, et une comète dit « ça tourne » là où huit
+# points identiques ne diraient rien.
+LOGO_RING = (
+    rgb(190, 150, 255), rgb(160, 125, 240), rgb(130, 105, 225),
+    rgb(100, 85, 210), rgb(75, 70, 190), rgb(55, 55, 165),
+    rgb(40, 42, 135), rgb(28, 32, 105),
+)
+
 # L'ordre du sélecteur. L'ambre en tête : c'est la teinte de TARS.
 PALETTES = (AMBER, PHOSPHOR, ICE, VIOLET, RUBIS, PAPIER)
 

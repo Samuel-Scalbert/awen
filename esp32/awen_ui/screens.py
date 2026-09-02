@@ -34,10 +34,18 @@ def _header(g, title, st, app):
     Un bloc qui bat une fois par seconde suffit à dire que la machine vit.
 
     Il ne coûte qu'une cellule par battement, grâce au redessin partiel.
+
+    LE LOGO TOURNE À GAUCHE DU NOM
+
+    Le même objet que le 🌀 du site, et ses couleurs avec lui : une marque
+    qui changerait de teinte avec le thème ne serait plus une marque. Il
+    occupe deux cellules et tourne en 1,2 seconde — assez pour qu'on le voie
+    vivre, assez lent pour qu'on ne le regarde pas.
     """
-    g.text(0, 0, "AWEN", g.p.FG)
-    g.text(5, 0, title, g.p.HI)
-    g.cursor(5 + len(title) + 1, 0, st.get("blink", True))
+    g.spinner(0, 0, st.get("spin", 0), theme.LOGO_RING)
+    g.text(2, 0, "AWEN", g.p.FG)
+    g.text(7, 0, title, g.p.HI)
+    g.cursor(7 + len(title) + 1, 0, st.get("blink", True))
     g.right(0, st.get("time", ""), g.p.DIM)
     _dots(g, app)
     g.rule(1)

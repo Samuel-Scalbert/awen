@@ -207,6 +207,10 @@ class Grid:
     def big(self, col, row, s, scale=2, fg=None):
         self._queue.append(("big", (col, row, s, scale, fg)))
 
+    def spinner(self, col, row, phase, ring):
+        """Anneau de points dont la traine tourne. Voir _draw_spinner."""
+        self._queue.append(("spinner", (col, row, phase, ring)))
+
     def dots(self, row, colors, active):
         self._queue.append(("dots", (row, colors, active)))
 
@@ -248,6 +252,8 @@ class Grid:
                 self._draw_bar(*args)
             elif kind == "dots":
                 self._draw_dots(*args)
+            elif kind == "spinner":
+                self._draw_spinner(*args)
             elif kind == "image":
                 self._draw_image(*args)
             elif kind == "imagefile":
@@ -266,6 +272,8 @@ class Grid:
             rows, key = (args[1],), ("bar", args[0], args[1], args[2])
         elif kind == "dots":
             rows, key = (args[0],), ("dots", args[0])
+        elif kind == "spinner":
+            rows, key = (args[1],), ("spinner", args[0], args[1])
         elif kind in ("image", "imagefile"):
             col, row, size = args[0], args[1], args[3]
             span = max(1, size // CH)
@@ -283,6 +291,35 @@ class Grid:
     #
     # Filets, cadres, jauges et gros texte ne passent pas par la grille de
     # caractères : les tracer directement est plus net et plus rapide.
+
+    # Huit positions sur un cercle de 6 px, pre-calculees : round(6*cos)
+    # et round(6*sin) tous les 45 degres. Refaire cette trigonometrie a
+    # chaque image couterait huit sinus par tour pour un resultat qui ne
+    # change jamais.
+    _RING_XY = ((6, 0), (4, 4), (0, 6), (-4, 4),
+                (-6, 0), (-4, -4), (0, -6), (4, -4))
+    _DOT = 3                       # cote d'un point, en pixels
+
+    def _draw_spinner(self, col, row, phase, ring):
+        """Le logo Awen : un anneau de points dont la traine tourne.
+
+        Les huit points sont TOUJOURS traces, seule leur couleur tourne.
+        Rien a effacer entre deux images : chaque passage recouvre le
+        precedent. Effacer puis redessiner ailleurs ferait clignoter le
+        point le temps d'une image.
+        """
+        key = ("spinner", col, row)
+        if self._gfx.get(key) == phase:
+            return
+        self._gfx[key] = phase
+
+        n = len(ring)
+        cx = col * CW + CW
+        cy = row * CH + CH // 2
+        half = self._DOT // 2
+        for i, (dx, dy) in enumerate(self._RING_XY):
+            self.d.fill_rect(cx + dx - half, cy + dy - half,
+                             self._DOT, self._DOT, ring[(i - phase) % n])
 
     def _draw_rule(self, row, color=None):
         """Filet horizontal d'un pixel, en bas de la ligne indiquée."""
