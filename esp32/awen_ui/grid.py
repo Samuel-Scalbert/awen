@@ -30,6 +30,7 @@ Les caractères sont limités à l'ASCII : la police intégrée de framebuf n'a 
 accents ni flèches. Écris « SEANCE », pas « SÉANCE ».
 """
 from array import array
+import logo as logo_mod
 import os
 
 
@@ -88,6 +89,11 @@ class Grid:
         # fonds de cellule que flush() repeint juste après : jauges et filets
         # apparaîtraient une image puis disparaîtraient.
         self._queue = []
+        # Alloues a la premiere utilisation : un afficheur sans logo
+        # n'a aucune raison de reserver un demi-kilo-octet.
+        self._logo_buf = None
+        self._logo_bg = None
+        self._logo_bg_key = None
 
         self.clear()
 
@@ -207,9 +213,9 @@ class Grid:
     def big(self, col, row, s, scale=2, fg=None):
         self._queue.append(("big", (col, row, s, scale, fg)))
 
-    def spinner(self, col, row, phase, ring):
-        """Anneau de points dont la traine tourne. Voir _draw_spinner."""
-        self._queue.append(("spinner", (col, row, phase, ring)))
+    def logo(self, col, row, phase, ring):
+        """Le logo Awen, image `phase`. Voir _draw_logo."""
+        self._queue.append(("logo", (col, row, phase, ring)))
 
     def dots(self, row, colors, active):
         self._queue.append(("dots", (row, colors, active)))
@@ -252,8 +258,8 @@ class Grid:
                 self._draw_bar(*args)
             elif kind == "dots":
                 self._draw_dots(*args)
-            elif kind == "spinner":
-                self._draw_spinner(*args)
+            elif kind == "logo":
+                self._draw_logo(*args)
             elif kind == "image":
                 self._draw_image(*args)
             elif kind == "imagefile":
@@ -272,8 +278,8 @@ class Grid:
             rows, key = (args[1],), ("bar", args[0], args[1], args[2])
         elif kind == "dots":
             rows, key = (args[0],), ("dots", args[0])
-        elif kind == "spinner":
-            rows, key = (args[1],), ("spinner", args[0], args[1])
+        elif kind == "logo":
+            rows, key = (args[1],), ("logo", args[0], args[1])
         elif kind in ("image", "imagefile"):
             col, row, size = args[0], args[1], args[3]
             span = max(1, size // CH)
@@ -292,34 +298,46 @@ class Grid:
     # Filets, cadres, jauges et gros texte ne passent pas par la grille de
     # caractères : les tracer directement est plus net et plus rapide.
 
-    # Huit positions sur un cercle de 6 px, pre-calculees : round(6*cos)
-    # et round(6*sin) tous les 45 degres. Refaire cette trigonometrie a
-    # chaque image couterait huit sinus par tour pour un resultat qui ne
-    # change jamais.
-    _RING_XY = ((6, 0), (4, 4), (0, 6), (-4, 4),
-                (-6, 0), (-4, -4), (0, -6), (4, -4))
-    _DOT = 3                       # cote d'un point, en pixels
+    def _draw_logo(self, col, row, phase, ring):
+        """Le logo Awen, envoye d'un bloc plutot que pixel par pixel.
 
-    def _draw_spinner(self, col, row, phase, ring):
-        """Le logo Awen : un anneau de points dont la traine tourne.
+        Un blit_buffer de 16x16 remplace la soixantaine de fill_rect
+        qu'exigerait un trace point par point. C'est plus rapide, mais
+        surtout ATOMIQUE : le fond et le bras arrivent ensemble, donc
+        jamais de bras a demi efface le temps d'une image.
 
-        Les huit points sont TOUJOURS traces, seule leur couleur tourne.
-        Rien a effacer entre deux images : chaque passage recouvre le
-        precedent. Effacer puis redessiner ailleurs ferait clignoter le
-        point le temps d'une image.
+        LES OCTETS SONT PRE-INVERSES. Le panneau tourne avec
+        _INVERT_COLORS dans st7789_min.py : le pilote inverse ce qu'on
+        lui passe en couleur, mais blit_buffer traverse sans rien
+        toucher. C'est pour la meme raison que le serveur inverse deja
+        la pochette Spotify avant de l'envoyer.
         """
-        key = ("spinner", col, row)
+        key = ("logo", col, row)
         if self._gfx.get(key) == phase:
             return
         self._gfx[key] = phase
 
-        n = len(ring)
-        cx = col * CW + CW
-        cy = row * CH + CH // 2
-        half = self._DOT // 2
-        for i, (dx, dy) in enumerate(self._RING_XY):
-            self.d.fill_rect(cx + dx - half, cy + dy - half,
-                             self._DOT, self._DOT, ring[(i - phase) % n])
+        size = logo_mod.SIZE
+        buf = self._logo_buf
+        if buf is None:
+            buf = self._logo_buf = bytearray(size * size * 2)
+
+        # Le fond est recopie d'un coup : construire 256 pixels un a un
+        # a chaque image couterait plus cher que le bras lui-meme, qui
+        # n'en occupe qu'une soixantaine.
+        bg = self.p.BG ^ 0xFFFF
+        if self._logo_bg_key != bg:
+            self._logo_bg_key = bg
+            self._logo_bg = bytes((bg >> 8, bg & 0xFF)) * (size * size)
+        buf[:] = self._logo_bg
+
+        frame = logo_mod.FRAMES[phase % len(logo_mod.FRAMES)]
+        for i in range(0, len(frame), 2):
+            c = ring[frame[i + 1] - 1] ^ 0xFFFF
+            j = frame[i] * 2
+            buf[j] = c >> 8
+            buf[j + 1] = c & 0xFF
+        self.d.blit_buffer(buf, col * CW, row * CH, size, size)
 
     def _draw_rule(self, row, color=None):
         """Filet horizontal d'un pixel, en bas de la ligne indiquée."""

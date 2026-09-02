@@ -22,8 +22,13 @@ from input import BTN_A, BTN_B, BTN_C, SHORT, LONG, REPEAT
 import theme
 
 
-def _header(g, title, st, app):
-    """Barre haute : la marque, l'écran, le curseur, l'heure.
+def _header(g, title, st, app, right=None, cursor=True):
+    """Barre haute : le logo, la marque, l'écran, le curseur, l'heure.
+
+    `right` remplace l'heure quand un écran a mieux à mettre là — l'accueil
+    y met le numéro de semaine, l'heure étant déjà en grand au milieu.
+    `cursor` se coupe pour la même raison : l'accueil a déjà son horloge qui
+    bouge, un second repère vivant n'y apporterait rien.
 
     « AWEN » figure partout — c'est le nom de la machine, et un afficheur qui
     ne dit jamais ce qu'il est ressemble à un écran de test.
@@ -42,11 +47,12 @@ def _header(g, title, st, app):
     occupe deux cellules et tourne en 1,2 seconde — assez pour qu'on le voie
     vivre, assez lent pour qu'on ne le regarde pas.
     """
-    g.spinner(0, 0, st.get("spin", 0), theme.LOGO_RING)
+    g.logo(0, 0, st.get("spin", 0), theme.LOGO_RING)
     g.text(2, 0, "AWEN", g.p.FG)
     g.text(7, 0, title, g.p.HI)
-    g.cursor(7 + len(title) + 1, 0, st.get("blink", True))
-    g.right(0, st.get("time", ""), g.p.DIM)
+    if cursor:
+        g.cursor(7 + len(title) + 1, 0, st.get("blink", True))
+    g.right(0, st.get("time", "") if right is None else right, g.p.DIM)
     _dots(g, app)
     g.rule(1)
 
@@ -151,11 +157,16 @@ class Home(Screen):
         jour = st.get("jour", {})
         online = st.get("online", True)
 
-        g.text(0, 0, "AWEN", g.p.FG)
-        g.text(5, 0, jour.get("long", st.get("date", ""))[:17], g.p.HI)
-        g.right(0, "S{}".format(jour.get("semaine", "")), g.p.DIM)
-        _dots(g, app)
-        g.rule(1)
+        # L'en-tete passe par _header comme partout ailleurs. Il etait
+        # recopie ici, et c'est precisement ce doublon qui a prive l'accueil
+        # du logo : une seule des deux copies avait ete modifiee.
+        #
+        # Le titre est la date, la droite le numero de semaine, et pas de
+        # curseur : l'horloge en grand juste en dessous dit deja que la
+        # machine vit. Le titre est tronque a 15 caracteres, le logo ayant
+        # pris deux colonnes.
+        _header(g, jour.get("long", st.get("date", ""))[:15], st, app,
+                right="S{}".format(jour.get("semaine", "")), cursor=False)
 
         # Ligne 2 laissee VIDE, et c'est la seule facon d'aerer : un glyphe
         # en echelle 4 fait exactement 32 px dans deux lignes de 16, il n'y a
