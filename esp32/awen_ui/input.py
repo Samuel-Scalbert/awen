@@ -102,20 +102,22 @@ class Encoder:
     On compte les transitions dans l'interruption — qui doit rester
     minuscule — et on les convertit en crans dans poll().
 
-    STEPS_PER_DETENT DÉPEND DU MODÈLE, ET SE MESURE
+    STEPS_PER_DETENT DÉPEND DU MODÈLE, ET SE MESURE — AVEC UN BON INSTRUMENT
 
-    Un encodeur ne fait pas forcément un cycle de quadrature complet entre
-    deux crans : beaucoup ont un cran là où les deux contacts sont ouverts
-    ET un autre là où ils sont fermés, ce qui n'en fait que deux.
+    Tous les encodeurs ne font pas un cycle de quadrature complet entre deux
+    crans ; certains n'en font que deux. Celui-ci en fait bien quatre :
+    40 transitions pour 10 crans comptés à la main, mesurées par
+    interruption.
 
-    Mesuré sur celui-ci : 53 transitions pour un tour, 25 crans sentis sous
-    le doigt, soit 2,1 — donc 2. La valeur par défaut de 4 exigeait deux
-    crans par événement, et c'est ce qui faisait « marcher la molette une
-    fois sur deux ». Le self-test (upload.ps1 -Test) refait la mesure et
-    affiche la valeur à mettre ici.
+    Cette valeur est passée à 2 pendant un temps, sur la foi d'un self-test
+    qui échantillonnait en Python et ratait donc des transitions — il
+    annonçait 2,1. Le vrai défaut de la molette était ailleurs : la course
+    d'interruption dans poll(), corrigée juste en dessous. Une constante
+    mesurée avec un instrument faux se corrige en réparant l'instrument,
+    pas en ajustant la constante.
     """
 
-    STEPS_PER_DETENT = 2
+    STEPS_PER_DETENT = 4
 
     def __init__(self, clk_no, dt_no):
         self.clk = Pin(clk_no, Pin.IN, Pin.PULL_UP)

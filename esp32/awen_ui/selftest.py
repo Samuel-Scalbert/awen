@@ -24,7 +24,7 @@ ENC_CLK, ENC_DT = 4, 19
 # une entree prevue pour 3,3.
 US_TRIG, US_ECHO = 15, 34
 CRANS_ATTENDUS = 10             # ce qu'on demande de tourner a la main
-STEPS_PER_DETENT_ACTUEL = 2     # doit refleter input.py
+STEPS_PER_DETENT_ACTUEL = 4     # doit refleter input.py
 BTN = {"A gauche": 26, "B selection": 27, "C droite": 14,
        "poussoir encodeur": 16}
 
@@ -322,7 +322,10 @@ def test_ultrason():
     # « aucun echo » ne distingue pas un capteur absent d'un capteur muet.
     hauts = sum(echo.value() for _ in range(50))
     if hauts == 0:
-        etat = "bas et stable (quelque chose est bien cable)"
+        # ATTENTION a ne pas surinterpreter : c'est le 2k du pont qui tient
+        # la ligne basse. Ce releve prouve que le DIVISEUR est cable, pas que
+        # le capteur est alimente ni que TRIG est relie.
+        etat = "bas et stable (le pont diviseur est en place)"
     elif hauts == 50:
         etat = "haut et stable (TRIG et ECHO inverses ?)"
     else:
@@ -359,11 +362,14 @@ def test_ultrason():
         line("  -> AUCUN ECHO, et la ligne flotte : le capteur n'est tout")
         line("     simplement pas branche. Rien d'autre a chercher.")
     elif muettes:
-        line("  -> AUCUN ECHO alors que la ligne est tenue. Le module est")
-        line("     alimente mais ne repond pas :")
-        line("     - VCC sur 5 V (VIN), pas sur 3V3 — il decroche sous 4,5 V ;")
-        line("     - TRIG bien sur GPIO {} ;".format(US_TRIG))
-        line("     - GND commun avec la carte.")
+        line("  -> AUCUN ECHO, mais le pont diviseur est bien la. Le capteur")
+        line("     ne recoit pas l'ordre, ou pas de courant :")
+        line("     - TRIG relie a GPIO {} ? C'est la cause n1 : sans lui le".format(US_TRIG))
+        line("       capteur ne tire jamais, et ECHO reste bas pour toujours.")
+        line("     - VCC sur VIN (5 V), pas sur 3V3 : il decroche sous 4,5 V.")
+        line("     - TRIG et ECHO inverses ? GPIO 34 est en ENTREE SEULE, il")
+        line("       ne peut pas declencher : l'inversion est invisible ici.")
+        line("     - GND du capteur commun avec celui de la carte.")
     else:
         line("  -> echo bloque en haut : verifie le pont diviseur sur ECHO.")
     line()
