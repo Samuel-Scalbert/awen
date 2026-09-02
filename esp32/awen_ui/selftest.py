@@ -223,25 +223,46 @@ def test_encoder():
     line("  (les crans se sentent sous le doigt : compte-les)")
     line("  tu as 15 secondes...")
 
+    # LU PAR INTERRUPTION, comme input.py — et surtout PAS en echantillonnant
+    # en Python. Une boucle sleep_ms(1) ne tient pas la cadence d'un encodeur
+    # qu'on tourne a la main : elle rate des etats, le decodeur absorbe les
+    # transitions devenues impossibles, et le compte s'effondre. Ce test
+    # annoncait « 4 transitions » pour 10 crans reellement tournes. Mesurer
+    # autrement que le firmware, c'est mesurer autre chose que le firmware.
     quad = (0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0)
-    etat = (clk.value() << 1) | dt.value()
-    acc = 0
+    etat = [(clk.value() << 1) | dt.value()]
+    acc = [0]
+    brutes = [0]
     vus_clk = set()
     vus_dt = set()
+
+    def _irq(_pin):
+        a, b = clk.value(), dt.value()
+        cur = (a << 1) | b
+        if cur != etat[0]:
+            brutes[0] += 1
+            acc[0] += quad[(etat[0] << 2) | cur]
+            etat[0] = cur
+
+    trig = Pin.IRQ_RISING | Pin.IRQ_FALLING
+    clk.irq(trigger=trig, handler=_irq)
+    dt.irq(trigger=trig, handler=_irq)
+
     fin = time.ticks_add(time.ticks_ms(), 15000)
     while time.ticks_diff(fin, time.ticks_ms()) > 0:
-        a, b = clk.value(), dt.value()
-        vus_clk.add(a)
-        vus_dt.add(b)
-        cur = (a << 1) | b
-        if cur != etat:
-            acc += quad[(etat << 2) | cur]
-            etat = cur
-        time.sleep_ms(1)
+        vus_clk.add(clk.value())
+        vus_dt.add(dt.value())
+        time.sleep_ms(5)
 
+    # On coupe les interruptions : les laisser vivre apres le test ferait
+    # tourner ce handler pendant les tests suivants.
+    clk.irq(handler=None)
+    dt.irq(handler=None)
+
+    acc, brutes = acc[0], brutes[0]
     line("  CLK a pris les valeurs {} ; DT {}".format(
         sorted(vus_clk), sorted(vus_dt)))
-    line("  deplacement net : {} transitions".format(acc))
+    line("  {} transitions vues, deplacement net : {}".format(brutes, acc))
     if len(vus_clk) < 2:
         line("  -> CLK ne bouge jamais : fil absent, ou c'est le commun.")
     if len(vus_dt) < 2:
@@ -269,7 +290,7 @@ def test_encoder():
     line()
 
 
-def _mesure_us(trig, echo, timeout_us=30000):
+def _mesure_us(trig, echo, timeout_us=40000):
     """Une mesure brute, en microsecondes d'aller-retour. -1 si rien.
 
     time_pulse_us renvoie -2 si l'echo n'est jamais monte (module muet ou
@@ -292,6 +313,21 @@ def test_ultrason():
     line("=== HC-SR04 (TRIG {}, ECHO {}) ===".format(US_TRIG, US_ECHO))
     trig = Pin(US_TRIG, Pin.OUT)
     echo = Pin(US_ECHO, Pin.IN)
+
+    # ETAT DE LA LIGNE AVANT DE PULSER. GPIO 34 n'a aucun tirage interne
+    # (34-39 en sont depourvues), donc sans rien au bout elle flotte et prend
+    # des valeurs au hasard. Avec le pont diviseur en place, l'ECHO au repos
+    # est tenu bas : une ligne STABLE a 0 prouve que quelque chose est
+    # branche, une ligne qui papillonne prouve le contraire. Sans ce releve,
+    # « aucun echo » ne distingue pas un capteur absent d'un capteur muet.
+    hauts = sum(echo.value() for _ in range(50))
+    if hauts == 0:
+        etat = "bas et stable (quelque chose est bien cable)"
+    elif hauts == 50:
+        etat = "haut et stable (TRIG et ECHO inverses ?)"
+    else:
+        etat = "instable, {}/50 a 1 — LA LIGNE FLOTTE, rien n'est cable".format(hauts)
+    line("  ligne ECHO au repos : {}".format(etat))
 
     line("  pointe le capteur vers un mur, puis passe la main devant.")
     line("  10 mesures, une toutes les 400 ms...")
@@ -319,9 +355,13 @@ def test_ultrason():
             line("     La distance ne bouge pas : as-tu bien passe la main ?")
         else:
             line("     Capteur OK.")
+    elif muettes and hauts not in (0, 50):
+        line("  -> AUCUN ECHO, et la ligne flotte : le capteur n'est tout")
+        line("     simplement pas branche. Rien d'autre a chercher.")
     elif muettes:
-        line("  -> AUCUN ECHO. Le module est muet :")
-        line("     - VCC sur 5 V (VIN), pas sur 3V3 ;")
+        line("  -> AUCUN ECHO alors que la ligne est tenue. Le module est")
+        line("     alimente mais ne repond pas :")
+        line("     - VCC sur 5 V (VIN), pas sur 3V3 — il decroche sous 4,5 V ;")
         line("     - TRIG bien sur GPIO {} ;".format(US_TRIG))
         line("     - GND commun avec la carte.")
     else:
