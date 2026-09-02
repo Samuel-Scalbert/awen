@@ -16,7 +16,9 @@
   <header class="app-header">
     <div class="bar">
       <a class="brand" href="{{ url_for('main.index') }}">
-        <span class="glyph">🌀</span> Awen
+        {# Le cadre reste fixe, seule la spirale tourne : c'est ce qui
+           distingue un logo vivant d'un bouton qui tremble. #}
+        <span class="glyph"><i class="spin">🌀</i></span> Awen
       </a>
       <nav class="nav-desktop">
         <a href="{{ url_for('workout.list_workouts') }}"

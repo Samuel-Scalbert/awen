@@ -1312,3 +1312,32 @@ button.ghost {
 /* Le titre de groupe en reprise : il sépare Push, Pull et Legs dans une
  * liste où tous les blocs se ressemblent. */
 .reprise-groupe { margin-top: var(--s-5); }
+
+/* --- Le logo tourne ------------------------------------------------------
+ *
+ * Un mouvement lent et permanent dans le bandeau : il dit « l'app est
+ * vivante » sans rien réclamer. Douze secondes par tour, c'est délibéré —
+ * assez lent pour qu'on ne le regarde pas, assez visible pour qu'on le
+ * remarque en passant. Une rotation rapide serait un sablier, donc une
+ * attente, donc une inquiétude.
+ *
+ * Seule la spirale tourne ; son cadre arrondi reste immobile. Faire pivoter
+ * le carré donnerait un bouton qui tremble, pas un logo vivant.
+ */
+.brand .glyph .spin {
+  display: block;
+  font-style: normal;          /* c'est un <i> pour la brièveté, pas de l'italique */
+  line-height: 1;
+  animation: awen-spin 12s linear infinite;
+}
+@keyframes awen-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Le mouvement perpétuel est exactement ce que ce réglage système demande
+ * de supprimer : pour ceux qui le règlent, l'animation ne tourne pas du
+ * tout plutôt que de tourner moins vite. */
+@media (prefers-reduced-motion: reduce) {
+  .brand .glyph .spin { animation: none; }
+}
