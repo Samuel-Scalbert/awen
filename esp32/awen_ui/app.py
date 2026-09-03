@@ -421,11 +421,21 @@ class App:
         sommeil attend le delai complet. L'asymetrie est voulue : se tromper
         en rallumant coute une lampe allumee pour rien, se tromper en
         eteignant coupe l'ecran sous le nez de quelqu'un.
+
+        LE REVEIL SUIT L'ETAT, PAS LE FRONT.
+
+        On se reveillait sur la TRANSITION absent->present renvoyee par
+        poll(). Il suffisait qu'elle soit manquee une fois — et les echos
+        perdus y suffisaient — pour que l'ecran reste noir indefiniment.
+        Lire `present` ne peut pas rater d'evenement : au pire on regarde
+        une demi-seconde trop tard. L'endormissement appelle forget() pour
+        que cet etat reparte de zero, sinon l'ecran se rallumerait aussitot
+        sur une presence que le delai vient de declarer perimee.
         """
-        revenu = self.sonar.poll(now)
+        self.sonar.poll(now)
 
         if not self.awake:
-            if revenu:
+            if self.sonar.present:
                 self.awake = True
                 self.backlight.wake()
                 # L'ecran a garde son image, mais le contenu a vieilli : on
@@ -438,6 +448,7 @@ class App:
         if self.sonar.expired(now):
             self.awake = False
             self.backlight.sleep()
+            self.sonar.forget()
 
     def _wake_on_input(self, now):
         """Un appui rallume, meme sans passer devant le capteur.

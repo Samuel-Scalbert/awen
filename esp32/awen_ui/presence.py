@@ -84,11 +84,18 @@ class Sonar:
 
         cm = self.measure()
         self.distance = cm
-        # Une mesure ratée n'est pas une absence : le capteur peut manquer un
-        # écho sur un vêtement sombre ou une surface oblique. On ne conclut
-        # rien plutôt que de conclure faux.
+        # UNE MESURE RATEE EST IGNOREE, PAS INTERPRETEE.
+        #
+        # Le capteur manque des echos : vetement sombre, surface oblique,
+        # salve perdue. C'est le cas normal, pas l'exception.
+        #
+        # Elle remettait `_candidate` a None, ce qui cassait la chaine de
+        # confirmation. Un mur qui ne repond qu'une fois sur deux suffisait
+        # alors a ce que plus rien ne soit jamais confirme : `present`
+        # restait bloque sur sa derniere valeur, l'ecran s'endormait par
+        # expiration du delai, et le retour ne produisait aucun front.
+        # L'ecran ne se rallumait plus jamais.
         if cm <= 0:
-            self._candidate = None
             return False
 
         vu = cm < self.threshold
@@ -105,6 +112,17 @@ class Sonar:
             return False
         self.present = vu
         return vu
+
+    def forget(self):
+        """Oublie la presence, quand l'afficheur s'endort.
+
+        Sans cet oubli, l'app qui se reveille sur l'ETAT `present` — et
+        non plus sur un front — se rendormirait aussitot puis se
+        rallumerait en boucle : elle verrait une presence que le delai
+        vient justement de declarer perimee.
+        """
+        self.present = False
+        self._candidate = None
 
     def seen(self, now):
         """Déclare une présence sans passer par le capteur.
@@ -133,6 +151,9 @@ class NoSonar:
 
     def poll(self, now):
         return False
+
+    def forget(self):
+        pass
 
     def seen(self, now):
         pass

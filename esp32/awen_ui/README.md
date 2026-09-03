@@ -326,9 +326,19 @@ deux consécutives qui disent la même chose. Sans ce filtre, un faux
 « présent » relancerait le compte à rebours en boucle et l'écran ne
 s'éteindrait jamais.
 
-Une mesure **ratée** (aucun écho) n'est pas une absence : le capteur peut
-manquer un vêtement sombre ou une surface oblique. On ne conclut rien plutôt
-que de conclure faux.
+Une mesure **ratée** (aucun écho) est **ignorée**, pas interprétée : le
+capteur manque un vêtement sombre ou une surface oblique, et c'est le cas
+normal. Elle réinitialisait la chaîne de confirmation, et un mur qui ne
+répond qu'une fois sur deux suffisait alors à ce que plus rien ne soit jamais
+confirmé — l'écran s'éteignait par expiration du délai et ne se rallumait
+plus jamais.
+
+Pour la même raison, le réveil suit **l'état** de présence et non la
+transition : un front manqué une seule fois laissait l'écran noir
+indéfiniment, alors que lire l'état ne peut rien rater — au pire on regarde
+une demi-seconde trop tard. L'endormissement oublie explicitement la
+présence, sans quoi l'écran se rallumerait aussitôt sur une détection que le
+délai vient de déclarer périmée.
 
 ### L'asymétrie est voulue
 
