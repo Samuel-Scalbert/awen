@@ -67,6 +67,35 @@ def _dots(g, app):
            app.index)
 
 
+def _sonar_line(g, app):
+    """Ce que voit le sonar, et a partir de quand l'ecran s'eteint.
+
+    Ligne 1 a droite, sous le numero de semaine : les pastilles de navigation
+    s'arretent colonne 13, la place est libre.
+
+    Deux chiffres seulement, mais ils repondent aux deux questions qu'on se
+    pose devant une veille qui se declenche mal : « me voit-il ? » et « a
+    partir de quelle distance ? ». Sans eux, le seuil de main.py est un
+    nombre qu'on ne peut confronter a rien.
+
+    La valeur mesuree s'allume quand elle passe sous le seuil : c'est la
+    reponse a la premiere question, lisible sans comparer les deux nombres.
+    """
+    sonar = getattr(app, "sonar", None)
+    if sonar is None or not sonar.threshold:
+        return                      # pas de capteur : rien a dire
+
+    cm = sonar.distance
+    # Un echo perdu vaut 0. Afficher « 0 cm » ferait croire a un obstacle
+    # colle au capteur, soit exactement l'inverse de ce qui se passe.
+    vu = "{:>3}".format(cm) if cm > 0 else " --"
+    reste = "/{}cm".format(sonar.threshold)
+
+    col = COLS - len(vu) - len(reste)
+    g.text(col, 1, vu, g.p.HI if sonar.present else g.p.DIM)
+    g.text(col + len(vu), 1, reste, g.p.DIM)
+
+
 def _statusbar(g, left, right):
     g.rule(ROWS - 2)
     g.text(0, ROWS - 1, left, g.p.DIM)
@@ -167,6 +196,7 @@ class Home(Screen):
         # pris deux colonnes.
         _header(g, jour.get("long", st.get("date", ""))[:15], st, app,
                 right="S{}".format(jour.get("semaine", "")), cursor=False)
+        _sonar_line(g, app)
 
         # Ligne 2 laissee VIDE, et c'est la seule facon d'aerer : un glyphe
         # en echelle 4 fait exactement 32 px dans deux lignes de 16, il n'y a

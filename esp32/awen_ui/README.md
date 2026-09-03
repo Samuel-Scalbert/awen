@@ -366,6 +366,24 @@ réveil, le redessin partiel n'envoie que ce qui a réellement changé.
 `Backlight` conserve son niveau pendant l'extinction, pour y revenir au
 réveil au lieu d'un palier arbitraire.
 
+### Ce que le sonar voit, écrit sur l'accueil
+
+Ligne 1 à droite, sous le numéro de semaine :
+
+```
+                      72/120cm
+```
+
+La distance mesurée, puis le seuil. Deux chiffres qui répondent aux deux
+seules questions qu'on se pose devant une veille qui se déclenche mal :
+**me voit-il ?** et **à partir de quelle distance ?** Sans eux, le
+`PRESENCE_CM` de `main.py` est un nombre qu'on ne peut confronter à rien.
+
+La valeur mesurée s'allume quand elle passe sous le seuil, ce qui répond à
+la première question sans avoir à comparer les deux nombres. Un écho perdu
+s'affiche `--` et non `0` : zéro ferait croire à un obstacle collé au
+capteur, soit exactement l'inverse de ce qui se passe.
+
 ## Animations
 
 Deux règles de rythme, dans `app.py` :

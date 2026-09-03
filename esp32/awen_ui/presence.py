@@ -148,6 +148,9 @@ class NoSonar:
 
     present = True
     distance = 0
+    # Un seuil nul dit « pas de capteur » : c'est ce que l'accueil regarde
+    # pour ne rien afficher plutôt que d'afficher « 0/0 cm ».
+    threshold = 0
 
     def poll(self, now):
         return False
