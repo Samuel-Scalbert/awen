@@ -384,6 +384,21 @@ la première question sans avoir à comparer les deux nombres. Un écho perdu
 s'affiche `--` et non `0` : zéro ferait croire à un obstacle collé au
 capteur, soit exactement l'inverse de ce qui se passe.
 
+Cette ligne a révélé deux limites du redessin partiel, corrigées depuis.
+L'invalidation des tracés hors grille raisonnait **par ligne** : un chiffre
+modifié colonne 23 faisait retracer les pastilles des colonnes 0 à 13, et
+`_draw_dots` les efface avant de les redessiner — elles clignotaient deux
+fois par seconde. Elle compare désormais **lignes et colonnes**.
+
+Et `flush()` repeignait les 16 pixels de hauteur d'une cellule, alors qu'un
+filet occupe le **dernier** pixel de la sienne : il était effacé puis
+retracé, ce qui donne un éclair noir sur un panneau qui écrit en direct. Les
+lignes portant un filet ne sont plus repeintes que sur 15 pixels. La police
+fait 8 px centrés, elle n'atteint jamais le 16e.
+
+Un chiffre qui change ne touche donc plus que **64 pixels**, ceux de son
+propre glyphe.
+
 ## Animations
 
 Deux règles de rythme, dans `app.py` :

@@ -160,14 +160,36 @@ class Grid:
         d = self.d
         ch, fg, bg = self.ch, self.fg, self.bg
         sch, sfg, sbg = self.sch, self.sfg, self.sbg
-        # Lignes effectivement repeintes : un tracé hors grille qui les
-        # traverse vient d'être recouvert et doit être refait, même si sa
-        # valeur n'a pas bougé.
-        touched = bytearray(ROWS)
+
+        # CE QUI A ÉTÉ REPEINT, PAR LIGNE **ET PAR COLONNE**.
+        #
+        # Un entier par ligne, un bit par colonne. C'était un simple drapeau
+        # par ligne, et cela suffisait tant qu'une ligne ne portait qu'une
+        # seule chose. Depuis que l'accueil écrit une distance à droite de la
+        # ligne des pastilles, un chiffre qui change invalidait des pastilles
+        # situées quinze colonnes plus loin : elles étaient effacées puis
+        # retracées deux fois par seconde, et cela se voyait.
+        touched = [0] * ROWS
+
+        # LES LIGNES QUI PORTENT UN FILET NE SONT REPEINTES QUE SUR 15 PIXELS.
+        #
+        # Un filet est tracé sur le DERNIER pixel de la cellule. Repeindre la
+        # hauteur entière l'effaçait, et le rejeu de la file le retraçait
+        # juste après — sur un panneau qui écrit en direct, cela donne un
+        # éclair noir à chaque changement de texte sur cette ligne.
+        #
+        # La police fait 8 px, centrée par YOFF : elle occupe les pixels 4 à
+        # 11 d'une cellule de 16. Les quatre du bas ne portent jamais de
+        # glyphe, en épargner un est donc sans conséquence.
+        filets = 0
+        for _kind, _args in self._queue:
+            if _kind == "rule" and 0 <= _args[0] < ROWS:
+                filets |= 1 << _args[0]
 
         for row in range(ROWS):
             base = row * COLS
             y = row * CH
+            hauteur = CH - 1 if (filets >> row) & 1 else CH
             col = 0
             while col < COLS:
                 k = base + col
@@ -192,9 +214,9 @@ class Grid:
 
                 x = start * CW
                 w = (col - start) * CW
-                d.fill_rect(x, y, w, CH, cb)
+                d.fill_rect(x, y, w, hauteur, cb)
                 d.text("".join(buf), x, y + YOFF, color=cf, bg=cb)
-                touched[row] = 1
+                touched[row] |= ((1 << (col - start)) - 1) << start
 
         self._run_queue(touched)
 
@@ -269,27 +291,51 @@ class Grid:
         self._queue = []
 
     def _forget_if_touched(self, kind, args, touched):
+        """Oublie un tracé dont la zone vient d'être recouverte par du texte.
+
+        La comparaison porte sur les lignes ET les colonnes. S'en tenir aux
+        lignes revenait à dire qu'un chiffre modifié à droite abîme une
+        pastille à gauche : elle était retracée pour rien, avec l'effacement
+        que cela suppose, donc un clignotement à chaque changement.
+        """
         if kind == "rule":
-            rows, key = (args[0],), ("rule", args[0])
+            # Un filet traverse toute la largeur : sa zone est la ligne
+            # entière. flush() ne l'efface plus, ce rejeu est donc devenu
+            # invisible — il ne reste que pour un tracé recouvert autrement.
+            rows, lo, hi, key = (args[0],), 0, COLS - 1, ("rule", args[0])
         elif kind == "frame":
             col, row, w, h = args[0], args[1], args[2], args[3]
-            rows, key = range(row, row + h), ("frame", col, row, w, h)
+            rows, lo, hi = range(row, row + h), col, col + w - 1
+            key = ("frame", col, row, w, h)
         elif kind == "bar":
-            rows, key = (args[1],), ("bar", args[0], args[1], args[2])
+            col, row, w = args[0], args[1], args[2]
+            rows, lo, hi, key = (row,), col, col + w - 1, ("bar", col, row, w)
         elif kind == "dots":
-            rows, key = (args[0],), ("dots", args[0])
+            # Une pastille tous les deux caractères, la première à cheval sur
+            # la colonne 0 : voir _draw_dots.
+            rows, lo, hi = (args[0],), 0, 2 * len(args[1]) - 1
+            key = ("dots", args[0])
         elif kind == "logo":
-            rows, key = (args[1],), ("logo", args[0], args[1])
+            col, row = args[0], args[1]
+            rows, lo, hi = (row,), col, col + logo_mod.SIZE // CW - 1
+            key = ("logo", col, row)
         elif kind in ("image", "imagefile"):
             col, row, size = args[0], args[1], args[3]
-            span = max(1, size // CH)
-            rows, key = range(row, row + span), ("image", col, row)
+            rows = range(row, row + max(1, size // CH))
+            lo, hi = col, col + max(1, size // CW) - 1
+            key = ("image", col, row)
         else:
-            col, row, scale = args[0], args[1], args[3]
-            span = max(1, (GLYPH * scale) // CH)
-            rows, key = range(row, row + span), ("big", col, row)
+            col, row, s, scale = args[0], args[1], args[2], args[3]
+            rows = range(row, row + max(1, (GLYPH * scale) // CH))
+            # Un glyphe agrandi occupe `scale` colonnes de large.
+            lo, hi = col, col + max(1, len(s) * scale) - 1
+            key = ("big", col, row)
+
+        lo = max(lo, 0)
+        hi = min(hi, COLS - 1)
+        zone = ((1 << (hi - lo + 1)) - 1) << lo if hi >= lo else 0
         for r in rows:
-            if 0 <= r < ROWS and touched[r]:
+            if 0 <= r < ROWS and touched[r] & zone:
                 self._gfx.pop(key, None)
                 return
 
