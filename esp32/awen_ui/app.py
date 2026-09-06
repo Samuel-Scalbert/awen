@@ -123,6 +123,10 @@ class App:
         self.cover = None           # pochette en RGB565 brut
         self._cover_tag = None
         self._pos_at = 0            # quand la position de lecture a été lue
+        # Debit du dernier transfert, en kilo-octets par seconde. Voir
+        # _mesure_debit().
+        self.net_kbs = None
+        self.net_octets = 0
 
     # ------------------------------------------------------------ réseau
 
@@ -160,6 +164,36 @@ class App:
         except Exception:
             return None
 
+    def _mesure_debit(self, octets, depuis):
+        """Enregistre le debit du transfert qui vient de finir.
+
+        CE N'EST PAS LA VITESSE DU WIFI, ET IL NE FAUT PAS LE PRETENDRE.
+
+        C'est le debit utile de bout en bout : la carte, l'air, le serveur et
+        le temps qu'il met a repondre, tout compris. Sur un petit transfert
+        la latence domine et le chiffre parait bas alors que la liaison va
+        tres bien — d'ou l'affichage de la taille a cote, sans laquelle le
+        nombre ne veut rien dire.
+
+        C'est justement ce qu'on veut surveiller : le RSSI dit si le signal
+        arrive, celui-ci dit si les donnees arrivent. Les deux se degradent
+        rarement en meme temps, et c'est le second qui gene vraiment.
+
+        UNE SEULE SOURCE : LE RESUME.
+
+        La pochette Spotify ferait un bien meilleur echantillon — 25 Ko
+        contre deux — mais elle ne se telecharge que sur un ecran, et
+        melanger les deux ferait sauter le chiffre d'un facteur dix pour une
+        raison etrangere au reseau. Un echantillon toujours identique, toutes
+        les trente secondes, se compare a lui-meme : c'est ce qu'on lit sur
+        cette ligne, une tendance, pas un test de debit.
+        """
+        ms = time.ticks_diff(time.ticks_ms(), depuis)
+        if octets <= 0 or ms <= 0:
+            return
+        self.net_octets = octets
+        self.net_kbs = (octets * 1000) // (ms * 1024)
+
     def _url(self, path):
         return "{}{}?key={}".format(self.cfg["base_url"], path,
                                     self.cfg["api_key"])
@@ -178,12 +212,17 @@ class App:
         # de memoire.
         gc.collect()
         r = None
+        debut = time.ticks_ms()
         try:
             r = urequests.get(self._url("/api/esp32/summary"),
                               timeout=NET_TIMEOUT)
             if r.status_code != 200:
                 raise OSError(r.status_code)
+            # .content avant .json() : urequests garde le corps en cache,
+            # la lecture n'a donc pas lieu deux fois.
+            octets = len(r.content)
             data = r.json()
+            self._mesure_debit(octets, debut)
         except Exception as e:
             # L'adresse de la carte accompagne l'erreur autant que la
             # memoire libre. Les deux pannes se ressemblent depuis le code

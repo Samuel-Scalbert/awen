@@ -291,7 +291,25 @@ class Home(Screen):
         rssi = app.wifi_rssi()
         g.text(0, 17, "*" if online else "!",
                g.p.FG if online else g.p.ALERT)
-        g.text(2, 17, "WIFI", g.p.DIM)
+        # DEUX MESURES QUI NE DISENT PAS LA MEME CHOSE.
+        #
+        # Le dBm dit si le signal arrive, le debit dit si les donnees
+        # arrivent. Les deux se degradent rarement ensemble, et c'est le
+        # second qui gene vraiment : un signal excellent avec un debit qui
+        # s'effondre, c'est un reseau sature, pas une antenne mal placee.
+        #
+        # La taille du transfert accompagne le debit. Sans elle le chiffre
+        # ment : sur deux kilo-octets la latence domine et le resultat parait
+        # mediocre alors que la liaison va tres bien.
+        # La taille du transfert n'est PAS affichee, faute de place : le pire
+        # cas a droite, « TRES FAIBLE -85 dBm », occupe deja les colonnes 11
+        # a 29. Elle reste dans la console au demarrage, et le debit se lit
+        # de toute facon en tendance, pas en valeur absolue.
+        kbs = getattr(app, "net_kbs", None)
+        if kbs is None:
+            g.text(2, 17, "WIFI", g.p.DIM)
+        else:
+            g.text(2, 17, "{}ko/s".format(min(kbs, 9999)), g.p.FG)
         if rssi is None:
             g.right(17, "EN LIGNE" if online else "HORS LIGNE",
                     g.p.FG if online else g.p.ALERT)
