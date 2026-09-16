@@ -271,6 +271,12 @@ def _chat(messages):
              "messages": messages,
              "tools": _schema(),
              "stream": False,
+             # Qwen3 reflechit a voix haute par defaut : « Okay, the user
+             # asked... » sur 1500 jetons pour dire bonjour. C'est du temps
+             # d'attente et du texte a masquer, pour une question de
+             # majordome qui n'en a aucun besoin. Les modeles sans mode
+             # reflexion ignorent simplement ce champ.
+             "think": False,
              "keep_alive": current_app.config["OLLAMA_KEEP_ALIVE"],
              "options": {"temperature": 0.3}}
     r = requests.post(_url("/api/chat"), json=corps, timeout=TIMEOUT_S)
@@ -350,8 +356,9 @@ def ask(question, historique=None):
                      "{} » sur le serveur.".format(etat["modele"],
                                                    etat["modele"]))
         else:
-            texte = "Le modèle a mis trop de temps : {}".format(
-                type(exc).__name__)
+            detail = getattr(getattr(exc, "response", None), "text", "") or ""
+            texte = "Le modèle a refusé la requête ({}) : {}".format(
+                type(exc).__name__, detail[:200] or "pas de détail")
         return {"ok": False, "reponse": texte, "ecran": "Modele injoignable",
                 "outils": utilises}
 
