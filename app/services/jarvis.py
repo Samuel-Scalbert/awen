@@ -315,6 +315,12 @@ def _decouper(texte):
         # Le modèle a oublié la consigne : on prend la première phrase plutôt
         # que de laisser l'afficheur vide.
         ecran = reponse.split(".")[0][:ECRAN_MAX]
+    if not reponse:
+        # L'inverse arrive aussi, et plus souvent sur les petits modèles : ils
+        # n'écrivent QUE la ligne ECRAN. Le navigateur se retrouvait alors
+        # avec une bulle vide alors que la réponse était là, tronquée à
+        # soixante caractères dans le champ destiné à l'afficheur.
+        reponse = ecran
     return reponse, ecran
 
 
