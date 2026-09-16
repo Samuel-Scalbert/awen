@@ -328,6 +328,69 @@ impression après trois essais.
 
 ---
 
+# Ou on en est — 16 septembre 2026, en service
+
+Jarvis repond. Ce qui suit est l'etat reel, pas l'intention.
+
+## Ce qui tourne
+
+| | |
+| --- | --- |
+| Poste de commande | `/jarvis` — globe, barre d'etat, chat, pave numerique |
+| Liste de taches | `/taches` — web, ESP32, et Jarvis qui ecrit dedans |
+| Modele | **qwen3:1.7b, sur le PROCESSEUR** (`OLLAMA_NUM_GPU=0`) |
+| Temps de reponse | 6 a 11 s par question, outil compris |
+| Outils | les dix repondent, lecture et ecriture verifiees |
+
+## Pourquoi le processeur, et pas la 3070
+
+**L'alimentation ne tient pas les pics de la carte.** Sept coupures dans
+l'apres-midi, toujours au moment ou la carte se met a calculer, jamais une
+panique du noyau (`pstore` vide a chaque demarrage), jamais plus de 43 W
+affiches ni plus de 48 °C.
+
+Le bloc est une **Cooler Master RS-600-ACAB-B1**, gamme Elite : 600 W,
+80 PLUS basique, regulation de groupe. La 3070 tire 220 W en moyenne mais
+produit des pics de quelques microsecondes bien au-dessus — invisibles a un
+releve par seconde, suffisants pour declencher la protection d'un bloc de
+cette gamme.
+
+**Ce qu'il faut pour y revenir :** verifier d'abord que les deux connecteurs
+8 broches ne partagent pas un seul cable en guirlande (gratuit, parfois
+suffisant) ; sinon un bloc 650-750 W en norme **ATX 3.x**, qui impose de
+tenir des excursions a 150 % de la puissance nominale. Ensuite, vider
+`OLLAMA_NUM_GPU` et repasser a `qwen3:8b` : 70 tokens/s mesures, contre 8 a
+11 s par question aujourd'hui.
+
+## Le choix du 1,7B n'est pas arbitraire
+
+Sur ce processeur, ce n'est pas la generation qui coute, c'est l'analyse du
+prompt — la consigne plus les schemas de dix outils, a chaque question.
+Mesure faite :
+
+| Modele | Une question a outil |
+| --- | --- |
+| qwen3:4b | **plus de 6 min 40** (delai depasse) |
+| qwen3:1.7b | **6 s a chaud, 14 s a froid** |
+
+Le rapport n'est pas de deux, il est de soixante-dix. Descendre d'un cran
+change la nature du service.
+
+## La faiblesse qui reste, et son pansement
+
+Un modele de 1,7B **repond parfois de memoire a une question qui exigeait une
+consultation**. Mesure : « je fais quoi a la salle aujourd'hui ? » a produit
+« je suis en salle pour l'entrainement », sans appeler aucun outil.
+
+Le rattrapage de `services/jarvis.py` corrige les cas courants : si les mots
+de la question designent un outil et qu'aucun n'a ete appele, on l'appelle et
+on redemande une fois. Les trois questions temoins passent desormais.
+
+**Mais c'est un pansement.** Il ne fonctionne que parce que les mots de la
+question designent l'outil. Sur une question tournee autrement — « est-ce que
+j'ai progresse au squat depuis aout ? » — le modele peut encore inventer. La
+vraie reponse est le 8B, donc l'alimentation.
+
 # Le magasin d'Ollama, et comment il se bloque
 
 Rencontre a l'installation, le 16 septembre 2026. Une heure perdue, a
