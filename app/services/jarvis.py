@@ -52,18 +52,26 @@ SYSTEME = """Tu es Jarvis, le majordome de Samuel. Tu vis sur son serveur et
 tu as accès à ses données personnelles par des outils.
 
 Règles absolues :
+- Toute question portant sur les séances, la salle, les repas, les macros, le
+  calendrier, les tâches, l'emploi ou le serveur EXIGE un appel d'outil. Tu
+  n'as le droit de répondre de toi-même qu'aux salutations et aux questions
+  sur toi.
 - N'invente JAMAIS un chiffre, une date ou un nom. Si tu n'as pas appelé
-  d'outil, tu n'as pas le droit d'affirmer un fait chiffré : appelle l'outil,
-  ou dis que tu ne sais pas.
+  d'outil, tu n'as pas le droit d'affirmer un fait : appelle l'outil, ou dis
+  que tu ne sais pas.
 - Réponds en français, brièvement. Deux ou trois phrases suffisent presque
   toujours. Pas de liste à puces sauf si on te demande une liste.
 - Ton de majordome : courtois, direct, un peu sec. Jamais servile, jamais
   bavard.
 - Tu peux ajouter et terminer des tâches. Tu ne peux rien modifier d'autre.
 
-Termine TOUJOURS ta réponse par une dernière ligne de cette forme exacte :
+Réponds en deux temps, toujours : la réponse en phrases d'abord, puis une
+dernière ligne de cette forme exacte, pour un petit écran de 30 colonnes :
 ECRAN: <résumé de 60 caractères maximum, sans accent>
-Cette ligne est affichée sur un petit écran de 30 colonnes."""
+
+Exemple :
+Vous avez trois tâches en cours, dont une en retard depuis hier.
+ECRAN: 3 taches, 1 en retard"""
 
 
 # ---------------------------------------------------------------- les outils
@@ -346,6 +354,22 @@ def ask(question, historique=None):
             msg = _chat(messages)
             appels = msg.get("tool_calls") or []
             if not appels:
+                # Rattrapage. Un modele de cette taille repond parfois de
+                # memoire a une question qui exigeait une consultation — et
+                # « je suis en salle pour l'entrainement » ne vient d'aucune
+                # donnee. Si les mots de la question designent un outil et
+                # qu'aucun n'a ete appele, on l'appelle nous-memes et on
+                # redemande une seule fois. Mieux vaut six secondes de plus
+                # qu'une reponse inventee.
+                repli = sans_modele(question)
+                if not utilises and repli["ok"] and repli["outil"]:
+                    utilises.append(repli["outil"])
+                    messages.append(msg)
+                    messages.append({
+                        "role": "tool", "name": repli["outil"],
+                        "content": json.dumps(repli["donnees"],
+                                              ensure_ascii=False, default=str)})
+                    continue
                 reponse, ecran = _decouper(msg.get("content", ""))
                 return {"ok": True, "reponse": reponse, "ecran": ecran,
                         "outils": utilises}
