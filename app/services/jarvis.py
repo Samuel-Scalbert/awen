@@ -38,8 +38,12 @@ from ..models import ProgramExercise, Workout
 from . import attendance, calendar_sync, coach, host, job_watch, stats, todos
 from .progression import plan_upcoming
 
-TIMEOUT_S = 120        # un 8B sur une 3070 répond en quelques secondes ;
-                       # la marge couvre le premier chargement du modèle.
+# Sur le processeur — le repli impose par l'alimentation de ce serveur — un
+# 4B tourne a une dizaine de mots par seconde, et une question a outil demande
+# deux generations : l'appel, puis la reponse. Le premier tour paie en plus le
+# chargement du modele depuis le disque. 120 s ne suffisaient pas, et l'echec
+# se presentait comme une panne de reseau.
+TIMEOUT_S = 420
 MAX_TOURS = 4          # au-delà, le modèle tourne en rond plutôt qu'il ne
                        # cherche : mieux vaut répondre avec ce qu'on a.
 ECRAN_MAX = 60
