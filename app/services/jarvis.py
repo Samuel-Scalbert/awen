@@ -266,6 +266,21 @@ def health():
             "modele": voulu, "modeles": noms}
 
 
+def _options():
+    """Les reglages d'inference. `num_gpu` a 0 fait tourner sur le processeur.
+
+    C'est un repli, pas un choix : la carte de ce serveur fait redemarrer la
+    machine des qu'elle calcule vraiment. Un assistant a huit mots par seconde
+    reste utilisable ; une machine qui tombe en pleine ecriture ne l'est pas,
+    et c'est ce qui a detruit quatre telechargements aujourd'hui.
+    """
+    opts = {"temperature": 0.3}
+    couches = current_app.config["OLLAMA_NUM_GPU"]
+    if couches != "":
+        opts["num_gpu"] = int(couches)
+    return opts
+
+
 def _chat(messages):
     corps = {"model": current_app.config["OLLAMA_MODEL"],
              "messages": messages,
@@ -278,7 +293,7 @@ def _chat(messages):
              # reflexion ignorent simplement ce champ.
              "think": False,
              "keep_alive": current_app.config["OLLAMA_KEEP_ALIVE"],
-             "options": {"temperature": 0.3}}
+             "options": _options()}
     r = requests.post(_url("/api/chat"), json=corps, timeout=TIMEOUT_S)
     r.raise_for_status()
     return r.json().get("message", {})

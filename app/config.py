@@ -39,5 +39,11 @@ class Config:
     # aussitot. Sur 7,7 Go de RAM partages avec deux conteneurs, c'est le
     # reglage a mesurer en premier si la machine se met a ramer.
     OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "30m")
+    # Nombre de couches confiees au GPU. "0" force le processeur.
+    # Le serveur redemarre spontanement des que la carte calcule — sept
+    # coupures le 16/09, pstore vide a chaque fois, donc electrique et non
+    # logiciel. Tant que ce n'est pas regle, mieux vaut un assistant lent
+    # qu'une machine qui tombe. Vide = laisser Ollama decider.
+    OLLAMA_NUM_GPU = os.getenv("OLLAMA_NUM_GPU", "")
     # Voix Piper (.onnx). Vide : le navigateur parle a sa place.
     PIPER_MODEL = os.getenv("PIPER_MODEL", "")
