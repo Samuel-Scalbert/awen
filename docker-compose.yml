@@ -11,6 +11,12 @@ services:
       # Chemin DANS le conteneur : le volume data est monté ici.
       DATABASE_URL: sqlite:////app/data/awen.db
       TZ: Europe/Paris
+    extra_hosts:
+      # Ollama tourne sur l'hote, pas ici : lui passer le GPU demanderait
+      # nvidia-container-toolkit pour un gain nul, puisqu'il expose deja
+      # une API HTTP. Cette ligne donne au conteneur le nom qui resout
+      # vers la passerelle Docker, donc vers la machine.
+      - "host.docker.internal:host-gateway"
     volumes:
       # La base et les données persistent hors du conteneur : une image
       # reconstruite ne doit jamais emporter l'historique d'entraînement.

@@ -7,3 +7,4 @@ from .workout import (BodyWeight, CoachDecision,  # noqa: E402,F401
                       ExerciseNote, ExerciseSet, JumpTest, MissedSession,
                       ProgramExercise, Workout)
 from .meal import Recipe  # noqa: E402,F401
+from .todo import Todo  # noqa: E402,F401

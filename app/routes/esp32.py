@@ -20,6 +20,7 @@ from ..services.coach import analyse, apply_advice
 from ..services.job_watch import get_daily_reports
 from ..services import host as host_svc
 from ..services import saints
+from ..services import todos as todos_svc
 from ..services import spotify as spotify_svc
 from ..services import weather as weather_svc
 from ..services.progression import (CYCLE, TRAINING_WEEKDAYS,
@@ -293,6 +294,11 @@ def summary():
         "spotify": _spotify_block(),
         "jour": _day_block(today),
         "meteo": _weather_block(),
+        # Deja tronquees a 30 colonnes et prefixees : la carte
+        # interprete du MicroPython, tout ce qu'on prepare ici est
+        # autant de travail qu'elle n'a pas a faire.
+        "taches": {"n": todos_svc.counts()["pending"],
+                   "lignes": [_ascii(l) for l in todos_svc.lines(3, COLS)]},
         "serveur": host_svc.summary(),
     })
 

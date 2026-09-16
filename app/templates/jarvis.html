@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#04070c">
+  <meta name="color-scheme" content="dark">
+  <title>J.A.R.V.I.S — Awen</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◆</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/jarvis.css') }}">
+</head>
+<body>
+
+<button id="bascule-menu" class="cadre bouton-menu">◆ MENU</button>
+
+<aside id="menu" class="cadre panneau">
+  <h1 class="titre-panneau">◆ CONTROLES_SYSTEME // MENU</h1>
+
+  <h2 class="groupe">MODULES</h2>
+  <a class="entree" href="{{ url_for('workout.list_workouts') }}">▤ SEANCES</a>
+  <a class="entree" href="{{ url_for('coach.dashboard') }}">◈ COACH</a>
+  <a class="entree" href="{{ url_for('stats.dashboard') }}">▦ PROGRESSION</a>
+  <a class="entree" href="{{ url_for('meals.list_meals') }}">◍ REPAS / MACROS</a>
+  <a class="entree" href="{{ url_for('meals.shopping_list') }}">▣ LISTE_COURSES</a>
+  <a class="entree" href="{{ url_for('calendar.view_calendar') }}">▧ CALENDRIER</a>
+  <a class="entree vif" href="{{ url_for('todos.index') }}">✓ TACHES
+    <span id="pastille-taches" class="pastille"></span></a>
+  <a class="entree" href="{{ url_for('jobs.daily_jobs') }}">▥ VEILLE_EMPLOI</a>
+
+  <h2 class="groupe">SYSTEME</h2>
+  <button class="entree" id="btn-pave">⌨ AIDE_PAVE_NUMERIQUE</button>
+  <button class="entree" id="btn-voix">🔊 VOIX : <span id="etat-voix">ON</span></button>
+  <a class="entree" href="{{ url_for('main.index') }}">⌂ INTERFACE_CLASSIQUE</a>
+
+  <p class="version">AWEN // JARVIS 0.1</p>
+</aside>
+
+<header class="cadre barre-haute">
+  <div class="barre-titre">◆ LOCAL_TIME</div>
+  <div class="barre-corps">
+    <div class="jauge"><span class="etiq">CPU</span><span id="cpu">--%</span></div>
+    <time id="horloge">--:--:--</time>
+    <div class="jauge"><span class="etiq">RAM</span><span id="ram">--%</span></div>
+  </div>
+  <div class="barre-pied">
+    <span>SYS_CLOCK</span><span id="date">--/--/----</span><span id="conteneurs">--</span>
+  </div>
+</header>
+
+<div id="lien" class="lien-etat">● connexion…</div>
+
+<canvas id="globe"></canvas>
+
+<main class="scene">
+  <div id="journal" class="journal" aria-live="polite"></div>
+</main>
+
+<footer class="pied">
+  <form id="chat" autocomplete="off">
+    <input id="question" type="text" maxlength="400"
+           placeholder="Parlez, monsieur." aria-label="Question à Jarvis">
+    <button type="submit" class="rond" title="Envoyer">▶</button>
+    <button type="button" id="btn-stop" class="rond" title="Couper la voix">■</button>
+  </form>
+  <p id="etat" class="etat">en attente</p>
+</footer>
+
+<div id="aide-pave" class="cadre aide" hidden>
+  <h2 class="titre-panneau">◆ PAVE_NUMERIQUE</h2>
+  <table>
+    {% for code, libelle, phrase in pave %}
+    <tr><td class="touche">{{ code.replace('Numpad', '') or 'Num' }}</td>
+        <td>{{ libelle }}</td>
+        <td class="muet">{{ phrase or '— local —' }}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="muet">Les raccourcis ne partent que si le champ de saisie n'a pas
+    le focus : appuyez sur Échap pour le quitter.</p>
+</div>
+
+<script>
+  window.JARVIS = {
+    pave: {{ pave | map('list') | list | tojson }},
+    urls: {
+      etat: "{{ url_for('jarvis.etat') }}",
+      demander: "{{ url_for('jarvis.demander') }}",
+      voix: "{{ url_for('jarvis.voix') }}"
+    }
+  };
+</script>
+<script src="{{ url_for('static', filename='js/jarvis.js') }}"></script>
+</body>
+</html>

@@ -26,6 +26,12 @@ containers=$(docker ps -a \
 disk_pct=$(df --output=pcent / | tail -1 | tr -dc '0-9')
 disk_free=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
 mem_pct=$(free | awk '/^Mem:/ {printf "%d", $3/$2*100}')
+# Le processeur ne se lit pas d'un coup : /proc/stat donne des compteurs
+# cumules depuis le demarrage. Deux releves a 200 ms d'intervalle, et on
+# mesure l'instant plutot que la moyenne depuis l'allumage.
+lire_cpu() { awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5}' /proc/stat; }
+read t1 i1 <<<"$(lire_cpu)"; sleep 0.2; read t2 i2 <<<"$(lire_cpu)"
+cpu_pct=$(awk -v t1="$t1" -v i1="$i1" -v t2="$t2" -v i2="$i2" \n    'BEGIN { d=t2-t1; if (d<=0) { print 0 } else { printf "%d", (1-(i2-i1)/d)*100 } }')
 load=$(cut -d' ' -f1 /proc/loadavg)
 up_days=$(awk '{printf "%d", $1/86400}' /proc/uptime)
 up_hours=$(awk '{printf "%d", ($1%86400)/3600}' /proc/uptime)
@@ -39,6 +45,7 @@ cat > "$TMP" <<EOF
   "disk_pct": ${disk_pct},
   "disk_free_gb": ${disk_free},
   "mem_pct": ${mem_pct},
+  "cpu_pct": ${cpu_pct},
   "load": ${load},
   "uptime_days": ${up_days},
   "uptime_hours": ${up_hours}

@@ -1341,3 +1341,42 @@ button.ghost {
 @media (prefers-reduced-motion: reduce) {
   .brand .glyph .spin { animation: none; }
 }
+
+
+/* ==========================================================================
+   Tâches — liste simple. Le lien vers le HUD Jarvis garde la teinte cyan du
+   poste de commande : il mène ailleurs, il ne doit pas ressembler au reste
+   de la navigation.
+   ========================================================================== */
+
+.jarvis-link { color: #46d7f5 !important; letter-spacing: .06em; }
+
+.todo-add {
+  display: flex; gap: var(--s-2); flex-wrap: wrap;
+  margin-bottom: var(--s-5);
+}
+.todo-add input[type=text] { flex: 1 1 240px; }
+
+.todo-list { list-style: none; margin: 0; padding: 0; }
+.todo-list li {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--card); margin-bottom: var(--s-2);
+}
+.todo-list li.late { border-color: var(--danger); background: var(--danger-soft); }
+.todo-list li.today { border-color: var(--accent-ring); }
+.todo-list li.is-done .todo-text { text-decoration: line-through; color: var(--muted); }
+.todo-list form { display: flex; margin: 0; }
+.todo-check {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 1px solid var(--border-strong); background: transparent;
+  color: var(--accent); font-size: 14px; line-height: 1; cursor: pointer;
+}
+.todo-check:hover { border-color: var(--accent); background: var(--accent-soft); }
+.todo-text { flex: 1; }
+.todo-due { font-size: .82rem; color: var(--muted); white-space: nowrap; }
+.todo-list li.late .todo-due { color: var(--danger); }
+.todo-done { margin-top: var(--s-5); }
+.todo-done summary { cursor: pointer; color: var(--muted); }
+.page-head .late { color: var(--danger); }

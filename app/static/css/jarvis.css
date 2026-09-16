@@ -1,0 +1,176 @@
+/* ==========================================================================
+   J.A.R.V.I.S — poste de commande plein écran.
+
+   Volontairement séparé de style.css : l'application est en menthe sur
+   anthracite, mobile d'abord, avec une barre d'onglets. Le HUD est cyan sur
+   noir, plein écran, au clavier. Mélanger les deux feuilles reviendrait à
+   surcharger la moitié des règles de l'une pour obtenir l'autre.
+   ========================================================================== */
+
+:root {
+  --noir: #04070c;
+  --cyan: #46d7f5;
+  --cyan-vif: #8ceeff;
+  --cyan-mort: rgba(70, 215, 245, .35);
+  --voile: rgba(70, 215, 245, .06);
+  --ambre: #f0a63c;         /* les alertes, la teinte de TARS */
+  --mono: "Consolas", "DejaVu Sans Mono", "SF Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--noir);
+  color: var(--cyan);
+  font: 12px/1.5 var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  overflow: hidden;
+}
+
+/* Le cadre à crochets d'angle, motif répété de toute l'interface. */
+.cadre { position: relative; border: 1px solid var(--cyan-mort); background: rgba(4, 7, 12, .72); }
+.cadre::before, .cadre::after {
+  content: ""; position: absolute; width: 14px; height: 14px;
+  border: 2px solid var(--cyan); pointer-events: none;
+}
+.cadre::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.cadre::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+/* ----------------------------------------------------------------- globe */
+/* Le canvas occupe tout l'écran et reste DERRIÈRE : c'est un décor, pas un
+   élément d'interface. Rien ne doit pouvoir intercepter un clic ici. */
+#globe {
+  position: fixed; inset: 0; width: 100%; height: 100%;
+  z-index: 0; pointer-events: none;
+}
+
+/* ------------------------------------------------------------ barre haute */
+.barre-haute {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 3; padding: 6px 18px 4px; min-width: 460px; text-align: center;
+}
+.barre-titre { font-size: 10px; color: var(--cyan-mort); }
+.barre-corps { display: flex; align-items: center; justify-content: space-between; gap: 26px; }
+.barre-corps time {
+  font-size: 34px; font-weight: 700; letter-spacing: .1em;
+  color: var(--cyan-vif); text-shadow: 0 0 14px rgba(70, 215, 245, .5);
+  font-variant-numeric: tabular-nums;
+}
+.jauge { display: flex; flex-direction: column; font-size: 10px; }
+.jauge .etiq { color: var(--cyan-mort); }
+.barre-pied {
+  display: flex; justify-content: space-between; gap: 18px;
+  font-size: 9px; color: var(--cyan-mort); border-top: 1px solid var(--voile);
+  padding-top: 3px; margin-top: 2px;
+}
+
+.lien-etat {
+  position: fixed; top: 18px; right: 22px; z-index: 3;
+  border: 1px solid var(--cyan-mort); border-radius: 999px;
+  padding: 5px 14px; font-size: 10px;
+}
+.lien-etat.hs { color: var(--ambre); border-color: rgba(240, 166, 60, .45); }
+
+/* ------------------------------------------------------------------ menu */
+.bouton-menu {
+  position: fixed; top: 14px; left: 14px; z-index: 5;
+  padding: 8px 16px; color: var(--cyan); font: inherit; cursor: pointer;
+}
+.panneau {
+  position: fixed; top: 58px; left: 14px; z-index: 4;
+  width: 268px; max-height: calc(100vh - 90px); overflow-y: auto;
+  padding: 12px 14px 8px;
+}
+.panneau[hidden] { display: none; }
+.titre-panneau { margin: 0 0 10px; font-size: 11px; font-weight: 400; color: var(--cyan-vif); }
+.groupe {
+  margin: 14px 0 6px; font-size: 9px; font-weight: 400;
+  color: var(--cyan-mort); border-bottom: 1px solid var(--voile); padding-bottom: 4px;
+}
+.entree {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  margin-bottom: 6px; padding: 9px 12px;
+  border: 1px solid var(--cyan-mort); border-radius: 999px;
+  background: var(--voile); color: var(--cyan);
+  font: inherit; text-transform: uppercase; text-decoration: none;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.entree:hover { background: rgba(70, 215, 245, .16); border-color: var(--cyan); }
+.entree.vif { border-color: var(--cyan); color: var(--cyan-vif); }
+.pastille { margin-left: auto; color: var(--ambre); }
+.version { margin: 14px 0 4px; text-align: center; font-size: 9px; color: var(--cyan-mort); }
+
+/* ----------------------------------------------------------------- scène */
+.scene {
+  position: relative; z-index: 2;
+  display: flex; align-items: flex-end; justify-content: center;
+  height: 100vh; padding: 0 20px 150px;
+}
+.journal {
+  width: min(760px, 100%); max-height: 46vh; overflow-y: auto;
+  text-transform: none; letter-spacing: .02em; font-size: 13px;
+}
+.tour { margin-bottom: 14px; }
+.tour .qui { font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan-mort); }
+.tour .dit { margin: 2px 0 0; color: var(--cyan-vif); white-space: pre-wrap; }
+.tour.moi .dit { color: var(--cyan); opacity: .75; }
+.tour .outils { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan-mort); }
+.tour .brut {
+  margin: 6px 0 0; padding: 8px 10px; max-height: 240px; overflow: auto;
+  border-left: 2px solid var(--cyan-mort); background: rgba(70, 215, 245, .05);
+  font-size: 11px; white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------------ pied */
+.pied {
+  position: fixed; bottom: 26px; left: 0; right: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+#chat { display: flex; align-items: center; gap: 12px; }
+#question {
+  width: min(520px, 68vw); padding: 12px 20px;
+  border: 1px solid var(--cyan-mort); border-radius: 999px;
+  background: rgba(4, 7, 12, .8); color: var(--cyan-vif);
+  font: inherit; text-transform: none; letter-spacing: .04em;
+}
+#question:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 16px rgba(70, 215, 245, .25); }
+.rond {
+  width: 46px; height: 46px; border-radius: 50%;
+  border: 1px solid var(--cyan); background: var(--voile);
+  color: var(--cyan-vif); font-size: 15px; cursor: pointer;
+}
+.rond:hover { background: rgba(70, 215, 245, .2); }
+.etat { margin: 0; font-size: 10px; color: var(--cyan-mort); }
+.etat.actif { color: var(--cyan-vif); }
+
+/* L'onde de réflexion : trois points, pas un curseur clignotant — on doit
+   voir que ça travaille, sans que ça saute aux yeux. */
+.etat.actif::after {
+  content: " ..."; animation: pense 1.2s steps(4, end) infinite;
+}
+@keyframes pense { 0% { opacity: .2 } 50% { opacity: 1 } 100% { opacity: .2 } }
+
+/* ------------------------------------------------------------------ aide */
+.aide {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 6; padding: 18px 22px; max-height: 84vh; overflow-y: auto;
+}
+.aide[hidden] { display: none; }
+.aide table { border-collapse: collapse; font-size: 11px; }
+.aide td { padding: 3px 12px 3px 0; }
+.aide .touche {
+  display: inline-block; min-width: 34px; text-align: center;
+  border: 1px solid var(--cyan-mort); border-radius: 4px; padding: 1px 6px;
+  color: var(--cyan-vif);
+}
+.muet { color: var(--cyan-mort); text-transform: none; letter-spacing: .02em; }
+
+@media (max-width: 720px) {
+  .barre-haute { min-width: 0; width: calc(100% - 28px); }
+  .barre-corps time { font-size: 26px; }
+  .panneau { width: calc(100% - 28px); }
+  .scene { padding-bottom: 170px; }
+}

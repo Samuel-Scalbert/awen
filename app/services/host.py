@@ -49,7 +49,8 @@ def summary():
     d = status()
     if d is None:
         return {"ok": False, "up": 0, "total": 0, "down": [],
-                "disk_pct": 0, "mem_pct": 0, "uptime": ""}
+                "disk_pct": 0, "mem_pct": 0, "cpu_pct": None,
+                "uptime": ""}
 
     containers = d.get("containers") or []
     up = [c for c in containers if c.get("state") == "running"]
@@ -66,6 +67,9 @@ def summary():
         "disk_pct": d.get("disk_pct", 0),
         "disk_free_gb": d.get("disk_free_gb", 0),
         "mem_pct": d.get("mem_pct", 0),
+        # None et pas 0 : un releve absent doit s'afficher « --% »,
+        # jamais « 0% », qui ferait croire a une machine au repos.
+        "cpu_pct": d.get("cpu_pct"),
         "load": d.get("load", 0),
         "uptime": "{}j {}h".format(d.get("uptime_days", 0),
                                    d.get("uptime_hours", 0)),

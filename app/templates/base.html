@@ -33,6 +33,9 @@
            class="{{ 'active' if bp == 'calendar' }}">📅 Calendrier</a>
         <a href="{{ url_for('jobs.daily_jobs') }}"
            class="{{ 'active' if bp == 'jobs' }}">💼 Jobs</a>
+        <a href="{{ url_for('todos.index') }}"
+           class="{{ 'active' if bp == 'todos' }}">✅ Tâches</a>
+        <a href="{{ url_for('jarvis.hud') }}" class="jarvis-link">◆ Jarvis</a>
       </nav>
     </div>
   </header>
@@ -61,6 +64,8 @@
       <span class="ico">📅</span> Agenda</a>
     <a href="{{ url_for('jobs.daily_jobs') }}" class="{{ 'active' if bp == 'jobs' }}">
       <span class="ico">💼</span> Jobs</a>
+    <a href="{{ url_for('todos.index') }}" class="{{ 'active' if bp == 'todos' }}">
+      <span class="ico">✅</span> Tâches</a>
   </nav>
 </body>
 </html>

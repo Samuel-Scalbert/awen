@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Tâches — Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>✅ Tâches</h2>
+  <p class="sub">
+    {% if counts.pending %}
+      {{ counts.pending }} à faire{% if counts.late %},
+      <strong class="late">dont {{ counts.late }} en retard</strong>{% endif %}.
+    {% else %}
+      Rien à faire. C'est rare, profites-en.
+    {% endif %}
+  </p>
+  <div class="page-links">
+    <a href="{{ url_for('jarvis.hud') }}">◆ Poste de commande</a>
+  </div>
+</div>
+
+<form class="todo-add" method="post" action="{{ url_for('todos.add') }}">
+  <input type="text" name="text" maxlength="200" required
+         placeholder="Quoi faire ?" autocomplete="off">
+  <input type="date" name="due" aria-label="Échéance (facultative)">
+  <button class="cta" type="submit">Ajouter</button>
+</form>
+
+<ul class="todo-list">
+  {% for t in pending %}
+  <li class="{% if t.due and t.due < today %}late{% elif t.due == today %}today{% endif %}">
+    <form method="post" action="{{ url_for('todos.complete', todo_id=t.id) }}">
+      <button class="todo-check" type="submit" title="Terminer">○</button>
+    </form>
+    <span class="todo-text">{{ t.text }}</span>
+    {% if t.due %}
+    <span class="todo-due">
+      {%- if t.due < today %}en retard — {% elif t.due == today %}aujourd'hui{% endif -%}
+      {%- if t.due != today %}{{ t.due.strftime('%d/%m') }}{% endif -%}
+    </span>
+    {% endif %}
+    {% if t.source != 'web' %}<span class="badge">{{ t.source }}</span>{% endif %}
+  </li>
+  {% else %}
+  <li class="muted">Liste vide.</li>
+  {% endfor %}
+</ul>
+
+{% if done %}
+<details class="todo-done">
+  <summary>{{ done|length }} terminée{{ 's' if done|length > 1 }}</summary>
+  <ul class="todo-list">
+    {% for t in done %}
+    <li class="is-done">
+      <form method="post" action="{{ url_for('todos.complete', todo_id=t.id) }}">
+        <input type="hidden" name="undo" value="1">
+        <button class="todo-check" type="submit" title="Remettre à faire">●</button>
+      </form>
+      <span class="todo-text">{{ t.text }}</span>
+      {% if t.done_at %}<span class="todo-due">{{ t.done_at.strftime('%d/%m') }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
+{% endblock %}
