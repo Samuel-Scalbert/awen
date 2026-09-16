@@ -1,0 +1,25 @@
+# Bride la carte graphique a chaque demarrage.
+#
+# `nvidia-smi -pl` ne survit pas au redemarrage : sans cette unite, la limite
+# disparait a la premiere coupure — c'est-a-dire exactement quand on en a le
+# plus besoin.
+#
+#   sudo cp scripts/limite-gpu.service /etc/systemd/system/
+#   sudo systemctl enable --now limite-gpu.service
+#
+# Pour changer la valeur, editer la ligne ExecStart puis :
+#   sudo systemctl daemon-reload && sudo systemctl restart limite-gpu
+[Unit]
+Description=Limite de puissance du GPU
+After=nvidia-persistenced.service
+Wants=nvidia-persistenced.service
+Before=ollama.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/nvidia-smi -pm 1
+ExecStart=/usr/bin/nvidia-smi -pl 130
+
+[Install]
+WantedBy=multi-user.target
