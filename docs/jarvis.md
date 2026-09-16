@@ -340,6 +340,7 @@ impression après trois essais.
 | Le pavé et le chat se marchent dessus | Les raccourcis ne se déclenchent que hors du champ de saisie. |
 | Le HUD affiche un relevé périmé | `host.py` renvoie `None` au-delà de 5 min ; le HUD montre `--%`. |
 | SQLite et un seul processus écrivain | Jarvis n'écrit que dans `todos`, une ligne à la fois. |
+| Le magasin d'Ollama se bloque | `scripts/reparer-ollama.sh` — voir la section ci-dessus. |
 
 # Les choix, et pourquoi
 
