@@ -328,6 +328,61 @@ impression après trois essais.
 
 ---
 
+# Le magasin d'Ollama, et comment il se bloque
+
+Rencontre a l'installation, le 16 septembre 2026. Une heure perdue, a
+connaitre avant d'y revenir : rien dans les messages d'Ollama ne l'indique.
+
+**La cause premiere est banale : une coupure pendant un telechargement.** Ce
+jour-la, le serveur a redemarre huit fois en une heure — une barrette de
+memoire qu'on essayait d'ajouter. ext4 enregistre la taille du fichier avant
+d'en ecrire le contenu ; une coupure entre les deux laisse un fichier de la
+bonne taille, rempli de zeros. Ni le disque ni Ollama n'y sont pour rien : le
+disque a ete teste (5 Go ecrits sans `fsync`, relus en `O_DIRECT`, conformes).
+
+**Ce qu'Ollama en fait, en revanche, transforme l'incident en impasse :**
+
+- il ne revalide jamais un fichier deja present — il voit la taille attendue,
+  en conclut que la couche est la, et repond `success` **en une seconde sans
+  rien telecharger** ;
+- `ollama rm` doit lire le manifeste pour savoir quoi effacer, or c'est lui
+  qui est illisible : la suppression echoue avec `Error: EOF` ;
+- le menage automatique se desactive des qu'un manifeste est corrompu
+  (`corrupt manifests detected, skipping prune operation`), donc les fichiers
+  vides restent en place indefiniment ;
+- **une seule entree abimee fait echouer tous les modeles, meme sains** : la
+  requete parcourt le magasin et s'arrete sur le premier fichier vide, en une
+  milliseconde, avec `invalid character ' '`.
+
+Le serveur ne peut plus en sortir seul. Il faut effacer le dossier, qui
+appartient a root : **`scripts/reparer-ollama.sh`**.
+
+## Les trois regles qui evitent de repasser par la
+
+**Ne rien couper pendant un telechargement.** Ni redemarrage, ni coupure de
+courant, ni session SSH qui expire en emportant le client.
+
+**Ne pas relancer le service juste apres.** Ollama fait le menage des fichiers
+non references a chaque demarrage ; si le manifeste n'est pas encore visible,
+il efface ce qu'il vient d'ecrire.
+
+**Ne jamais croire le message de succes.** La seule mesure honnete est
+l'espace disque : un telechargement de 2,5 Go qui ne consomme pas 2,5 Go n'a
+pas eu lieu. C'est ce que verifie le script — et c'est ce qui aurait fait
+gagner l'heure perdue.
+
+## Et pour diagnostiquer, l'acces au journal
+
+Sans lui, on debogue a l'aveugle : les huit redemarrages etaient ecrits noir
+sur blanc dans `journalctl`, invisibles depuis un compte ordinaire. Le compte
+`sscalbert` a ete ajoute au groupe `systemd-journal` le 16/09/2026. Les
+lignes qui disent tout :
+
+```bash
+journalctl -u ollama --since '16:00' --no-pager | grep -v 'GIN\]'
+journalctl --list-boots        # un redemarrage inattendu explique bien des choses
+```
+
 # Ce qui peut casser, et ce qu'on fera
 
 | Risque | Parade |
