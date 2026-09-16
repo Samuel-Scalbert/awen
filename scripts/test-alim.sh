@@ -44,6 +44,14 @@ else
     PALIERS=(100 130 160 190 220)
 fi
 
+# Sans modele utilisable, la carte reste a 18 W et la campagne ne mesure
+# rien : chaque palier echoue en une seconde sur une erreur de magasin.
+if ! curl -s -m 10 http://127.0.0.1:11434/api/show -d "{\"name\": \"$MODELE\"}" | grep -q 'license'; then
+    echo "Le modele $MODELE n'est pas utilisable : la campagne ne mesurerait" >&2
+    echo "qu'une carte au repos. Lancer d'abord scripts/reparer-ollama.sh." >&2
+    exit 1
+fi
+
 note "===== nouvelle campagne, paliers : ${PALIERS[*]} W ====="
 note "alimentation declaree : 600 W | carte : $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 
@@ -85,8 +93,8 @@ for watts in "${PALIERS[@]}"; do
 done
 
 note "===== campagne terminee sans coupure ====="
-note "remise a la limite par defaut"
-nvidia-smi -pl 220 >/dev/null 2>&1
+note "remise de la limite geree par limite-gpu.service"
+systemctl restart limite-gpu >/dev/null 2>&1 || nvidia-smi -pl 130 >/dev/null 2>&1
 echo
 echo "Journal complet : $JOURNAL"
 echo "Apres une coupure, ses dernieres lignes disent a quelle puissance."

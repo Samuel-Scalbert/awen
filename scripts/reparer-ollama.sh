@@ -67,6 +67,14 @@ duree=$(( $(date +%s) - debut ))
 ecart=$(( apres - avant ))
 echo "disque apres : ${apres} Mo   (ecart : ${ecart} Mo en ${duree} s)"
 
+# Le telechargement est sur le disque, mais encore en cache : une coupure
+# pendant l'etape suivante l'emporterait. Or c'est justement l'etape
+# suivante — le chargement du modele sur le GPU — qui fait tomber cette
+# machine. On force donc tout sur le disque maintenant : si le GPU coupe
+# le courant dans dix secondes, les 5 Go seront intacts au redemarrage.
+echo "ecriture forcee sur le disque..."
+sync
+
 if [ "$ecart" -lt 500 ]; then
     echo
     echo "ECHEC : le disque n'a pas grossi, donc rien n'a ete telecharge."
@@ -75,6 +83,7 @@ if [ "$ecart" -lt 500 ]; then
 fi
 
 etape "5/5  Verification par generation"
+echo "(c'est ici que le GPU se reveille — l'etape qui fait tomber la machine)"
 reponse=$(curl -s -m 300 http://127.0.0.1:11434/api/generate \
     -d "{\"model\":\"$MODELE\",\"prompt\":\"Dis bonjour en une phrase.\",\"stream\":false,\"think\":false}")
 python3 - "$reponse" <<'PY'
