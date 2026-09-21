@@ -11,6 +11,18 @@ services:
       # Chemin DANS le conteneur : le volume data est monté ici.
       DATABASE_URL: sqlite:////app/data/awen.db
       TZ: Europe/Paris
+    dns:
+      # Sans ceci, le conteneur n'a AUCUN serveur DNS et rien ne sort : ni la
+      # meteo, ni Spotify, ni le calendrier. L'hote resout pourtant tres bien,
+      # mais son /etc/resolv.conf est ecrit par Tailscale et ne contient que
+      # des adresses du tailnet ; Docker n'en retient aucune comme utilisable
+      # et fabrique un resolv.conf marque « NO EXTERNAL NAMESERVERS DEFINED ».
+      # On donne donc des resolveurs publics explicites. Le conteneur n'a pas
+      # besoin des noms du tailnet : il ne parle qu'a l'hote, par
+      # host.docker.internal, que Docker inscrit dans /etc/hosts et non dans
+      # le DNS.
+      - 1.1.1.1
+      - 9.9.9.9
     extra_hosts:
       # Ollama tourne sur l'hote, pas ici : lui passer le GPU demanderait
       # nvidia-container-toolkit pour un gain nul, puisqu'il expose deja
