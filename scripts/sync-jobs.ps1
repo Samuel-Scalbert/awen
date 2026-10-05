@@ -74,10 +74,19 @@ if (-not $Force -and (Test-Path -LiteralPath $StateFile)) {
 #
 # On passe par un fichier temporaire plutot qu'un pipe : le pipeline
 # PowerShell transforme les octets en texte et corromprait l'archive.
+# Chemin explicite vers le tar de Windows. Si Git for Windows est plus haut
+# dans le PATH, c'est son tar GNU qui repond -- et GNU tar lit « C:\... »
+# comme « hote:chemin », donc il tente une connexion reseau et echoue sur
+# « Cannot connect to C: resolve failed ». La tache planifiee ne voyait pas
+# le probleme parce que son PATH ne contient pas Git ; un lancement a la main
+# depuis un terminal de developpement, si.
+$tar = Join-Path (Join-Path $env:SystemRoot 'System32') 'tar.exe'
+if (-not (Test-Path $tar)) { $tar = 'tar' }
+
 $archive = Join-Path $env:TEMP 'awen-jobs.tar'
 
 try {
-    tar -cf $archive -C $Source $present
+    & $tar -cf $archive -C $Source $present
     if ($LASTEXITCODE -ne 0) { throw "tar a echoue (code $LASTEXITCODE)" }
 
     $size = [math]::Round((Get-Item $archive).Length / 1KB)

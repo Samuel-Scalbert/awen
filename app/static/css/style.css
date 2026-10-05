@@ -205,7 +205,10 @@ main {
   z-index: 20;
   bottom: 0; left: 0; right: 0;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  /* Une colonne par onglet, quel que soit leur nombre : une grille figée à
+     six renvoyait le septième (Tâches) seul sur une deuxième ligne. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 2px;
   padding: .3rem .3rem calc(.3rem + env(safe-area-inset-bottom));
   background: rgba(26, 30, 38, .93);
@@ -986,46 +989,356 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
   font-size: .92rem;
 }
 
-/* ---------- Jobs & lettres ------------------------------------------------ */
+/* ---------- Veille emploi ------------------------------------------------- */
 
-.daily-jobs {
-  margin-bottom: var(--s-4);
+/* Une teinte par famille de rôles : on reconnaît la famille avant de lire
+   son nom. A garde la menthe, c'est la cible principale. */
+:root {
+  --fam-a: var(--accent);
+  --fam-b: var(--info);
+  --fam-c: #b8a4ff;
+  --fam-d: var(--warn);
+  --fam-e: #f19cc3;
+}
+.fam-a { --fam: var(--fam-a); }
+.fam-b { --fam: var(--fam-b); }
+.fam-c { --fam: var(--fam-c); }
+.fam-d { --fam: var(--fam-d); }
+.fam-e { --fam: var(--fam-e); }
+
+.jw-alert {
+  margin: 0 0 var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid;
+  border-left-width: 3px;
+  border-radius: var(--r);
+  font-size: .92rem;
+}
+.jw-alert p { margin: 0; }
+.jw-alert.warn {
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}
+.jw-alert.warn strong { color: var(--warn); }
+.jw-alert.info {
+  background: color-mix(in srgb, var(--info) 8%, transparent);
+  border-color: color-mix(in srgb, var(--info) 40%, transparent);
+}
+
+/* Les derniers jours en bandeau, le plus récent à gauche : il défile au
+   doigt sur téléphone. */
+.jw-days {
+  display: flex;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-5);
+  padding-bottom: var(--s-2);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.jw-days a {
+  flex: none;
+  display: grid;
+  justify-items: center;
+  gap: .1rem;
+  min-width: 3.5rem;
+  padding: .4rem .6rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--muted);
+  font-size: .74rem;
+  font-weight: 600;
+  line-height: 1.25;
+  transition: border-color .18s var(--ease), background .18s var(--ease);
+}
+.jw-days a:hover { border-color: var(--border-strong); text-decoration: none; }
+.jw-days .n { color: var(--text); font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.jw-days a.empty .n { color: var(--muted); font-weight: 500; }
+.jw-days a.active { background: var(--accent-soft); border-color: var(--accent-ring); color: var(--accent); }
+.jw-days a.active .n { color: var(--accent); }
+
+.jw-day-head { margin-bottom: var(--s-4); }
+.jw-day-head h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  margin: 0 0 var(--s-3);
+}
+.jw-tag {
+  padding: .1rem .55rem;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.jw-counts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-3); }
+.jw-count {
+  padding: .25rem .7rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  color: var(--muted-strong);
+  font-size: .85rem;
+}
+.jw-count strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.jw-count.go strong { color: var(--accent); }
+.jw-count.maybe strong { color: var(--warn); }
+.jw-sources { margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+
+/* Petit intitulé en capitales au-dessus d'un bloc, ou devant une ligne */
+.jw-label, .jw-sources b, .jw-facts dt {
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.jw-label { display: block; margin-bottom: .25rem; }
+.jw-sources b { margin-right: .35rem; color: var(--muted-strong); }
+
+.jw-brief {
+  margin: 0 0 var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-ring);
+  border-radius: var(--r);
+  color: var(--muted-strong);
+  font-size: .94rem;
+}
+.jw-brief .md p { margin: 0 0 var(--s-2); }
+.jw-brief .md p:last-child { margin-bottom: 0; }
+.jw-split-label { margin: var(--s-3) 0 .35rem; }
+.jw-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.jw-split li {
+  padding: .15rem .55rem;
+  background: color-mix(in srgb, var(--fam) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--fam) 40%, transparent);
+  border-radius: var(--r-pill);
+  color: var(--muted-strong);
+  font-size: .78rem;
+}
+.jw-split li b { color: var(--fam); }
+.jw-split li .tnum { margin-left: .2rem; color: var(--text); font-weight: 650; }
+.jw-split li.none { opacity: .45; }
+
+/* Carte d'offre */
+.jw-offer {
+  position: relative;
+  margin: 0 0 var(--s-4);
   padding: var(--s-4) var(--s-5);
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-1);
 }
-.daily-jobs.today { border-color: var(--accent-ring); }
-.daily-jobs h3 {
-  display: flex;
+/* Le liseré gauche dit le verdict avant qu'on ait lu un mot. */
+.jw-offer::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: var(--s-4);
+  bottom: var(--s-4);
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--border-strong);
+}
+.jw-offer.go::before { background: var(--accent); }
+.jw-offer.maybe::before { background: var(--warn); }
+/* Les comptes rendus collent des URL de 120 caractères : sans césure
+   possible, elles élargissent la carte au-delà de l'écran du téléphone. */
+.jw-offer .md, .jw-brief .md, .jw-section .md { overflow-wrap: anywhere; }
+
+.jw-offer-head { display: flex; align-items: flex-start; gap: var(--s-3); margin-bottom: var(--s-3); }
+.jw-rank {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--muted-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.jw-offer.go .jw-rank { background: var(--accent-soft); border-color: var(--accent-ring); color: var(--accent); }
+.jw-titles { min-width: 0; }
+.jw-offer h4 { margin: 0; font-size: 1.08rem; line-height: 1.3; }
+.jw-company { margin: .1rem 0 0; color: var(--muted-strong); font-size: .92rem; }
+
+.jw-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: var(--s-3); }
+.jw-chip {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: .5rem;
+  padding: .15rem .6rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  color: var(--muted-strong);
+  font-size: .78rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.jw-chip.verdict.go {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 750;
+}
+.jw-chip.verdict.maybe {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 50%, transparent);
+  color: var(--warn);
+}
+.jw-chip.fam {
+  background: color-mix(in srgb, var(--fam) 10%, transparent);
+  border-color: color-mix(in srgb, var(--fam) 45%, transparent);
+  color: var(--fam);
+}
+.jw-chip.fresh { border-color: var(--accent-ring); color: var(--accent); }
+.jw-chip.old { border-color: color-mix(in srgb, var(--danger) 45%, transparent); color: var(--danger); }
+
+/* Les faits de l'annonce, en colonnes qui se replient seules */
+.jw-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: var(--s-2) var(--s-4);
   margin: 0 0 var(--s-3);
 }
-.daily-jobs h3 .badge {
-  display: inline-block;
-  margin: 0;
-  padding: .1rem .5rem;
-  border-radius: var(--r-pill);
-  font-size: .7rem;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
-.offer {
-  margin: var(--s-3) 0;
-  padding: var(--s-4);
+.jw-facts div { min-width: 0; }
+.jw-facts dd { margin: 0; font-size: .9rem; line-height: 1.45; overflow-wrap: anywhere; }
+
+/* Grille d'évaluation : trois crans, menthe pour fort, ambre pour moyen,
+   rouge pour faible. */
+.jw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5.6rem, 1fr));
+  gap: var(--s-3);
+  list-style: none;
+  margin: 0 0 var(--s-4);
+  padding: var(--s-3);
   background: var(--bg-sunken);
   border: 1px solid var(--border);
   border-radius: var(--r);
 }
-.offer h4 { margin: 0 0 .5rem; color: var(--accent); }
-.offer-links { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 0; }
+.jw-grid li { display: grid; gap: .35rem; }
+.jw-grid .lbl { color: var(--muted); font-size: .76rem; line-height: 1.2; }
+.jw-grid .lbl b { display: block; color: var(--muted-strong); font-weight: 650; }
+.jw-grid .meter { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.jw-grid .meter i { height: 5px; border-radius: 3px; background: var(--border-strong); }
+.jw-grid .lvl-3 .meter i { background: var(--accent); }
+.jw-grid .lvl-2 .meter i:nth-child(-n+2) { background: var(--warn); }
+.jw-grid .lvl-1 .meter i:first-child { background: var(--danger); }
+
+.jw-text { margin: 0 0 var(--s-3); line-height: 1.65; }
+.jw-text .md p, .jw-text.md p { margin: 0 0 var(--s-2); }
+.jw-callout {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid;
+  border-radius: var(--r);
+  line-height: 1.6;
+}
+.jw-callout .md p { margin: 0; }
+.jw-callout.angle { background: var(--accent-soft); border-color: var(--accent-ring); }
+.jw-callout.angle .jw-label { color: var(--accent); }
+.jw-callout.question {
+  background: color-mix(in srgb, var(--info) 7%, transparent);
+  border-color: color-mix(in srgb, var(--info) 35%, transparent);
+}
+.jw-callout.question .jw-label { color: var(--info); }
+
+.jw-more { margin: 0 0 var(--s-2); }
+.jw-more > summary { color: var(--muted-strong); font-size: .9rem; font-weight: 600; }
+.jw-more > .md { margin: var(--s-2) 0 0 1.8rem; color: var(--muted-strong); font-size: .92rem; }
+
+.jw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+.jw-actions .host { font-weight: 450; opacity: .75; }
+
+.jw-empty {
+  padding: var(--s-5);
+  background: var(--card);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  text-align: center;
+}
+
+.jw-sections { margin-top: var(--s-5); }
+.jw-section {
+  margin-bottom: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.jw-section > summary { color: var(--muted-strong); font-weight: 600; }
+.jw-section > .md { margin-top: var(--s-3); font-size: .92rem; overflow-x: auto; }
+
+/* Ce que produit chaque famille, cumulé sur les derniers comptes rendus */
+.jw-families { margin-top: var(--s-6); }
+.jw-fam-rows { display: grid; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }
+.jw-fam-rows li {
+  display: grid;
+  grid-template-columns: minmax(9rem, 13rem) 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: .88rem;
+}
+.jw-fam-rows .name b { margin-right: .3rem; color: var(--fam); }
+.jw-fam-rows .track {
+  position: relative;
+  height: .55rem;
+  background: var(--bg-sunken);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.jw-fam-rows .track i { position: absolute; inset: 0 auto 0 0; border-radius: var(--r-pill); }
+.jw-fam-rows .seen { background: color-mix(in srgb, var(--fam) 28%, transparent); }
+.jw-fam-rows .kept { background: var(--fam); }
+.jw-fam-rows .nums { color: var(--muted-strong); }
+.jw-fam-note { margin-top: var(--s-3); font-size: .82rem; }
+
 .md ul { margin: .4rem 0; padding-left: 1.2rem; line-height: 1.6; }
 .md li { margin-bottom: .2rem; }
 .md p:last-child { margin-bottom: 0; }
-.conclusion { margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--border); }
+
+@media (max-width: 34rem) {
+  .jw-offer { padding: var(--s-3) var(--s-4); }
+  .jw-facts { grid-template-columns: 1fr 1fr; }
+  .jw-actions .btn { flex: 1 1 auto; }
+  .jw-more > .md { margin-left: 0; }
+  /* Nom et chiffres sur une ligne, la barre dessous sur toute la largeur */
+  .jw-fam-rows li {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name nums" "track track";
+    gap: .3rem var(--s-3);
+  }
+  .jw-fam-rows .name { grid-area: name; }
+  .jw-fam-rows .nums { grid-area: nums; }
+  .jw-fam-rows .track { grid-area: track; }
+}
+
+/* ---------- Lettres de motivation ------------------------------------------ */
 
 ul.letters { list-style: none; padding: 0; margin: 0; }
 ul.letters li {

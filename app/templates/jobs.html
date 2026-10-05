@@ -2,9 +2,9 @@
 {% block title %}Jobs — Awen{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h2>💼 Jobs du jour</h2>
-  <p class="sub">Veille écrite chaque matin à 9h par le pipeline Claude cowork —
-    offres retenues en tête, offres écartées dans le compte rendu complet.</p>
+  <h2>💼 Veille emploi</h2>
+  <p class="sub">Écrite chaque matin par la tâche Claude : les offres qui te
+    ressemblent, pourquoi, et comment postuler.</p>
   <div class="page-links">
     <a href="{{ url_for('jobs.letters') }}">📄 Lettres de motivation</a>
   </div>
@@ -17,42 +17,199 @@
 pipeline Claude cowork dans <code>Veille quotidienne/&lt;date&gt;/Compte rendu.md</code>.</p>
 
 {% elif not reports %}
-<p class="muted">Aucun compte rendu de veille trouvé pour l'instant —
-le pipeline tourne à 9h chaque matin.</p>
+<p class="muted">Aucun compte rendu de veille trouvé pour l'instant :
+la tâche tourne chaque matin à 9h.</p>
 
 {% else %}
-{% for r in reports %}
-<section class="daily-jobs{% if r.is_today %} today{% endif %}">
-  <h3>{{ r.date_fr }}
-    {% if r.is_today %}<span class="badge done">aujourd'hui</span>{% endif %}
-    <small class="muted">— {{ r.offers|length }} offre{{ 's' if r.offers|length > 1 }} retenue{{ 's' if r.offers|length > 1 }}</small>
-  </h3>
 
-  {% for o in r.offers %}
-  <article class="offer">
-    <h4>{{ o.title }}</h4>
-    <div class="md">{{ o.body_html|safe }}</div>
-    {% if o.links %}
-    <p class="offer-links">
-      {% for link in o.links %}
-      <a class="cta small" href="{{ link }}" target="_blank" rel="noopener">
-        {%- if 'apply' in link or 'ats.' in link %}✉️ Postuler{% else %}🔗 Voir l'offre{% endif %} ({{ loop.index }})</a>
+{% if banner %}
+<div class="jw-alert {{ banner.kind }}" role="status">
+  {% if banner.kind == 'info' %}
+  <p>La veille du jour n'est pas encore arrivée : la tâche part à 9h et finit
+    en général avant 13h. En attendant, voici celle de
+    {{ banner.last.date_fr|lower }}.</p>
+  {% else %}
+  <p><strong>{% if banner.gap == 1 %}Pas de veille aujourd'hui.{% else %}Pas de
+    nouvelle veille depuis {{ banner.gap }} jours.{% endif %}</strong>
+    Dernier compte rendu : {{ banner.last.date_fr|lower }}. Si le PC ou l'app
+    Claude étaient éteints à 9h, l'app a suspendu la tâche : rouvre-la dans
+    l'app Claude et réactive-la.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+<nav class="jw-days" aria-label="Comptes rendus des derniers jours">
+  {% for r in reports %}
+  <a href="{{ url_for('jobs.daily_jobs', jour=r.dirname) }}"
+     class="{{ 'active' if r.dirname == sel.dirname }}{{ ' empty' if not r.offers }}"
+     title="{{ r.date_fr }} : {{ r.offers|length }} offre{{ 's' if r.offers|length > 1 }} retenue{{ 's' if r.offers|length > 1 }}">
+    <span class="d">{{ r.day_short }}</span>
+    <span class="n">{{ r.offers|length }}</span>
+  </a>
+  {% endfor %}
+</nav>
+
+<section class="jw-day">
+  <header class="jw-day-head">
+    <h3>{{ sel.date_fr }}
+      {% if sel.is_today %}<span class="jw-tag">aujourd'hui</span>{% endif %}</h3>
+    <div class="jw-counts">
+      {% if sel.n_go or sel.n_maybe %}
+      <span class="jw-count go"><strong>{{ sel.n_go }}</strong> à postuler aujourd'hui</span>
+      <span class="jw-count maybe"><strong>{{ sel.n_maybe }}</strong> à considérer</span>
+      {% else %}
+      <span class="jw-count"><strong>{{ sel.offers|length }}</strong>
+        retenue{{ 's' if sel.offers|length > 1 }}</span>
+      {% endif %}
+      {% if sel.rejected_count %}
+      <span class="jw-count"><strong>{{ sel.rejected_count }}</strong>
+        écartée{{ 's' if sel.rejected_count > 1 }}</span>
+      {% endif %}
+    </div>
+    {% if sel.sources_html %}
+    <p class="jw-sources"><b>Sources</b> {{ sel.sources_html|safe }}</p>
+    {% endif %}
+  </header>
+
+  {% for a in sel.alerts_html %}
+  <div class="jw-alert warn"><p>{{ a|safe }}</p></div>
+  {% endfor %}
+
+  {% if sel.conclusion_html or sel.split_rows %}
+  <div class="jw-brief">
+    <span class="jw-label">En bref</span>
+    {% if sel.conclusion_html %}<div class="md">{{ sel.conclusion_html|safe }}</div>{% endif %}
+    {% if sel.split_rows %}
+    <span class="jw-label jw-split-label">Retenues / vues, par famille</span>
+    <ul class="jw-split" aria-label="Offres retenues sur offres vues, par famille">
+      {% for f in sel.split_rows %}
+      <li class="fam-{{ f.letter|lower }}{{ ' none' if not f.seen }}"
+          title="{{ f.label }} : {{ f.kept }} retenue{{ 's' if f.kept > 1 }} sur {{ f.seen }} vue{{ 's' if f.seen > 1 }}">
+        <b>{{ f.letter }}</b> {{ f.label }} <span class="tnum">{{ f.kept }}/{{ f.seen }}</span>
+      </li>
       {% endfor %}
-    </p>
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% for o in sel.offers %}
+  <article class="jw-offer {{ o.verdict.kind if o.verdict }}" id="offre-{{ o.rank or loop.index }}">
+    <header class="jw-offer-head">
+      <span class="jw-rank">{{ o.rank or loop.index }}</span>
+      <div class="jw-titles">
+        <h4>{{ o.role }}</h4>
+        {% if o.company %}<p class="jw-company">{{ o.company }}</p>{% endif %}
+      </div>
+    </header>
+
+    <div class="jw-chips">
+      {% if o.verdict %}<span class="jw-chip verdict {{ o.verdict.kind }}">{{ o.verdict.label }}</span>{% endif %}
+      {% if o.best %}<span class="jw-chip verdict go">Meilleur fit du jour</span>{% endif %}
+      {% if o.family %}<span class="jw-chip fam fam-{{ o.family.letter|lower }}">{{ o.family.letter }} · {{ o.family.label }}</span>{% endif %}
+      {% if o.published %}
+      <span class="jw-chip {{ o.age_kind }}" title="Publiée le {{ o.published.strftime('%d/%m/%Y') }}">
+        {{ o.published.strftime('%d/%m') }} · {{ o.age_label }}</span>
+      {% endif %}
+    </div>
+
+    {% if o.facts %}
+    <dl class="jw-facts">
+      {% for label, value in o.facts %}
+      <div><dt>{{ label }}</dt><dd>{{ value|safe }}</dd></div>
+      {% endfor %}
+    </dl>
+    {% endif %}
+
+    {% if o.grid %}
+    <ul class="jw-grid" aria-label="Grille d'évaluation">
+      {% for c in o.grid %}
+      <li class="lvl-{{ c.level }}">
+        <span class="lbl"><b>{{ c.name }}</b> {{ c.word }}</span>
+        <span class="meter" aria-hidden="true"><i></i><i></i><i></i></span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% for x in o.other_sections if not x.label %}
+    <div class="md jw-text">{{ x.html|safe }}</div>
+    {% endfor %}
+    {% if o.sections.fit %}
+    <div class="jw-text"><span class="jw-label">Fit</span><div class="md">{{ o.fit_html|safe }}</div></div>
+    {% endif %}
+    {% if o.sections.angle %}
+    <div class="jw-callout angle"><span class="jw-label">L'angle</span><div class="md">{{ o.angle_html|safe }}</div></div>
+    {% endif %}
+    {% if o.sections.question %}
+    <div class="jw-callout question"><span class="jw-label">La question à poser</span><div class="md">{{ o.question_html|safe }}</div></div>
+    {% endif %}
+    {% if o.sections.research %}
+    <details class="jw-more"><summary>Ce que la veille a trouvé sur eux</summary>
+      <div class="md">{{ o.research_html|safe }}</div></details>
+    {% endif %}
+    {% for x in o.other_sections if x.label %}
+    <details class="jw-more"><summary>{{ x.label }}</summary>
+      <div class="md">{{ x.html|safe }}</div></details>
+    {% endfor %}
+    {% if o.links_note %}
+    <details class="jw-more"><summary>Vérifier que l'offre est toujours active</summary>
+      <div class="md">{{ o.links_note_html|safe }}</div></details>
+    {% endif %}
+
+    {% if o.actions %}
+    <footer class="jw-actions">
+      {% for a in o.actions %}
+      <a class="btn small{{ ' btn-ghost' if a.kind != 'apply' }}" href="{{ a.url }}"
+         target="_blank" rel="noopener noreferrer">
+        {{- '✉️ Postuler' if a.kind == 'apply' else "🔗 Voir l'offre" }}
+        <span class="host">{{ a.host }}</span></a>
+      {% endfor %}
+    </footer>
     {% endif %}
   </article>
   {% else %}
-  <p class="muted">Aucune offre retenue ce jour-là.</p>
+  <p class="jw-empty">Aucune offre retenue ce jour-là. Zéro est une réponse
+    acceptable : la veille préfère ne rien proposer que proposer à côté.</p>
   {% endfor %}
 
-  {% if r.conclusion %}
-  <p class="muted conclusion">{{ r.conclusion_html|safe }}</p>
-  {% endif %}
-  <details class="muted">
-    <summary>Compte rendu complet (offres écartées…)</summary>
-    <div class="md">{{ r.raw_html|safe }}</div>
-  </details>
+  <div class="jw-sections">
+    {% if sel.rejected_html %}
+    <details class="jw-section"><summary>{{ sel.rejected_count or '' }} offre{{ 's' if sel.rejected_count != 1 }}
+      examinée{{ 's' if sel.rejected_count != 1 }} et écartée{{ 's' if sel.rejected_count != 1 }}</summary>
+      <div class="md">{{ sel.rejected_html|safe }}</div></details>
+    {% endif %}
+    {% for x in sel.extras %}
+    <details class="jw-section"><summary>{{ x.title }}</summary>
+      <div class="md">{{ x.html|safe }}</div></details>
+    {% endfor %}
+    {% if sel.notes %}
+    <details class="jw-section"><summary>Notes de la veille</summary>
+      <div class="md">{{ sel.notes_html|safe }}</div></details>
+    {% endif %}
+    <details class="jw-section"><summary>Compte rendu complet</summary>
+      <div class="md">{{ sel.raw_html|safe }}</div></details>
+  </div>
 </section>
-{% endfor %}
+
+{% if families %}
+<section class="jw-families">
+  <h3 class="section-title">Familles sur {{ families.days }} jour{{ 's' if families.days > 1 }} de veille</h3>
+  <ul class="jw-fam-rows">
+    {% for f in families.rows %}
+    <li class="fam-{{ f.letter|lower }}">
+      <span class="name"><b>{{ f.letter }}</b> {{ f.label }}</span>
+      <span class="track" aria-hidden="true">
+        <i class="seen" style="width: {{ f.seen_pct }}%"></i>
+        <i class="kept" style="width: {{ f.kept_pct }}%"></i></span>
+      <span class="nums tnum">{{ f.kept }} / {{ f.seen }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted jw-fam-note">Offres retenues sur offres vues. Une famille qui
+    ne produit rien en deux semaines peut être retirée des réglages de la tâche.</p>
+</section>
+{% endif %}
+
 {% endif %}
 {% endblock %}

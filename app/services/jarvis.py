@@ -141,8 +141,12 @@ def _veille_emploi():
     if not reports:
         return {"info": "aucun compte rendu de veille disponible"}
     r = reports[0]
+    # Le verdict suit le titre : c'est lui qui dit quelle offre envoyer
+    # aujourd'hui, et le modèle ne peut pas le deviner du seul intitulé.
     return {"date": r.get("date_fr"),
-            "offres": [o.get("title") for o in r.get("offers", [])]}
+            "offres": [o["title"] + (f" ({o['verdict']['label']})"
+                                     if o.get("verdict") else "")
+                       for o in r.get("offers", [])]}
 
 
 def _etat_serveur():
