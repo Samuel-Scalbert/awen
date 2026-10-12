@@ -65,6 +65,10 @@ la tâche tourne chaque matin à 9h.</p>
       <span class="jw-count"><strong>{{ sel.rejected_count }}</strong>
         écartée{{ 's' if sel.rejected_count > 1 }}</span>
       {% endif %}
+      {% if sel.missions %}
+      <a class="jw-count vol" href="#benevolat"><strong>{{ sel.missions|length }}</strong>
+        mission{{ 's' if sel.missions|length > 1 }} de bénévolat</a>
+      {% endif %}
     </div>
     {% if sel.sources_html %}
     <p class="jw-sources"><b>Sources</b> {{ sel.sources_html|safe }}</p>
@@ -172,6 +176,57 @@ la tâche tourne chaque matin à 9h.</p>
   <p class="jw-empty">Aucune offre retenue ce jour-là. Zéro est une réponse
     acceptable : la veille préfère ne rien proposer que proposer à côté.</p>
   {% endfor %}
+
+  {% if sel.missions %}
+  <section class="jw-volunteer" id="benevolat" aria-label="Missions de bénévolat">
+    <header class="jw-vol-head">
+      <span class="jw-vol-ico" aria-hidden="true">🤝</span>
+      <div>
+        <h3>Bénévolat</h3>
+        <p>Pas un emploi : des missions pour gagner de l'expérience pendant la recherche.</p>
+      </div>
+    </header>
+    <div class="jw-vol-grid">
+      {% for m in sel.missions %}
+      <article class="jw-mission">
+        {% if m.org %}<p class="jw-mission-org">{{ m.org }}</p>{% endif %}
+        <h4>{{ m.title }}</h4>
+        {% if m.org_about %}<p class="jw-mission-about">{{ m.org_about }}</p>{% endif %}
+        <div class="jw-chips">
+          {% if m.theme %}<span class="jw-chip vol">{{ m.theme }}</span>{% endif %}
+          {% if m.place %}<span class="jw-chip">{{ '🏠' if m.remote else '📍' }} {{ m.place }}</span>{% endif %}
+        </div>
+        {% if m.facts %}
+        <dl class="jw-facts">
+          {% for label, value in m.facts %}
+          <div><dt>{{ label }}</dt><dd>{{ value|safe }}</dd></div>
+          {% endfor %}
+        </dl>
+        {% endif %}
+        {% for x in m.other_sections if not x.label %}
+        <div class="md jw-text">{{ x.html|safe }}</div>
+        {% endfor %}
+        {% if m.sections.why %}
+        <div class="jw-text"><span class="jw-label">Pourquoi toi</span><div class="md">{{ m.why_html|safe }}</div></div>
+        {% endif %}
+        {% if m.sections.caveat %}
+        <div class="jw-callout caveat"><span class="jw-label">La réserve</span><div class="md">{{ m.caveat_html|safe }}</div></div>
+        {% endif %}
+        {% for x in m.other_sections if x.label %}
+        <details class="jw-more"><summary>{{ x.label }}</summary>
+          <div class="md">{{ x.html|safe }}</div></details>
+        {% endfor %}
+        {% if m.url %}
+        <footer class="jw-actions">
+          <a class="btn small vol" href="{{ m.url }}" target="_blank" rel="noopener noreferrer">
+            Voir la mission <span class="host">{{ m.host }}</span></a>
+        </footer>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
 
   <div class="jw-sections">
     {% if sel.rejected_html %}

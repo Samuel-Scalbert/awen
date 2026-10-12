@@ -2,8 +2,8 @@
 
 Le pipeline écrit chaque matin `Veille quotidienne/<YYYY-MM-DD>/Compte
 rendu.md` dans JOB_SEARCH_DIR. On en extrait, sans toucher aux fichiers :
-les offres retenues (champs, grille, liens typés), les offres écartées, les
-notes d'en-tête et la conclusion.
+les offres retenues (champs, grille, liens typés), les missions de bénévolat,
+les offres écartées, les notes d'en-tête et la conclusion.
 
 Le format a changé plusieurs fois depuis juillet 2026 : « Salaire affiché »
 puis « Salaire », un titre coupé par un tiret, puis par une virgule, puis
@@ -74,6 +74,18 @@ _RUBRICS = {
 }
 
 
+# Missions de bénévolat : les mêmes blocs que les offres, d'autres intitulés.
+_VOL_FIELDS = {
+    "organisation": "org", "association": "org", "theme": "theme",
+    "format": "place", "lieu": "place", "engagement": "commitment",
+    "places": "places", "places restantes": "places",
+}
+_VOL_RUBRICS = {
+    "pourquoi toi": "why", "la reserve": "caveat",
+    "lien": "links", "s'inscrire": "links",
+}
+
+
 def _key(text):
     """« Ce que j’ai trouvé sur eux : » -> « ce que j'ai trouve sur eux »."""
     text = text.replace("’", "'").strip().rstrip(":").strip().lower()
@@ -87,6 +99,10 @@ def cap(text):
     Seulement si le texte commence par une lettre : « 2 à 4 ans » ne doit
     pas devenir « 2 À 4 ans ».
     """
+    # Une rubrique qui commence par une adresse (« **Lien** : https://... »)
+    # reste intacte : « Https:// » n'est plus reconnu comme un lien.
+    if text.lstrip().lower().startswith("http"):
+        return text
     for i, c in enumerate(text):
         if c.isalnum():
             return text[:i] + c.upper() + text[i + 1:] if c.isalpha() else text
@@ -165,8 +181,12 @@ def _host(url):
     host = urlparse(url).netloc.lower()
     host = host[4:] if host.startswith("www.") else host
     # « noveocare.taleez.com » -> « taleez.com » : c'est la plateforme qui
-    # dit où l'on va postuler, l'entreprise est déjà dans le titre.
-    return ".".join(host.split(".")[-2:])
+    # dit où l'on va postuler, l'entreprise est déjà dans le titre. Sous un
+    # suffixe à deux étages, il faut un segment de plus : « gouv.fr » seul
+    # ne nomme aucun site.
+    parts = host.split(".")
+    keep = 3 if ".".join(parts[-2:]) in ("gouv.fr", "asso.fr", "co.uk") else 2
+    return ".".join(parts[-keep:])
 
 
 def _actions(links_text, body):
@@ -198,6 +218,95 @@ def _actions(links_text, body):
     return actions
 
 
+def _read_block(lines, known):
+    """Sépare les champs, les rubriques et le texte libre d'un bloc « ### ».
+
+    Les puces « - **Clé** : valeur » du haut sont des champs ; ensuite,
+    chaque « **Rubrique** : » ouvre une rubrique qui court jusqu'à la
+    suivante, listes comprises. `known` dit quels intitulés sont des champs
+    attendus ; les autres puces sont gardées telles quelles.
+    """
+    fields, other_fields, rubrics, intro = {}, [], [], []
+    current = None
+    for line in lines:
+        r = _RUBRIC_RE.match(line)
+        if r:
+            key = _key(r.group(1))
+            if key in known and known[key] not in fields:
+                fields[known[key]] = r.group(2).strip()
+                current = None
+                continue
+            current = {"key": key, "label": r.group(1).strip(), "lines": [r.group(2)]}
+            rubrics.append(current)
+            continue
+        f = _FIELD_RE.match(line)
+        if f and current is None:
+            kind = known.get(_key(f.group(1)))
+            if kind and kind not in fields:
+                fields[kind] = f.group(2).strip()
+            else:
+                other_fields.append({"label": f.group(1).strip(),
+                                     "value": f.group(2).strip()})
+            continue
+        (intro if current is None else current["lines"]).append(line)
+    return fields, other_fields, rubrics, intro
+
+
+def _sections(rubrics, intro, known):
+    """Range les rubriques reconnues par nature ; les autres gardent leur titre."""
+    sections, others = {}, []
+    for r in rubrics:
+        text = cap("\n".join(r["lines"]).strip())
+        kind = known.get(r["key"])
+        if kind and kind not in sections:
+            sections[kind] = text
+        elif text:
+            others.append({"label": r["label"], "text": text})
+    intro_text = "\n".join(intro).strip()
+    if intro_text:
+        others.insert(0, {"label": "", "text": intro_text})
+    return sections, others
+
+
+def _parse_mission(block):
+    """Une mission de bénévolat de la section « Missions de bénévolat »."""
+    lines = block.strip().splitlines()
+    if not lines:
+        return None
+    head = lines[0].strip()
+    rank = _RANK_RE.match(head)
+    title = _RANK_RE.sub("", head).strip()
+    body = "\n".join(lines[1:]).strip()
+    fields, other_fields, rubrics, intro = _read_block(lines[1:], _VOL_FIELDS)
+    sections, other_sections = _sections(rubrics, intro, _VOL_RUBRICS)
+
+    # « Latitudes, qui sensibilise au numérique » : le nom seul sert
+    # d'étiquette, la suite dit ce que fait l'association.
+    org = fields.get("org", "")
+    name, _, about = org.partition(",")
+    if title.endswith(", " + name.strip()):
+        title = title[:-len(", " + name.strip())].strip()
+    urls = _LINK_RE.findall(sections.get("links") or body)
+    url = urls[0].rstrip(".,;:!?*»\"'") if urls else ""
+    place = fields.get("place", "")
+    return {
+        "title": title,
+        "rank": int(rank.group(1)) if rank else None,
+        "org": name.strip(),
+        "org_about": cap(about.strip()),
+        "theme": fields.get("theme", ""),
+        "place": place,
+        "remote": "distance" in _key(place),
+        "commitment": fields.get("commitment", ""),
+        "places": fields.get("places", ""),
+        "other_fields": other_fields,
+        "sections": sections,
+        "other_sections": other_sections,
+        "url": url,
+        "host": _host(url) if url else "",
+    }
+
+
 def _parse_offer(block, ref, today):
     lines = block.strip().splitlines()
     if not lines:
@@ -207,44 +316,8 @@ def _parse_offer(block, ref, today):
     title = _RANK_RE.sub("", head).strip()
     body = "\n".join(lines[1:]).strip()
 
-    # Les puces « - **Clé** : valeur » du haut sont des champs ; ensuite,
-    # chaque « **Rubrique** : » ouvre une rubrique qui court jusqu'à la
-    # suivante, listes comprises.
-    fields, other_fields, rubrics, intro = {}, [], [], []
-    current = None
-    for line in lines[1:]:
-        r = _RUBRIC_RE.match(line)
-        if r:
-            key = _key(r.group(1))
-            if key in _FIELDS and _FIELDS[key] not in fields:
-                fields[_FIELDS[key]] = r.group(2).strip()
-                current = None
-                continue
-            current = {"key": key, "label": r.group(1).strip(), "lines": [r.group(2)]}
-            rubrics.append(current)
-            continue
-        f = _FIELD_RE.match(line)
-        if f and current is None:
-            kind = _FIELDS.get(_key(f.group(1)))
-            if kind and kind not in fields:
-                fields[kind] = f.group(2).strip()
-            else:
-                other_fields.append({"label": f.group(1).strip(),
-                                     "value": f.group(2).strip()})
-            continue
-        (intro if current is None else current["lines"]).append(line)
-
-    sections, other_sections = {}, []
-    for r in rubrics:
-        text = cap("\n".join(r["lines"]).strip())
-        kind = _RUBRICS.get(r["key"])
-        if kind and kind not in sections:
-            sections[kind] = text
-        elif text:
-            other_sections.append({"label": r["label"], "text": text})
-    intro_text = "\n".join(intro).strip()
-    if intro_text:
-        other_sections.insert(0, {"label": "", "text": intro_text})
+    fields, other_fields, rubrics, intro = _read_block(lines[1:], _FIELDS)
+    sections, other_sections = _sections(rubrics, intro, _RUBRICS)
 
     best = bool(_BEST_RE.search(title))
     role, company = _split_title(_BEST_RE.sub("", title).strip())
@@ -355,7 +428,7 @@ def parse_report(text, day, dirname):
     parts = _H2_SPLIT_RE.split(text)
     preamble, pairs = parts[0], list(zip(parts[1::2], parts[2::2]))
 
-    offers, rejected, extras, conclusion = [], [], [], ""
+    offers, missions, rejected, extras, conclusion = [], [], [], [], ""
     for title, body in pairs:
         key = _key(title)
         if key.startswith("offres retenues"):
@@ -363,6 +436,13 @@ def parse_report(text, day, dirname):
                 offer = _parse_offer(block, ref, today)
                 if offer:
                     offers.append(offer)
+        elif "benevolat" in key:
+            # À part des offres : l'ESP32 et Jarvis comptent des emplois, et
+            # la page leur donne un bloc qu'on ne peut pas confondre.
+            for block in re.split(r"^###\s+", body, flags=re.M)[1:]:
+                mission = _parse_mission(block)
+                if mission:
+                    missions.append(mission)
         elif key == "conclusion":
             conclusion = body.strip()
         elif "ecart" in key:
@@ -382,6 +462,7 @@ def parse_report(text, day, dirname):
         "day_short": f"{DAYS_FR[day.weekday()][:3]}. {day.day}" if day else dirname,
         "is_today": day == today if day else False,
         "offers": offers,
+        "missions": missions,
         "sources": sources,
         "alerts": alerts,
         "notes": notes,

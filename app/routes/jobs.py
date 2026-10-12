@@ -57,6 +57,14 @@ def _prepare(report):
         o["links_note_html"] = _render_md(o["links_note"])
         for x in o["other_sections"]:
             x["html"] = _render_md(x["text"])
+    for m in report["missions"]:
+        m["why_html"] = _render_md(m["sections"].get("why", ""))
+        m["caveat_html"] = _render_md(m["sections"].get("caveat", ""))
+        facts = [("Engagement", m["commitment"]), ("Places", m["places"])]
+        facts += [(f["label"], f["value"]) for f in m["other_fields"]]
+        m["facts"] = [(label, _render_inline(cap(v))) for label, v in facts if v]
+        for x in m["other_sections"]:
+            x["html"] = _render_md(x["text"])
     for x in report["extras"]:
         x["html"] = _render_md(x["text"])
     report["sources_html"] = _render_inline(report["sources"])

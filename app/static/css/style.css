@@ -1284,6 +1284,82 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
   text-align: center;
 }
 
+/* Bénévolat : un bloc à part, en corail et en grille, pour qu'on ne le
+   prenne jamais pour une offre d'emploi. Aucune autre partie de la page
+   n'utilise cette teinte. */
+:root { --vol: #ff9e7a; }
+.jw-count.vol { text-decoration: none; }
+.jw-count.vol:hover { border-color: color-mix(in srgb, var(--vol) 50%, transparent); }
+.jw-count.vol strong { color: var(--vol); }
+.jw-volunteer {
+  margin: var(--s-6) 0 0;
+  padding: var(--s-4) var(--s-5) var(--s-5);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--vol) 8%, transparent), transparent 10rem),
+    var(--bg-sunken);
+  border: 1px dashed color-mix(in srgb, var(--vol) 45%, transparent);
+  border-radius: var(--r-lg);
+  scroll-margin-top: calc(var(--header-h) + var(--s-4));
+}
+.jw-vol-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-4); }
+.jw-vol-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  background: color-mix(in srgb, var(--vol) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vol) 45%, transparent);
+  border-radius: 50%;
+  font-size: 1.25rem;
+}
+.jw-vol-head h3 { margin: 0; color: var(--vol); }
+.jw-vol-head p { margin: 0; color: var(--muted); font-size: .88rem; }
+.jw-vol-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--s-3);
+}
+/* En colonne, pour que le bouton reste au pied de la carte quelle que soit
+   la longueur du texte de sa voisine. */
+.jw-mission {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--s-4);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--vol);
+  border-radius: var(--r);
+}
+.jw-mission-org {
+  margin: 0 0 .25rem;
+  color: var(--vol);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.jw-mission h4 { margin: 0 0 .3rem; font-size: 1rem; line-height: 1.35; }
+.jw-mission-about { margin: 0 0 var(--s-3); color: var(--muted); font-size: .85rem; line-height: 1.45; }
+.jw-mission .jw-chips { margin-top: .2rem; }
+.jw-mission .jw-facts { grid-template-columns: 1fr 1fr; }
+.jw-mission .jw-text { font-size: .93rem; }
+.jw-mission .md { overflow-wrap: anywhere; }
+.jw-mission .jw-actions { margin-top: auto; }
+.jw-chip.vol {
+  background: color-mix(in srgb, var(--vol) 12%, transparent);
+  border-color: color-mix(in srgb, var(--vol) 45%, transparent);
+  color: var(--vol);
+}
+.jw-callout.caveat {
+  background: transparent;
+  border-color: var(--border-strong);
+  border-style: dashed;
+  font-size: .9rem;
+}
+.btn.vol { width: 100%; background: var(--vol); color: #2b1408; }
+
 .jw-sections { margin-top: var(--s-5); }
 .jw-section {
   margin-bottom: var(--s-2);
@@ -1327,6 +1403,7 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
   .jw-facts { grid-template-columns: 1fr 1fr; }
   .jw-actions .btn { flex: 1 1 auto; }
   .jw-more > .md { margin-left: 0; }
+  .jw-volunteer { padding: var(--s-3) var(--s-3) var(--s-4); }
   /* Nom et chiffres sur une ligne, la barre dessous sur toute la largeur */
   .jw-fam-rows li {
     grid-template-columns: 1fr auto;

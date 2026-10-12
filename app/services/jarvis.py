@@ -143,10 +143,16 @@ def _veille_emploi():
     r = reports[0]
     # Le verdict suit le titre : c'est lui qui dit quelle offre envoyer
     # aujourd'hui, et le modèle ne peut pas le deviner du seul intitulé.
-    return {"date": r.get("date_fr"),
-            "offres": [o["title"] + (f" ({o['verdict']['label']})"
-                                     if o.get("verdict") else "")
-                       for o in r.get("offers", [])]}
+    veille = {"date": r.get("date_fr"),
+              "offres": [o["title"] + (f" ({o['verdict']['label']})"
+                                       if o.get("verdict") else "")
+                         for o in r.get("offers", [])]}
+    # Le bénévolat n'apparaît que les jours où la veille en propose : une
+    # clé vide inviterait le modèle à en parler pour ne rien dire.
+    if r.get("missions"):
+        veille["benevolat"] = [f"{m['title']} ({m['org']})" if m["org"]
+                               else m["title"] for m in r["missions"]]
+    return veille
 
 
 def _etat_serveur():
