@@ -10,6 +10,7 @@ bureau, pas dans la salle — le téléphone est en main là-bas. La séance y e
 donc en lecture seule, un aperçu de ce qui attend. Seul le coach a des
 boutons, parce que trancher un conseil depuis son bureau, ça, c'est naturel.
 """
+import unicodedata
 from datetime import date, datetime, timedelta
 from hashlib import sha1
 
@@ -18,6 +19,7 @@ from flask import (Blueprint, Response, abort, current_app, jsonify, request)
 from ..models import ProgramExercise, Workout, db
 from ..services.coach import analyse, apply_advice
 from ..services.job_watch import get_daily_reports
+from ..services import calendar_sync
 from ..services import host as host_svc
 from ..services import saints
 from ..services import todos as todos_svc
@@ -142,8 +144,12 @@ def _coach_block():
     }
 
 
-def _spotify_block():
-    """L'état de lecture, tronqué aux 28 colonnes utiles de l'écran."""
+def _spotify_block(clean=_ascii):
+    """L'état de lecture, tronqué aux 28 colonnes utiles de l'écran.
+
+    `clean` nettoie les textes : sans accents pour la police 8x8 des sept
+    écrans, avec pour les polices des trois pages.
+    """
     sp = spotify_svc.now_playing()
     # now_playing() renvoie None si Spotify n'est pas configuré, mais aussi
     # un {"device": ""} nu quand rien ne joue ou que l'API a échoué. Ne
@@ -163,14 +169,14 @@ def _spotify_block():
     # se rafraîchissait jamais.
     art = sp.get("art_url") or ""
     return {
-        "title": _ascii(sp["title"])[:56],
-        "artist": _ascii(sp["artist"])[:28],
-        "album": _ascii(sp["album"])[:28],
+        "title": clean(sp["title"])[:56],
+        "artist": clean(sp["artist"])[:28],
+        "album": clean(sp["album"])[:28],
         "position_s": sp["position_s"],
         "duration_s": sp["duration_s"],
         "volume": sp["volume"],
         "playing": sp["playing"],
-        "device": _ascii(sp["device"])[:12],
+        "device": clean(sp["device"])[:12],
         "cover": sha1(art.encode()).hexdigest()[:12] if art else "",
     }
 
@@ -341,3 +347,192 @@ def advice_action():
         abort(404)
     return jsonify(ok=True, applied=True, exercise=updated.name,
                    weight_kg=updated.weight_kg)
+
+
+# --------------------------------------------------------------------------
+# Les trois pages : Accueil, Spotify, Calendrier
+#
+# Le firmware à trois pages lit /pages et non /summary. Il n'a plus besoin de
+# la séance, du coach, des offres ni du serveur, et un JSON deux fois plus
+# court se lit deux fois plus vite sur une carte qui compte ses octets.
+# /summary reste en place tant qu'un afficheur à sept écrans peut encore
+# l'appeler.
+
+AGENDA_JOURS = 14       # jusqu'où le calendrier regarde
+AGENDA_LIGNES = 14      # évènements envoyés à la page Calendrier, au plus
+AGENDA_ACCUEIL = 4      # lignes de l'accueil
+TITRE_MAX = 30          # l'écran coupe au pixel ; ceci borne seulement le JSON
+
+MOIS_ACCENTS = ("janvier", "février", "mars", "avril", "mai", "juin",
+                "juillet", "août", "septembre", "octobre", "novembre",
+                "décembre")
+JOURS_CAPS = ("LUNDI", "MARDI", "MERCREDI", "JEUDI", "VENDREDI", "SAMEDI",
+              "DIMANCHE")
+JOURS_3 = ("LUN", "MAR", "MER", "JEU", "VEN", "SAM", "DIM")
+LETTRES = "LMMJVSD"
+
+# Les caractères que les polices de l'afficheur savent tracer : l'ASCII et
+# les accents du français. Voir scripts/gen_fonts.py, qui doit lister les
+# mêmes.
+_ACCENTS = set("àâäçéèêëîïôöùûüÿœÀÂÇÉÈÊËÎÏÔÙÛÜŒ°")
+_SIGNES = {"’": "'", "‘": "'", "“": '"', "”": '"', "«": '"', "»": '"',
+           "–": "-", "—": "-", "·": "-", "…": "...", " ": " ",
+           " ": " ", "æ": "ae", "Æ": "AE"}
+
+# Sous la colonne PLUIE il reste dix caractères : le libellé complet de la
+# météo (« BRUINE VERGLACANTE ») n'y tient pas. Pour une pluie, l'en-tête dit
+# déjà « pluie », il ne reste qu'à dire laquelle.
+_CIEL_COURT = {
+    "PEU NUAGEUX": "ECLAIRCIES", "NUAGES EPARS": "NUAGEUX",
+    "BROUILLARD GIVRANT": "BROUILLARD", "BRUINE FORTE": "BRUINE",
+    "BRUINE VERGLACANTE": "VERGLAS", "PLUIE FAIBLE": "FAIBLE",
+    "PLUIE": "MODEREE", "PLUIE FORTE": "FORTE",
+    "PLUIE VERGLACANTE": "VERGLAS", "NEIGE FAIBLE": "NEIGE",
+    "NEIGE FORTE": "NEIGE", "GRAINS DE NEIGE": "NEIGE",
+    "AVERSES FORTES": "AVERSES", "AVERSES DE NEIGE": "NEIGE",
+    "ORAGE ET GRELE": "GRELE",
+}
+
+
+def _latin(s):
+    """Garde ce que l'afficheur sait écrire, accents compris.
+
+    Un caractère hors jeu est ramené à sa lettre de base quand il en a une
+    (« ñ » devient « n »), sinon remplacé par une espace : un emoji dans un
+    titre d'agenda ne doit ni planter la carte ni laisser un carré vide.
+    """
+    out = []
+    for ch in s or "":
+        if 32 <= ord(ch) < 127 or ch in _ACCENTS:
+            out.append(ch)
+        elif ch in _SIGNES:
+            out.append(_SIGNES[ch])
+        else:
+            base = unicodedata.normalize("NFKD", ch)[:1]
+            out.append(base if base and 32 < ord(base) < 127 else " ")
+    return " ".join("".join(out).split())
+
+
+def _dans(minutes):
+    """« DANS 45 MIN », « DANS 1 H 19 » : le temps avant le prochain."""
+    if minutes < 60:
+        return "DANS {} MIN".format(max(1, minutes))
+    h, m = divmod(minutes, 60)
+    return "DANS {} H {:02d}".format(h, m) if m else "DANS {} H".format(h)
+
+
+def _ligne(e, etat):
+    heure = "" if e["all_day"] else e["start"].strftime("%H:%M")
+    return [heure, _latin(e["title"])[:TITRE_MAX], etat]
+
+
+def _agenda_block(now):
+    """L'agenda, déjà trié et étiqueté pour les deux pages qui le montrent.
+
+    Chaque ligne vaut [heure, titre, état]. L'heure est vide pour une
+    journée entière. L'état : 0 passé, 1 celui qu'on met en avant (en cours,
+    ou le prochain), 2 à venir.
+
+    L'accueil reçoit quatre lignes d'aujourd'hui au plus, cadrées sur ce qui
+    arrive : à dix-huit heures, les rendez-vous du matin n'ont plus à
+    occuper l'écran. Le calendrier reçoit ce qui reste d'aujourd'hui puis
+    les jours suivants.
+    """
+    today = now.date()
+    lundi = today - timedelta(days=today.weekday())
+    events, status = calendar_sync.occurrences(
+        lundi, today + timedelta(days=AGENDA_JOURS - 1))
+
+    par_jour = {}
+    for e in events:
+        par_jour.setdefault(e["start"].date(), []).append(e)
+
+    # --- aujourd'hui ------------------------------------------------------
+    du_jour, vedette, dans = [], None, ""
+    for e in par_jour.get(today, []):
+        if e["all_day"]:
+            etat = 2
+        elif max(e["end"], e["start"] + timedelta(minutes=1)) <= now:
+            etat = 0
+        elif vedette is None:
+            etat, vedette = 1, len(du_jour)
+            attente = (e["start"] - now).total_seconds()
+            dans = "EN COURS" if attente <= 0 else _dans(int(-(-attente // 60)))
+        else:
+            etat = 2
+        du_jour.append(_ligne(e, etat))
+
+    debut = 0
+    if len(du_jour) > AGENDA_ACCUEIL:
+        repere = len(du_jour) if vedette is None else vedette
+        debut = max(0, min(repere - 1, len(du_jour) - AGENDA_ACCUEIL))
+
+    # --- les jours qui viennent -------------------------------------------
+    jours, reste = [], AGENDA_LIGNES
+    for k in range(AGENDA_JOURS):
+        d = today + timedelta(days=k)
+        if k == 0:
+            lignes = [l for l in du_jour if l[2] != 0]
+        else:
+            lignes = [_ligne(e, 2) for e in par_jour.get(d, [])]
+        lignes = lignes[:reste]
+        if not lignes:
+            continue
+        reste -= len(lignes)
+        titre = ("AUJOURD'HUI", "DEMAIN")[k] if k < 2 else JOURS_CAPS[d.weekday()]
+        jours.append({"t": titre,
+                      "d": "{} {}".format(JOURS_3[d.weekday()], d.day),
+                      "ev": lignes})
+        if reste <= 0:
+            break
+
+    semaine = []
+    for i in range(7):
+        d = lundi + timedelta(days=i)
+        semaine.append([LETTRES[i], d.day, 1 if par_jour.get(d) else 0])
+
+    return {
+        "ok": status == "ok",
+        "n": len(du_jour),
+        "jour": du_jour[debut:debut + AGENDA_ACCUEIL],
+        "dans": dans,
+        "jours": jours,
+        "semaine": semaine,
+        "auj": today.weekday(),
+        "mois": MOIS_ACCENTS[today.month - 1].capitalize(),
+        "annee": today.year,
+    }
+
+
+def _weather_pages():
+    m = _weather_block()
+    if m.get("ok"):
+        label = m.pop("label", "")
+        m.pop("icon", None)
+        m["court"] = _CIEL_COURT.get(label, label)[:10]
+    return m
+
+
+@bp.route("/pages")
+def pages():
+    """Tout ce que montrent les trois pages, en un seul appel."""
+    _check_key()
+    now = datetime.now()
+    today = now.date()
+    return jsonify({
+        "ok": True,
+        # L'heure en minutes depuis minuit, et les secondes : la carte n'a
+        # pas d'horloge sauvegardée, mais elle sait compter. Avec ces deux
+        # nombres elle fait avancer la minute elle-même, au lieu d'afficher
+        # jusqu'à trente secondes de retard entre deux appels.
+        "min": now.hour * 60 + now.minute,
+        "sec": now.second,
+        "jour": {
+            "long": "{} {} {}".format(JOURS[today.weekday()], today.day,
+                                      MOIS_ACCENTS[today.month - 1]),
+            "semaine": today.isocalendar()[1],
+        },
+        "meteo": _weather_pages(),
+        "agenda": _agenda_block(now),
+        "spotify": _spotify_block(_latin),
+    })
