@@ -101,30 +101,51 @@ pas un octet de VRAM. C'est précisément pourquoi il est retenu.
 
 ---
 
-# L'interface — le poste de commande
+# L'interface : le poste de commande
 
-L'écran de référence : fond noir, cyan, capitales espacées en chasse fixe,
-crochets d'angle, un globe de points qui tourne au centre, une barre d'état en
-haut, les commandes en bas.
+L'écran a été redessiné le 13 octobre 2026. Il garde le fond noir, le cyan et
+le globe du premier jet, mais il s'organise autour de ce qui sert vraiment :
+le pavé numérique, la réponse de Jarvis, les tâches.
 
 ```
- ┌ MENU ┐                ╔══════════════════════════╗           ● connecté
- │      │                ║  ◆ LOCAL_TIME            ║
- │ SEANCE_DU_JOUR        ║ CPU   17:39:12    RAM    ║
- │ PROGRESSION           ║ 14%               48%    ║
- │ REPAS / MACROS        ║ SYS_CLOCK 16/09  ONLINE  ║
- │ LISTE_COURSES         ╚══════════════════════════╝
- │ CALENDRIER
- │ TACHES                          . ·· ˙ · .
- │ VEILLE_EMPLOI                 · ˙  ___  ˙ ·
- │ SPOTIFY                      ·  ˙/     \˙  ·
- │ ECRAN_ESP32                  ·  |  ●●●  |  ·
- │ ETAT_SERVEUR                  · ˙\ ___ /˙ ·
- │ PARAMETRES                      ˙ · ·· ˙
- │
- │ VERSION 0.1                   ( 🎤 )  ( ■ )
- └──────┘                        en écoute...
+ Jarvis  ● Modèle prêt        11:39:22  mardi 13 octobre     Processeur  Mémoire  Disque
+ ──────────────────────────────────────────────────────────────────────────────────────
+ Pavé numérique       │                                    │ Tâches 7, dont 1 en retard
+ [Verr][ / ][ * ][ - ]│              · ˙ ˙ ·               │ ○ Relancer Numberly  10/10
+ [ 7  ][ 8 ][ 9 ][ + ]│            ·  globe  ·             │ ○ Envoyer la candidature
+ [ 4  ][ 5 ][ 6 ][   ]│              · . . ·               │
+ [ 1  ][ 2 ][ 3 ][ ↵ ]│                                    │ Serveur
+ [ 0       ][ . ][   ]│ › Je fais quoi aujourd'hui ?       │ 3 conteneurs sur 3 en marche
+                      │ Aujourd'hui, c'est Pull, monsieur. │
+                      │ [ Une question, monsieur ? ][Envoyer] │ Le reste d'Awen
 ```
+
+Trois choix portent tout le reste.
+
+**Le pavé est dessiné à l'écran, comme le vrai.** C'est la vraie façon de se
+servir de Jarvis, et elle était cachée dans une fenêtre d'aide. `DISPOSITION`,
+dans `routes/jarvis.py`, décrit le pavé physique rangée par rangée ; la grille
+CSS le reproduit, touches doubles comprises. Une touche s'allume quand on
+l'enfonce, et reste cerclée tant que Jarvis travaille sur sa question : sur le
+processeur une réponse met dix secondes, il faut savoir laquelle est en route.
+Les touches dessinées se cliquent aussi : sur un téléphone, ce sont seize gros
+boutons sous le pouce.
+
+**Deux écritures, deux rôles.** La machine (heure, mesures, touches) est en
+chasse fixe. Tout ce qui est une phrase (les réponses de Jarvis, les tâches)
+est en caractères à empattements, et en plus grand : c'est la voix du
+majordome, et c'est elle qu'on vient lire.
+
+**Trois colonnes, puis deux, puis une.** Sur grand écran, tout tient sans
+défiler : le pavé, la conversation sous le globe, puis les tâches et le
+serveur. En dessous de 74 rem le rail passe sous le pavé ; en dessous de
+56 rem tout s'empile, la conversation en tête.
+
+Ce qui a été retiré, et pourquoi : les crochets d'angle, les capitales
+espacées et les faux libellés techniques (« SYS_CLOCK », « CONTROLES_SYSTEME »)
+étaient du décor sans information ; le menu ouvert en permanence prenait un
+quart de l'écran pour doubler la navigation ; le gris-bleu des libellés
+n'avait pas assez de contraste pour être lu.
 
 ## Comment on dessine le globe
 
@@ -150,27 +171,24 @@ mécanisme.
 
 La règle de fraîcheur existante s'applique telle quelle : au-delà de cinq
 minutes, `host.py` renvoie `None` plutôt qu'un relevé périmé. **Le HUD affiche
-alors `--%`, jamais le dernier chiffre connu.** Un indicateur qui ment est pire
+alors `--`, jamais le dernier chiffre connu.** Un indicateur qui ment est pire
 qu'un indicateur vide — c'est déjà la philosophie du module, on ne la casse pas
 pour faire joli.
 
-Le voyant « connecté » en haut à droite dit une seule chose : **Ollama
+Le voyant à côté du nom, « Modèle prêt », dit une seule chose : **Ollama
 répond-il ?** Pas « le serveur est allumé » — ça, la page chargée le prouve
 déjà.
 
-## Le menu
+## Le reste d'Awen
 
-Il liste **nos modules, pas ceux de l'image**. « ACTIVER LA VISION », « GPU
-BOOST », « ANTIVIRUS » sont les entrées d'un autre projet ; chez nous elles ne
-mèneraient nulle part.
+Les liens vers les autres pages tiennent en deux colonnes au bas du rail. Ils
+pointent tous vers des pages qui existent : le poste de commande est une porte
+d'entrée, pas une réécriture de l'application.
 
 Un bouton qui ne fait rien est pire que pas de bouton : il coûte un clic, une
-déception, et il apprend à se méfier du reste du menu.
-
-Les entrées réelles : séance du jour · progression · repas et macros · liste de
-courses · calendrier · **tâches** · veille emploi · Spotify · écran ESP32 ·
-état du serveur · paramètres. Toutes pointent vers des pages qui existent
-déjà — le HUD est une porte d'entrée, pas une réécriture de l'application.
+déception, et il apprend à se méfier du reste. C'est pour cela que la touche
+« Verr num », que le navigateur ne nous laisse pas utiliser, est dessinée
+éteinte plutôt que de porter un libellé.
 
 ---
 

@@ -6,11 +6,13 @@ from flask import (Blueprint, Response, current_app, jsonify, render_template,
                    request)
 
 from ..services import jarvis as svc
+from ..services import todos
 
 bp = Blueprint("jarvis", __name__, url_prefix="/jarvis")
 
-# Les dix-sept touches du pavé numérique. Le libellé est ce qu'affiche
-# l'aide-mémoire du HUD, la phrase est ce qui part vraiment.
+# Les touches du pavé numérique. Le libellé est ce qu'affiche la touche
+# dessinée dans le HUD, la phrase est ce qui part vraiment. Un libellé tient
+# sur une touche : neuf lettres au plus.
 #
 # Les codes sont ceux du navigateur (`event.code`) : `Numpad7` est distinct
 # de `Digit7`, donc la touche du pavé ne se confond pas avec celle du haut du
@@ -19,7 +21,7 @@ bp = Blueprint("jarvis", __name__, url_prefix="/jarvis")
 # part que si le champ de saisie n'a pas le focus.
 PAVE = [
     ("Numpad7", "Séance", "Je fais quoi aujourd'hui ?"),
-    ("Numpad8", "Progression", "Montre-moi ma progression"),
+    ("Numpad8", "Progrès", "Montre-moi ma progression"),
     ("Numpad9", "Coach", "Quel est le conseil du coach ?"),
     ("Numpad4", "Macros", "Mes macros du jour"),
     ("Numpad5", "Ce soir", "Qu'est-ce que je mange ce soir ?"),
@@ -31,15 +33,52 @@ PAVE = [
     ("NumpadDecimal", "Faite", "Marque ma prochaine tâche comme terminée"),
     ("NumpadAdd", "Répète", None),        # traité côté navigateur
     ("NumpadSubtract", "Stop", None),     # idem : couper la lecture
-    ("NumpadEnter", "Développe", "Développe ta réponse précédente"),
+    ("NumpadEnter", "Détaille", "Développe ta réponse précédente"),
     ("NumpadMultiply", "Serveur", "Comment va le serveur ?"),
-    ("NumpadDivide", "Libre", None),
+    ("NumpadDivide", "Libre", None),      # idem : ouvre la saisie libre
 ]
+
+# La disposition physique d'un pavé numérique, rangée par rangée. Le HUD la
+# redessine telle quelle, pour que l'œil retrouve à l'écran la touche que le
+# doigt connaît déjà. « haute » et « large » sont les touches doubles ; la
+# grille CSS place les autres autour d'elles.
+DISPOSITION = [
+    ("NumLock", "Verr", ""), ("NumpadDivide", "/", ""),
+    ("NumpadMultiply", "*", ""), ("NumpadSubtract", "-", ""),
+    ("Numpad7", "7", ""), ("Numpad8", "8", ""), ("Numpad9", "9", ""),
+    ("NumpadAdd", "+", "haute"),
+    ("Numpad4", "4", ""), ("Numpad5", "5", ""), ("Numpad6", "6", ""),
+    ("Numpad1", "1", ""), ("Numpad2", "2", ""), ("Numpad3", "3", ""),
+    ("NumpadEnter", "↵", "haute"),
+    ("Numpad0", "0", "large"), ("NumpadDecimal", ".", ""),
+]
+
+
+def _clavier():
+    """Les touches dans l'ordre de la grille, avec leur rôle."""
+    roles = {code: (libelle, phrase) for code, libelle, phrase in PAVE}
+    return [{"code": code, "legende": legende, "forme": forme,
+             "libelle": roles.get(code, ("", None))[0],
+             "phrase": roles.get(code, ("", None))[1]}
+            for code, legende, forme in DISPOSITION]
 
 
 @bp.route("/")
 def hud():
-    return render_template("jarvis.html", pave=PAVE)
+    return render_template("jarvis.html", pave=PAVE, clavier=_clavier())
+
+
+@bp.route("/taches/<int:todo_id>/terminer", methods=["POST"])
+def terminer_tache(todo_id):
+    """Cocher une tâche depuis le HUD, sans passer par le modèle.
+
+    Sur le processeur, demander à Jarvis de la cocher prend une dizaine de
+    secondes. Un clic doit être instantané. La liste à jour repart dans la
+    réponse, pour que le HUD n'attende pas son prochain relevé.
+    """
+    if todos.complete(todo_id) is None:
+        return jsonify({"ok": False}), 404
+    return jsonify({"ok": True, "taches": svc.etat_complet()["taches"]})
 
 
 @bp.route("/etat")

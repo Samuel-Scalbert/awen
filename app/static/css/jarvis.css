@@ -1,176 +1,314 @@
 /* ==========================================================================
-   J.A.R.V.I.S — poste de commande plein écran.
+   Jarvis : le poste de commande.
 
    Volontairement séparé de style.css : l'application est en menthe sur
-   anthracite, mobile d'abord, avec une barre d'onglets. Le HUD est cyan sur
-   noir, plein écran, au clavier. Mélanger les deux feuilles reviendrait à
+   anthracite, avec une barre d'onglets. Ici tout est cyan sur noir et se
+   pilote au pavé numérique. Mélanger les deux feuilles reviendrait à
    surcharger la moitié des règles de l'une pour obtenir l'autre.
+
+   Deux écritures, et chacune a un rôle :
+   - la machine (heure, mesures, touches) est en chasse fixe ;
+   - tout ce qui est une phrase (les réponses de Jarvis, les tâches) est en
+     caractères à empattements. C'est la voix du majordome, et c'est elle
+     qu'on vient lire : elle est donc la plus grande chose de l'écran.
    ========================================================================== */
 
 :root {
-  --noir: #04070c;
+  --nuit: #04070c;
   --cyan: #46d7f5;
-  --cyan-vif: #8ceeff;
-  --cyan-mort: rgba(70, 215, 245, .35);
+  --givre: #d9f4fb;         /* le texte qu'on lit vraiment */
+  --brume: #6f9fae;         /* le secondaire, encore lisible sur le noir */
+  --trait: rgba(70, 215, 245, .16);
+  --trait-fort: rgba(70, 215, 245, .38);
   --voile: rgba(70, 215, 245, .06);
-  --ambre: #f0a63c;         /* les alertes, la teinte de TARS */
-  --mono: "Consolas", "DejaVu Sans Mono", "SF Mono", monospace;
+  --ambre: #f0a63c;         /* les alertes seulement, la teinte de TARS */
+  --machine: "Cascadia Mono", Consolas, "DejaVu Sans Mono", "SF Mono", monospace;
+  --voix: "Sitka Text", Constantia, "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
+html { height: 100%; }
 body {
   margin: 0;
-  min-height: 100vh;
-  background: var(--noir);
+  min-height: 100%;
+  background: var(--nuit);
   color: var(--cyan);
-  font: 12px/1.5 var(--mono);
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  overflow: hidden;
+  font: 14px/1.5 var(--machine);
+  /* Sitka dessine par défaut des chiffres à l'ancienne, qui descendent
+     sous la ligne : dans « 3 conteneurs sur 3 », ils se lisent mal. */
+  font-variant-numeric: lining-nums;
+  scrollbar-color: var(--trait-fort) transparent;
 }
 
-/* Le cadre à crochets d'angle, motif répété de toute l'interface. */
-.cadre { position: relative; border: 1px solid var(--cyan-mort); background: rgba(4, 7, 12, .72); }
-.cadre::before, .cadre::after {
-  content: ""; position: absolute; width: 14px; height: 14px;
-  border: 2px solid var(--cyan); pointer-events: none;
-}
-.cadre::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
-.cadre::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+a { color: var(--cyan); text-underline-offset: 3px; }
+a:hover { color: var(--givre); }
+:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
-/* ----------------------------------------------------------------- globe */
-/* Le canvas occupe tout l'écran et reste DERRIÈRE : c'est un décor, pas un
-   élément d'interface. Rien ne doit pouvoir intercepter un clic ici. */
+h2 {
+  margin: 0 0 .8rem;
+  color: var(--brume);
+  font: 400 .8rem var(--machine);
+  letter-spacing: .04em;
+}
+
+/* Le globe est la présence de Jarvis : il occupe la place que lui laisse la
+   conversation et s'anime quand Jarvis réfléchit. Le canvas couvre l'écran
+   et reste derrière, pour que rien ne puisse intercepter un clic. */
 #globe {
   position: fixed; inset: 0; width: 100%; height: 100%;
   z-index: 0; pointer-events: none;
 }
+.bandeau, .pave, .scene, .rail { position: relative; z-index: 1; }
 
-/* ------------------------------------------------------------ barre haute */
-.barre-haute {
-  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
-  z-index: 3; padding: 6px 18px 4px; min-width: 460px; text-align: center;
+/* -------------------------------------------------------------- bandeau */
+.bandeau {
+  grid-area: bandeau;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: .7rem 1.25rem;
+  border-bottom: 1px solid var(--trait);
 }
-.barre-titre { font-size: 10px; color: var(--cyan-mort); }
-.barre-corps { display: flex; align-items: center; justify-content: space-between; gap: 26px; }
-.barre-corps time {
-  font-size: 34px; font-weight: 700; letter-spacing: .1em;
-  color: var(--cyan-vif); text-shadow: 0 0 14px rgba(70, 215, 245, .5);
+.identite { display: flex; align-items: baseline; gap: 1rem; }
+.nom { color: var(--givre); font: 600 1.4rem var(--voix); }
+.lien { color: var(--brume); font-size: .8rem; white-space: nowrap; }
+.lien::before {
+  content: ""; display: inline-block; width: .5rem; height: .5rem;
+  margin-right: .45rem; border-radius: 50%; background: var(--cyan);
+}
+.lien.hs { color: var(--ambre); }
+.lien.hs::before { background: var(--ambre); }
+
+.heure { display: flex; align-items: baseline; gap: .9rem; }
+#horloge {
+  color: var(--givre);
+  font: 600 1.9rem var(--machine);
   font-variant-numeric: tabular-nums;
+  letter-spacing: .03em;
 }
-.jauge { display: flex; flex-direction: column; font-size: 10px; }
-.jauge .etiq { color: var(--cyan-mort); }
-.barre-pied {
-  display: flex; justify-content: space-between; gap: 18px;
-  font-size: 9px; color: var(--cyan-mort); border-top: 1px solid var(--voile);
-  padding-top: 3px; margin-top: 2px;
-}
+.jour { color: var(--brume); font: 1rem var(--voix); }
 
-.lien-etat {
-  position: fixed; top: 18px; right: 22px; z-index: 3;
-  border: 1px solid var(--cyan-mort); border-radius: 999px;
-  padding: 5px 14px; font-size: 10px;
-}
-.lien-etat.hs { color: var(--ambre); border-color: rgba(240, 166, 60, .45); }
+.mesures { display: flex; justify-content: flex-end; gap: 1.4rem; margin: 0; }
+.mesures dt { color: var(--brume); font-size: .72rem; }
+.mesures dd { margin: 0; color: var(--givre); font-variant-numeric: tabular-nums; }
+/* Un filet qui se remplit : le niveau se lit sans lire le chiffre. */
+.niveau { position: relative; display: block; width: 4.5rem; height: 2px; margin-top: .3rem; background: var(--trait); }
+.niveau::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--n, 0%); background: var(--cyan); }
+.alerte dd { color: var(--ambre); }
+.alerte .niveau::after { background: var(--ambre); }
 
-/* ------------------------------------------------------------------ menu */
-.bouton-menu {
-  position: fixed; top: 14px; left: 14px; z-index: 5;
-  padding: 8px 16px; color: var(--cyan); font: inherit; cursor: pointer;
-}
-.panneau {
-  position: fixed; top: 58px; left: 14px; z-index: 4;
-  width: 268px; max-height: calc(100vh - 90px); overflow-y: auto;
-  padding: 12px 14px 8px;
-}
-.panneau[hidden] { display: none; }
-.titre-panneau { margin: 0 0 10px; font-size: 11px; font-weight: 400; color: var(--cyan-vif); }
-.groupe {
-  margin: 14px 0 6px; font-size: 9px; font-weight: 400;
-  color: var(--cyan-mort); border-bottom: 1px solid var(--voile); padding-bottom: 4px;
-}
-.entree {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  margin-bottom: 6px; padding: 9px 12px;
-  border: 1px solid var(--cyan-mort); border-radius: 999px;
-  background: var(--voile); color: var(--cyan);
-  font: inherit; text-transform: uppercase; text-decoration: none;
-  cursor: pointer; transition: background .15s, border-color .15s;
-}
-.entree:hover { background: rgba(70, 215, 245, .16); border-color: var(--cyan); }
-.entree.vif { border-color: var(--cyan); color: var(--cyan-vif); }
-.pastille { margin-left: auto; color: var(--ambre); }
-.version { margin: 14px 0 4px; text-align: center; font-size: 9px; color: var(--cyan-mort); }
+/* ----------------------------------------------------------------- pavé */
+.pave { grid-area: pave; padding: 1.1rem 1.25rem; }
 
-/* ----------------------------------------------------------------- scène */
+/* Quatre colonnes, comme le pavé physique. Les touches doubles réservent
+   leur place et la grille range les autres autour. */
+.touches {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 4.9rem;
+  grid-auto-flow: dense;
+  gap: .5rem;
+}
+.touche {
+  display: grid;
+  align-content: space-between;
+  justify-items: start;
+  min-width: 0;
+  padding: .45rem .4rem;
+  border: 1px solid var(--trait-fort);
+  border-radius: 10px;
+  background: var(--voile);
+  color: var(--givre);
+  font: .74rem/1.2 var(--machine);
+  text-align: left;
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.touche kbd { color: var(--brume); font: 600 .82rem var(--machine); }
+.touche span { white-space: nowrap; }
+.touche.haute { grid-row: span 2; }
+.touche.large { grid-column: span 2; }
+.touche:hover { border-color: var(--cyan); }
+/* La touche s'allume quand on l'enfonce, au clavier comme au doigt. */
+.touche.appui { background: var(--cyan); border-color: var(--cyan); color: var(--nuit); }
+.touche.appui kbd { color: var(--nuit); }
+/* Et elle reste cerclée tant que Jarvis travaille sur sa question : une
+   réponse met dix secondes, il faut savoir laquelle est en route. */
+.touche.en-cours { border-color: var(--cyan); box-shadow: inset 0 0 0 1px var(--cyan); }
+.touche.inerte { opacity: .3; cursor: default; }
+.touche.inerte:hover { border-color: var(--trait-fort); }
+
+.mode-emploi { margin: .9rem 0 0; color: var(--brume); font-size: .78rem; }
+
+/* ---------------------------------------------------------------- scène */
 .scene {
-  position: relative; z-index: 2;
-  display: flex; align-items: flex-end; justify-content: center;
-  height: 100vh; padding: 0 20px 150px;
+  grid-area: scene;
+  display: grid;
+  grid-template-rows: minmax(9rem, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  padding: 0 clamp(1rem, 4vw, 3.5rem) 1.25rem;
 }
-.journal {
-  width: min(760px, 100%); max-height: 46vh; overflow-y: auto;
-  text-transform: none; letter-spacing: .02em; font-size: 13px;
+.presence { min-height: 9rem; }
+
+.journal { max-height: 46vh; overflow-y: auto; scrollbar-width: thin; }
+.tour { margin: 0 0 1.1rem; }
+/* Seul le dernier échange compte à l'œil ; les précédents s'effacent. */
+.tour:not(:last-child) { opacity: .5; }
+.dit {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--givre);
+  font: 1.3rem/1.5 var(--voix);
+  white-space: pre-wrap;
 }
-.tour { margin-bottom: 14px; }
-.tour .qui { font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--cyan-mort); }
-.tour .dit { margin: 2px 0 0; color: var(--cyan-vif); white-space: pre-wrap; }
-.tour.moi .dit { color: var(--cyan); opacity: .75; }
-.tour .outils { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--cyan-mort); }
-.tour .brut {
-  margin: 6px 0 0; padding: 8px 10px; max-height: 240px; overflow: auto;
-  border-left: 2px solid var(--cyan-mort); background: rgba(70, 215, 245, .05);
-  font-size: 11px; white-space: pre-wrap;
+.tour.moi .dit { color: var(--brume); font: .82rem/1.5 var(--machine); }
+.tour.moi .dit::before { content: "› "; }
+.source { margin-top: .3rem; color: var(--brume); font-size: .75rem; }
+.brut { margin-top: .5rem; }
+.brut summary { color: var(--brume); font-size: .78rem; cursor: pointer; }
+.brut pre {
+  max-height: 14rem; margin: .4rem 0 0; padding: .6rem .8rem; overflow: auto;
+  border-left: 2px solid var(--trait-fort); background: var(--voile);
+  color: var(--givre); font: .74rem/1.5 var(--machine); white-space: pre-wrap;
 }
 
-/* ------------------------------------------------------------------ pied */
-.pied {
-  position: fixed; bottom: 26px; left: 0; right: 0; z-index: 3;
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-}
-#chat { display: flex; align-items: center; gap: 12px; }
+#chat { display: flex; gap: .6rem; margin-top: .9rem; }
 #question {
-  width: min(520px, 68vw); padding: 12px 20px;
-  border: 1px solid var(--cyan-mort); border-radius: 999px;
-  background: rgba(4, 7, 12, .8); color: var(--cyan-vif);
-  font: inherit; text-transform: none; letter-spacing: .04em;
+  flex: 1; min-width: 0;
+  padding: .8rem 1.1rem;
+  border: 1px solid var(--trait-fort);
+  border-radius: 12px;
+  background: rgba(4, 7, 12, .85);
+  color: var(--givre);
+  font: 1.08rem var(--voix);
 }
-#question:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 16px rgba(70, 215, 245, .25); }
-.rond {
-  width: 46px; height: 46px; border-radius: 50%;
-  border: 1px solid var(--cyan); background: var(--voile);
-  color: var(--cyan-vif); font-size: 15px; cursor: pointer;
+#question::placeholder { color: var(--brume); opacity: 1; }
+#question:focus { border-color: var(--cyan); }
+.envoyer {
+  padding: 0 1.2rem;
+  border: 1px solid var(--cyan);
+  border-radius: 12px;
+  background: var(--cyan);
+  color: var(--nuit);
+  font: 600 .88rem var(--machine);
+  cursor: pointer;
 }
-.rond:hover { background: rgba(70, 215, 245, .2); }
-.etat { margin: 0; font-size: 10px; color: var(--cyan-mort); }
-.etat.actif { color: var(--cyan-vif); }
+.envoyer:hover { background: var(--givre); border-color: var(--givre); }
 
-/* L'onde de réflexion : trois points, pas un curseur clignotant — on doit
-   voir que ça travaille, sans que ça saute aux yeux. */
-.etat.actif::after {
-  content: " ..."; animation: pense 1.2s steps(4, end) infinite;
-}
+.sous-chat { display: flex; align-items: center; gap: 1rem; margin-top: .5rem; }
+.etat { flex: 1; margin: 0; color: var(--brume); font-size: .8rem; }
+.etat.actif { color: var(--givre); }
+/* Trois points qui battent : on doit voir que ça travaille, sans que ça
+   saute aux yeux. */
+.etat.actif::after { content: " ..."; animation: pense 1.2s steps(4, end) infinite; }
 @keyframes pense { 0% { opacity: .2 } 50% { opacity: 1 } 100% { opacity: .2 } }
-
-/* ------------------------------------------------------------------ aide */
-.aide {
-  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  z-index: 6; padding: 18px 22px; max-height: 84vh; overflow-y: auto;
+.discret {
+  padding: .3rem .1rem;
+  border: 0; background: none;
+  color: var(--brume);
+  font: .8rem var(--machine);
+  text-decoration: underline; text-underline-offset: 3px;
+  cursor: pointer;
 }
-.aide[hidden] { display: none; }
-.aide table { border-collapse: collapse; font-size: 11px; }
-.aide td { padding: 3px 12px 3px 0; }
-.aide .touche {
-  display: inline-block; min-width: 34px; text-align: center;
-  border: 1px solid var(--cyan-mort); border-radius: 4px; padding: 1px 6px;
-  color: var(--cyan-vif);
-}
-.muet { color: var(--cyan-mort); text-transform: none; letter-spacing: .02em; }
+.discret:hover { color: var(--cyan); }
 
-@media (max-width: 720px) {
-  .barre-haute { min-width: 0; width: calc(100% - 28px); }
-  .barre-corps time { font-size: 26px; }
-  .panneau { width: calc(100% - 28px); }
-  .scene { padding-bottom: 170px; }
+/* ----------------------------------------------------------------- rail */
+.rail { grid-area: rail; padding: 1.1rem 1.25rem; }
+.rail > * + * { margin-top: 1.6rem; }
+.compte { color: var(--givre); }
+.compte.retard { color: var(--ambre); }
+
+.taches { list-style: none; margin: 0 0 .6rem; padding: 0; }
+.taches li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: start;
+  gap: .2rem .55rem;
+  padding: .3rem 0;
+  border-bottom: 1px solid var(--trait);
+}
+/* La zone cliquable est plus large que le rond : on doit pouvoir cocher au
+   doigt sans viser. */
+.coche {
+  display: grid; place-items: center;
+  width: 2rem; height: 2rem; margin: -.15rem 0 0 -.4rem; padding: 0;
+  border: 0; background: none; cursor: pointer;
+}
+.coche::before {
+  content: ""; width: 1.05rem; height: 1.05rem;
+  border: 1px solid var(--trait-fort); border-radius: 50%;
+  transition: background .12s, border-color .12s;
+}
+.coche:hover::before { border-color: var(--cyan); background: var(--voile); }
+.taches .texte { padding-top: .2rem; color: var(--givre); font: 1rem/1.4 var(--voix); overflow-wrap: anywhere; }
+.taches .echeance { padding-top: .35rem; color: var(--brume); font-size: .74rem; font-variant-numeric: tabular-nums; }
+.taches .retard .echeance { color: var(--ambre); }
+.taches .fait .texte { color: var(--brume); text-decoration: line-through; }
+.taches .fait .coche::before { background: var(--cyan); border-color: var(--cyan); }
+.vide { margin: 0 0 .6rem; color: var(--brume); font: .95rem/1.45 var(--voix); }
+.suite { font-size: .8rem; }
+
+.ligne { margin: 0 0 .25rem; color: var(--givre); font: 1rem/1.4 var(--voix); }
+.ligne.discrete { color: var(--brume); font: .78rem/1.5 var(--machine); }
+.ligne.alerte { color: var(--ambre); }
+
+.modules { display: grid; grid-template-columns: 1fr 1fr; gap: .3rem 1rem; font-size: .84rem; }
+
+/* ==========================================================================
+   Mise en page
+
+   Téléphone d'abord : une colonne qui défile, la conversation en tête, puis
+   le pavé, qui devient seize gros boutons sous le pouce.
+   ========================================================================== */
+body { display: grid; grid-template-areas: "bandeau" "scene" "pave" "rail"; grid-template-columns: minmax(0, 1fr); }
+.pave, .rail { border-top: 1px solid var(--trait); }
+.bandeau { grid-template-columns: 1fr auto; row-gap: .5rem; }
+.identite { flex-direction: column; gap: 0; }
+.heure { flex-direction: column; align-items: flex-end; gap: 0; }
+#horloge { font-size: 1.5rem; }
+.jour { font-size: .9rem; }
+.mesures { grid-column: 1 / -1; justify-content: flex-start; }
+.scene { padding-top: .5rem; }
+.dit { font-size: 1.15rem; }
+
+/* Écran moyen : le pavé à gauche, la conversation à droite sur toute la
+   hauteur, et le rail qui prend ce qui reste sous le pavé. */
+@media (min-width: 56rem) {
+  body {
+    height: 100vh;
+    overflow: hidden;
+    grid-template-areas: "bandeau bandeau" "pave scene" "rail scene";
+    grid-template-columns: 23rem minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+  .bandeau { grid-template-columns: 1fr auto 1fr; }
+  .identite { flex-direction: row; gap: 1rem; }
+  .heure { flex-direction: row; align-items: baseline; gap: .9rem; }
+  #horloge { font-size: 1.9rem; }
+  .jour { font-size: 1rem; }
+  .mesures { grid-column: auto; justify-content: flex-end; }
+  .pave { border-top: 0; border-right: 1px solid var(--trait); }
+  .rail { border-right: 1px solid var(--trait); overflow-y: auto; scrollbar-width: thin; }
+  .scene { padding-top: 0; }
+  .dit { font-size: 1.3rem; }
+}
+
+/* Grand écran : trois colonnes, tout sous les yeux sans défiler. */
+@media (min-width: 74rem) {
+  body {
+    grid-template-areas: "bandeau bandeau bandeau" "pave scene rail";
+    grid-template-columns: clamp(22.5rem, 26vw, 25rem) minmax(0, 1fr) clamp(16rem, 21vw, 20rem);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .pave { overflow-y: auto; scrollbar-width: thin; }
+  .rail { border-top: 0; border-right: 0; border-left: 1px solid var(--trait); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .etat.actif::after { animation: none; }
+  .touche, .coche::before { transition: none; }
 }

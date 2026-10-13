@@ -449,8 +449,18 @@ def sans_modele(question):
 
 
 def etat_complet():
-    """Tout ce que le HUD affiche dans sa barre haute, en un appel."""
+    """Tout ce que le HUD affiche hors conversation, en un appel."""
+    aujourdhui = date.today()
+    taches = todos.counts()
+    # Les six prochaines suffisent à un coup d'œil : le reste est sur la
+    # page Tâches, et une liste qui défile sur un écran qu'on regarde de
+    # loin ne se lit plus.
+    taches["liste"] = [
+        {"id": t.id, "texte": t.text,
+         "echeance": t.due.strftime("%d/%m") if t.due else None,
+         "retard": bool(t.due and t.due < aujourdhui)}
+        for t in todos.pending(6)]
     return {"ollama": health(), "hote": host.summary(),
-            "taches": todos.counts(),
+            "taches": taches,
             "heure": datetime.now().strftime("%H:%M:%S"),
             "date": date.today().strftime("%d/%m/%Y")}

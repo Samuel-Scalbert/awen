@@ -253,7 +253,7 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 - [x] Endpoint JSON ESP32
 - [ ] Firmware de l'afficheur ([esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display))
 - [ ] Liste de tâches (module web + ESP32)
-- [ ] Poste de commande Jarvis : HUD web, chat, pavé numérique, parole
+- [ ] Poste de commande Jarvis : pavé numérique à l'écran, conversation, tâches, parole
 - [ ] Assistant local sur le GPU du serveur
       — conception des trois lignes ci-dessus : [docs/jarvis.md](docs/jarvis.md)
 

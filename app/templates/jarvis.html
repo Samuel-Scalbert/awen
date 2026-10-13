@@ -5,78 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#04070c">
   <meta name="color-scheme" content="dark">
-  <title>J.A.R.V.I.S — Awen</title>
+  <title>Jarvis | Awen</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◆</text></svg>">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/jarvis.css') }}">
 </head>
 <body>
 
-<button id="bascule-menu" class="cadre bouton-menu">◆ MENU</button>
+<canvas id="globe" aria-hidden="true"></canvas>
 
-<aside id="menu" class="cadre panneau">
-  <h1 class="titre-panneau">◆ CONTROLES_SYSTEME // MENU</h1>
-
-  <h2 class="groupe">MODULES</h2>
-  <a class="entree" href="{{ url_for('workout.list_workouts') }}">▤ SEANCES</a>
-  <a class="entree" href="{{ url_for('coach.dashboard') }}">◈ COACH</a>
-  <a class="entree" href="{{ url_for('stats.dashboard') }}">▦ PROGRESSION</a>
-  <a class="entree" href="{{ url_for('meals.list_meals') }}">◍ REPAS / MACROS</a>
-  <a class="entree" href="{{ url_for('meals.shopping_list') }}">▣ LISTE_COURSES</a>
-  <a class="entree" href="{{ url_for('calendar.view_calendar') }}">▧ CALENDRIER</a>
-  <a class="entree vif" href="{{ url_for('todos.index') }}">✓ TACHES
-    <span id="pastille-taches" class="pastille"></span></a>
-  <a class="entree" href="{{ url_for('jobs.daily_jobs') }}">▥ VEILLE_EMPLOI</a>
-
-  <h2 class="groupe">SYSTEME</h2>
-  <button class="entree" id="btn-pave">⌨ AIDE_PAVE_NUMERIQUE</button>
-  <button class="entree" id="btn-voix">🔊 VOIX : <span id="etat-voix">ON</span></button>
-  <a class="entree" href="{{ url_for('main.index') }}">⌂ INTERFACE_CLASSIQUE</a>
-
-  <p class="version">AWEN // JARVIS 0.1</p>
-</aside>
-
-<header class="cadre barre-haute">
-  <div class="barre-titre">◆ LOCAL_TIME</div>
-  <div class="barre-corps">
-    <div class="jauge"><span class="etiq">CPU</span><span id="cpu">--%</span></div>
+<header class="bandeau">
+  <div class="identite">
+    <span class="nom">Jarvis</span>
+    <span id="lien" class="lien">Connexion</span>
+  </div>
+  <div class="heure">
     <time id="horloge">--:--:--</time>
-    <div class="jauge"><span class="etiq">RAM</span><span id="ram">--%</span></div>
+    <span id="date" class="jour"></span>
   </div>
-  <div class="barre-pied">
-    <span>SYS_CLOCK</span><span id="date">--/--/----</span><span id="conteneurs">--</span>
-  </div>
+  <dl class="mesures">
+    <div id="m-cpu"><dt>Processeur</dt><dd><span id="cpu">--</span><i class="niveau"></i></dd></div>
+    <div id="m-ram"><dt>Mémoire</dt><dd><span id="ram">--</span><i class="niveau"></i></dd></div>
+    <div id="m-disque"><dt>Disque</dt><dd><span id="disque">--</span><i class="niveau"></i></dd></div>
+  </dl>
 </header>
 
-<div id="lien" class="lien-etat">● connexion…</div>
-
-<canvas id="globe"></canvas>
+<section class="pave" aria-labelledby="titre-pave">
+  <h2 id="titre-pave">Pavé numérique</h2>
+  <div class="touches">
+    {% for t in clavier %}
+    <button type="button" data-code="{{ t.code }}"
+            class="touche{{ ' ' + t.forme if t.forme }}{{ ' inerte' if not t.libelle }}"
+            {%- if not t.libelle %} disabled aria-hidden="true"{% endif %}
+            {%- if t.phrase %} title="{{ t.phrase }}"{% endif %}>
+      <kbd>{{ t.legende }}</kbd>
+      <span>{{ t.libelle }}</span>
+    </button>
+    {% endfor %}
+  </div>
+  <p class="mode-emploi">Une touche pose une question. Pour écrire la vôtre,
+    tapez directement : Échap rend la main au pavé.</p>
+</section>
 
 <main class="scene">
+  <div id="presence" class="presence"></div>
   <div id="journal" class="journal" aria-live="polite"></div>
-</main>
-
-<footer class="pied">
   <form id="chat" autocomplete="off">
     <input id="question" type="text" maxlength="400"
-           placeholder="Parlez, monsieur." aria-label="Question à Jarvis">
-    <button type="submit" class="rond" title="Envoyer">▶</button>
-    <button type="button" id="btn-stop" class="rond" title="Couper la voix">■</button>
+           placeholder="Une question, monsieur ?" aria-label="Question à Jarvis">
+    <button type="submit" class="envoyer">Envoyer</button>
   </form>
-  <p id="etat" class="etat">en attente</p>
-</footer>
+  <div class="sous-chat">
+    <p id="etat" class="etat" role="status">Prêt</p>
+    <button type="button" id="btn-voix" class="discret" aria-pressed="true">Voix activée</button>
+    <button type="button" id="btn-stop" class="discret">Faire taire</button>
+  </div>
+</main>
 
-<div id="aide-pave" class="cadre aide" hidden>
-  <h2 class="titre-panneau">◆ PAVE_NUMERIQUE</h2>
-  <table>
-    {% for code, libelle, phrase in pave %}
-    <tr><td class="touche">{{ code.replace('Numpad', '') or 'Num' }}</td>
-        <td>{{ libelle }}</td>
-        <td class="muet">{{ phrase or '— local —' }}</td></tr>
-    {% endfor %}
-  </table>
-  <p class="muet">Les raccourcis ne partent que si le champ de saisie n'a pas
-    le focus : appuyez sur Échap pour le quitter.</p>
-</div>
+<aside class="rail">
+  <section aria-labelledby="titre-taches">
+    <h2 id="titre-taches">Tâches <span id="compte-taches" class="compte"></span></h2>
+    <ul id="liste-taches" class="taches"></ul>
+    <p id="taches-vides" class="vide" hidden>Rien en attente. Confiez-en une à
+      Jarvis, ou ajoutez-la depuis la page Tâches.</p>
+    <a id="lien-taches" class="suite" href="{{ url_for('todos.index') }}">Toutes les tâches</a>
+  </section>
+
+  <section aria-labelledby="titre-serveur">
+    <h2 id="titre-serveur">Serveur</h2>
+    <p id="conteneurs" class="ligne">Relevé en cours</p>
+    <p id="allume" class="ligne discrete"></p>
+    <p id="modele" class="ligne discrete"></p>
+  </section>
+
+  <nav aria-labelledby="titre-modules">
+    <h2 id="titre-modules">Le reste d'Awen</h2>
+    <div class="modules">
+      <a href="{{ url_for('workout.list_workouts') }}">Séances</a>
+      <a href="{{ url_for('coach.dashboard') }}">Coach</a>
+      <a href="{{ url_for('stats.dashboard') }}">Progression</a>
+      <a href="{{ url_for('meals.list_meals') }}">Repas</a>
+      <a href="{{ url_for('meals.shopping_list') }}">Courses</a>
+      <a href="{{ url_for('calendar.view_calendar') }}">Calendrier</a>
+      <a href="{{ url_for('jobs.daily_jobs') }}">Veille emploi</a>
+      <a href="{{ url_for('main.index') }}">Accueil</a>
+    </div>
+  </nav>
+</aside>
 
 <script>
   window.JARVIS = {
@@ -84,7 +98,8 @@
     urls: {
       etat: "{{ url_for('jarvis.etat') }}",
       demander: "{{ url_for('jarvis.demander') }}",
-      voix: "{{ url_for('jarvis.voix') }}"
+      voix: "{{ url_for('jarvis.voix') }}",
+      terminer: "{{ url_for('jarvis.terminer_tache', todo_id=0) }}"
     }
   };
 </script>
