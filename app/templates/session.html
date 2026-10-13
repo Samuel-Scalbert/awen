@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set plyo_mode = mode == 'plyo' %}
 {% set reprise_mode = mode == 'reprise' %}
-{% block title %}{{ 'Plyométrie' if plyo_mode else ('Reprise' if reprise_mode else 'Séance ' ~ workout.focus) }} — Awen{% endblock %}
+{% block title %}{{ 'Plyométrie' if plyo_mode else ('Reprise' if reprise_mode else 'Séance ' ~ workout.focus) }} | Awen{% endblock %}
 {% block content %}
 <div class="page-head">
   {% if plyo_mode %}

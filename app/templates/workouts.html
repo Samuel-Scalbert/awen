@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Muscu — Awen{% endblock %}
+{% block title %}Muscu | Awen{% endblock %}
 {% block content %}
 <div class="page-head">
   <h2>Séances de muscu</h2>
-  <p class="sub">Rotation continue Push / Pull / Legs — la charge s'ajuste toute seule
+  <p class="sub">Rotation continue Push / Pull / Legs : la charge s'ajuste toute seule
     à la fin de chaque séance.</p>
   <div class="page-links">
     <a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a>
@@ -19,22 +19,22 @@
 <a class="cta" href="{{ url_for('workout.session') }}">▶️ Reprendre la séance
   {{ current.focus }} ({{ current.sets|length }} séries faites)</a>
 {% else %}
-<a class="cta" href="{{ url_for('workout.session') }}">▶️ Démarrer la séance du jour
-  — {{ next_type }}</a>
+<a class="cta" href="{{ url_for('workout.session') }}">▶️ Démarrer la séance du jour :
+  {{ next_type }}</a>
 {# Hors cycle, et volontairement en second : la reprise sert à redémarrer,
    pas à remplacer la séance du jour. #}
-<a class="cta secondary" href="{{ url_for('workout.reprise') }}">🔄 Séance de reprise
-  — tous les exercices, tu t'arrêtes quand tu veux</a>
+<a class="cta secondary" href="{{ url_for('workout.reprise') }}">🔄 Séance de reprise :
+  tous les exercices, tu t'arrêtes quand tu veux</a>
 {% endif %}
 
 <h3 class="section-title">Historique</h3>
 <ul class="history">
   {% for w in workouts %}
-  <li>
+  <li{% if not w.sets and w.completed %} class="vide"{% endif %}>
     <details>
-      <summary><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> — {{ w.focus }}
+      <summary><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> {{ w.focus }}
         {% if not w.completed %}<em>(en cours)</em>{% endif %}
-        · {{ w.sets|length }} séries</summary>
+        · {% if w.sets %}{{ w.sets|length }} série{{ 's' if w.sets|length > 1 }}{% else %}vide{% endif %}</summary>
       {% set ex_notes = notes_by_workout.get(w.id, {}) %}
       {% for name, items in w.sets|groupby('exercise') %}
       {% set first = items|first %}
@@ -52,7 +52,7 @@
     </details>
   </li>
   {% else %}
-  <li>Aucune séance enregistrée — lance la première ! 💪</li>
+  <li>Aucune séance enregistrée : lance la première ! 💪</li>
   {% endfor %}
 </ul>
 {% endblock %}

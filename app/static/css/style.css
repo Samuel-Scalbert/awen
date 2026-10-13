@@ -491,54 +491,6 @@ summary::before {
 }
 details[open] > summary::before { transform: rotate(90deg); }
 
-/* ---------- Tableau de bord ---------------------------------------------- */
-
-.cards {
-  list-style: none;
-  margin: 0 0 var(--s-4);
-  padding: 0;
-  display: grid;
-  gap: var(--s-3);
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-}
-.cards a {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  height: 100%;
-  padding: var(--s-4);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  color: var(--text);
-  text-decoration: none;
-  box-shadow: var(--shadow-1);
-  transition: transform .18s var(--ease), border-color .18s var(--ease),
-              box-shadow .18s var(--ease), background .18s var(--ease);
-}
-.cards a:hover {
-  transform: translateY(-2px);
-  background: var(--card-hover);
-  border-color: var(--accent-ring);
-  box-shadow: var(--shadow-2);
-  text-decoration: none;
-}
-.cards .ico {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: var(--r);
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  font-size: 1.35rem;
-}
-.cards .label { display: block; font-weight: 600; }
-.cards .desc { display: block; color: var(--muted); font-size: .84rem; line-height: 1.4; }
-.cards a.primary { border-color: var(--accent-ring); background: linear-gradient(180deg, var(--accent-soft), transparent 60%), var(--card); }
-.cards a.primary .ico { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-
 /* ---------- Tuiles de chiffres clés --------------------------------------- */
 
 .stats {
@@ -579,6 +531,93 @@ details[open] > summary::before { transform: rotate(90deg); }
 .stat.accent .stat-value { color: var(--accent); }
 .stat-value small { margin-left: .2rem; font-size: .55em; font-weight: 600; color: var(--muted); }
 .stat-note { font-size: .78rem; color: var(--muted); }
+
+/* ---------- Accueil : la journée d'abord --------------------------------- */
+
+/* Une seule surface et trois colonnes séparées par un filet, plutôt que
+   trois cartes : c'est une journée, pas trois sujets. La séance porte la
+   menthe parce que c'est le seul geste qui a une heure. */
+.today {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr);
+  margin-bottom: var(--s-5);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.today-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--s-4) var(--s-5);
+  border-left: 1px solid var(--border);
+}
+.today-col:first-child { border-left: 0; }
+.today-col.seance { background: linear-gradient(180deg, var(--accent-soft), transparent 75%); }
+.today-col h3 {
+  margin: 0 0 var(--s-2);
+  font-size: .84rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.today-lead { margin: 0; font-size: 1.7rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+.today-col.seance .today-lead { color: var(--accent); }
+.today-sub { margin: .3rem 0 var(--s-3); color: var(--muted-strong); font-size: .95rem; line-height: 1.45; }
+.today-warn { margin: 0 0 var(--s-2); color: var(--warn); font-size: .88rem; line-height: 1.45; }
+.today-list { list-style: none; margin: 0 0 var(--s-2); padding: 0; font-size: .9rem; }
+.today-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: .32rem 0;
+  border-top: 1px solid var(--border);
+}
+.today-list .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.today-list .d { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.today-list .d.go { color: var(--accent); font-weight: 600; }
+.today-list .d.late { color: var(--danger); font-weight: 600; }
+.today-more { margin: 0 0 var(--s-2); color: var(--muted); font-size: .84rem; }
+/* Le geste suivant reste au pied de la colonne, quelle que soit sa hauteur. */
+.today-foot { margin: auto 0 0; padding-top: var(--s-3); }
+.today-foot a:not(.cta) { font-size: .92rem; font-weight: 600; }
+
+/* Les tuiles à gauche, la courbe à droite : seule sur sa ligne, elle
+   prenait cinq cents pixels de haut pour dire une tendance. */
+.home-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+  gap: var(--s-3);
+  margin-bottom: var(--s-4);
+}
+.home-progress .stats { grid-template-columns: 1fr; margin: 0; }
+
+.also {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem var(--s-4);
+  margin-top: var(--s-6);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--border);
+  font-size: .9rem;
+}
+.also span { color: var(--muted); }
+
+@media (max-width: 52rem) {
+  .today { grid-template-columns: minmax(0, 1fr); }
+  .today-col { padding: var(--s-4); border-left: 0; border-top: 1px solid var(--border); }
+  .today-col:first-child { border-top: 0; }
+  .home-progress { grid-template-columns: minmax(0, 1fr); }
+  .home-progress .stats { grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); }
+}
+
+/* Sur deux colonnes, une troisième tuile restait seule à gauche avec un
+   trou à droite : la dernière d'une série impaire prend toute la largeur. */
+@media (max-width: 30rem) {
+  .stats > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 
 /* ---------- Séance guidée ------------------------------------------------ */
 
@@ -772,6 +811,9 @@ form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-
   border-radius: var(--r);
 }
 .history summary { font-size: .95rem; }
+/* Une séance ouverte puis laissée vide reste dans l'historique, mais en
+   retrait : elle ne doit pas se lire comme un entraînement. */
+.history > li.vide { opacity: .5; }
 .history p { margin: .5rem 0 0; font-size: .9rem; }
 
 .prog input { width: 4rem; min-height: 2.4rem; padding: .35rem .3rem; }
@@ -1518,7 +1560,6 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
   /* Les cases font ~45px de large : l'emoji volerait la place au nom de la
      séance, qui est la seule information utile en un coup d'œil. */
   .cal .badge-ico { display: none; }
-  .cards { grid-template-columns: 1fr; }
 }
 
 /* Tablette et desktop : header avec nav, plus de barre d'onglets basse */
@@ -1621,6 +1662,12 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
 .rir-pick button.on {
   background: var(--accent); color: var(--on-accent);
   border-color: var(--accent); font-weight: 700;
+}
+/* Sur téléphone, tout bouton du formulaire prend une ligne entière. Ces
+   quatre-là doivent se la partager : empilés, ils coûtaient quatre lignes
+   de défilement à chaque série. */
+@media (max-width: 47.99rem) {
+  form.log .rir-pick button { flex: 1 1 0; }
 }
 
 .advice-list { list-style: none; padding: 0; margin: 0 0 var(--s-5); }

@@ -11,7 +11,7 @@
 <figure class="chart">
   <figcaption>{{ title }}</figcaption>
   <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img"
-       aria-label="{{ title }} — de {{ c.marks[0].text }} à {{ c.marks[-1].text }}"
+       aria-label="{{ title }}, de {{ c.marks[0].text }} à {{ c.marks[-1].text }}"
 >
     <line class="grid" x1="4" y1="10" x2="{{ c.width - 4 }}" y2="10"/>
     <line class="grid" x1="4" y1="{{ c.baseline }}" x2="{{ c.width - 4 }}" y2="{{ c.baseline }}"/>

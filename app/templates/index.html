@@ -2,10 +2,106 @@
 {% import "_charts.html" as chart %}
 {% block content %}
 <div class="page-head">
-  <h2>Tableau de bord</h2>
-  <p class="sub">Ton assistant perso : muscu, meal prep, calendrier et recherche d'emploi,
-    hébergé à la maison.</p>
+  <h2>{{ jour }}</h2>
 </div>
+
+{# La journée d'abord : une seule surface, trois colonnes. Chacune dit où
+   on en est et propose le geste suivant. #}
+<section class="today" aria-label="Aujourd'hui">
+
+  <div class="today-col seance">
+    <h3>Séance</h3>
+    {% if seance.etat == 'en_cours' %}
+    <p class="today-lead">{{ seance.focus }}</p>
+    <p class="today-sub">En cours{% if seance.depuis %} depuis le {{ seance.depuis.strftime('%d/%m') }}{% endif %}
+      {%- if seance.prevues %} : {{ seance.faites }} série{{ 's' if seance.faites > 1 }} sur {{ seance.prevues }}
+      {%- else %} : {{ seance.faites }} série{{ 's' if seance.faites > 1 }} notée{{ 's' if seance.faites > 1 }}{% endif %}.</p>
+    {% elif seance.etat == 'prevue' %}
+    <p class="today-lead">{{ seance.focus }}</p>
+    <p class="today-sub">Prévue aujourd'hui, {{ seance.prevues }} séries.</p>
+    {% elif seance.etat == 'faite' %}
+    <p class="today-lead">{{ seance.focus }}, faite</p>
+    <p class="today-sub">{{ seance.faites }} série{{ 's' if seance.faites > 1 }} aujourd'hui. Rien d'autre à soulever.</p>
+    {% else %}
+    <p class="today-lead">Repos</p>
+    <p class="today-sub">Prochaine séance : {{ seance.prochaine }}, {{ seance.focus }}.</p>
+    {% endif %}
+
+    {% if seance.exercices %}
+    <ol class="today-list">
+      {% for e in seance.exercices %}
+      <li><span class="t">{{ e.nom }}</span><span class="d">{{ e.cible }}</span></li>
+      {% endfor %}
+    </ol>
+    {% if seance.reste %}<p class="today-more">et {{ seance.reste }} autre{{ 's' if seance.reste > 1 }} exercice{{ 's' if seance.reste > 1 }}</p>{% endif %}
+    {% endif %}
+
+    <p class="today-foot">
+      {% if seance.etat == 'en_cours' %}
+      <a class="cta" href="{{ url_for('workout.session') }}">Reprendre la séance</a>
+      {% elif seance.etat == 'prevue' %}
+      <a class="cta" href="{{ url_for('workout.session') }}">Commencer la séance</a>
+      {% elif seance.etat == 'faite' %}
+      <a href="{{ url_for('workout.list_workouts') }}">Revoir mes séances</a>
+      {% else %}
+      <a href="{{ url_for('workout.session') }}">La faire aujourd'hui quand même</a>
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="today-col">
+    <h3>Veille emploi</h3>
+    {% if veille is none %}
+    <p class="today-lead">Pas de veille</p>
+    <p class="today-sub">Aucun compte rendu n'est encore arrivé sur le serveur.</p>
+    {% else %}
+    {% if veille.alerte and veille.alerte.kind == 'warn' %}
+    <p class="today-warn">Pas de nouvelle veille depuis {{ veille.alerte.gap }} jour{{ 's' if veille.alerte.gap > 1 }} :
+      vérifie la tâche dans l'app Claude.</p>
+    {% endif %}
+    <p class="today-lead">{% if veille.n %}{{ veille.n }} offre{{ 's' if veille.n > 1 }}{% else %}Aucune offre{% endif %}</p>
+    <p class="today-sub">
+      {%- if not veille.rapport.is_today %}Veille de {{ veille.rapport.date_fr.rsplit(' ', 1)[0]|lower }}.
+      {% elif veille.go %}{{ veille.go }} à envoyer aujourd'hui.
+      {% elif veille.n %}Retenue{{ 's' if veille.n > 1 }} ce matin.
+      {% else %}Rien de retenu ce matin, et c'est une réponse acceptable.{% endif -%}
+    </p>
+    {% if veille.premiere %}
+    <ol class="today-list">
+      {% for o in veille.rapport.offers[:3] %}
+      <li><span class="t">{{ o.role }}{% if o.company %}, {{ o.company }}{% endif %}</span>
+        {%- if o.verdict and o.verdict.kind == 'go' %}<span class="d go">à envoyer</span>{% endif %}</li>
+      {% endfor %}
+    </ol>
+    {% if veille.n > 3 %}<p class="today-more">et {{ veille.n - 3 }} autre{{ 's' if veille.n - 3 > 1 }}</p>{% endif %}
+    {% endif %}
+    {% if veille.missions %}
+    <p class="today-more">{{ veille.missions }} mission{{ 's' if veille.missions > 1 }} de bénévolat à regarder.</p>
+    {% endif %}
+    {% endif %}
+    <p class="today-foot"><a href="{{ url_for('jobs.daily_jobs') }}">Lire la veille</a></p>
+  </div>
+
+  <div class="today-col">
+    <h3>Tâches</h3>
+    {% if taches %}
+    <p class="today-lead">{{ compte.pending }} à faire</p>
+    <p class="today-sub">{% if compte.late %}{{ compte.late }} en retard.{% else %}Aucune en retard.{% endif %}</p>
+    <ol class="today-list">
+      {% for t in taches %}
+      <li><span class="t">{{ t.text }}</span>
+        {%- if t.due %}<span class="d{{ ' late' if t.due < today }}">{{ t.due.strftime('%d/%m') }}</span>{% endif %}</li>
+      {% endfor %}
+    </ol>
+    {% if compte.pending > taches|length %}<p class="today-more">et {{ compte.pending - taches|length }} autre{{ 's' if compte.pending - taches|length > 1 }}</p>{% endif %}
+    <p class="today-foot"><a href="{{ url_for('todos.index') }}">Toutes les tâches</a></p>
+    {% else %}
+    <p class="today-lead">Rien à faire</p>
+    <p class="today-sub">La liste est vide.</p>
+    <p class="today-foot"><a href="{{ url_for('todos.index') }}">Ajouter une tâche</a></p>
+    {% endif %}
+  </div>
+</section>
 
 {% if headline %}
 <div class="coach-banner">
@@ -13,121 +109,45 @@
   <div class="advice-body">
     <strong>{{ headline.title }}</strong>
     <p>{{ headline.detail }}</p>
-    <a class="cta small" href="{{ url_for('coach.dashboard') }}">🧠 Voir le coach</a>
+    <a class="cta small" href="{{ url_for('coach.dashboard') }}">Voir le coach</a>
   </div>
 </div>
 {% endif %}
 
 {% if o.n_sessions %}
 <h3 class="section-title">Ta progression</h3>
-<ul class="stats">
-  <li class="stat accent">
-    <span class="stat-label">Volume total</span>
-    <span class="stat-value">{{ '%.1f'|format(o.total_volume / 1000) | replace('.', ',') }}<small>t</small></span>
-    <span class="stat-note">{{ o.total_sets }} séries · {{ o.n_sessions }} séances</span>
-  </li>
-  <li class="stat">
-    <span class="stat-label">Rythme</span>
-    <span class="stat-value">{{ o.per_week }}<small>/sem</small></span>
-    <span class="stat-note">assiduité {{ o.adherence }} %</span>
-  </li>
-  <li class="stat">
-    <span class="stat-label">Dernière séance</span>
-    <span class="stat-value">{{ o.days_since }}<small>j</small></span>
-    <span class="stat-note">{{ o.last_date.strftime('%d/%m') }} · écart moyen {{ o.avg_gap }} j</span>
-  </li>
-</ul>
-{% if volume_chart %}
-<div class="chart-grid">
-  {{ chart.line(volume_chart, "Volume par séance") }}
+<div class="home-progress">
+  <ul class="stats">
+    <li class="stat accent">
+      <span class="stat-label">Volume total</span>
+      <span class="stat-value">{{ '%.1f'|format(o.total_volume / 1000) | replace('.', ',') }}<small>t</small></span>
+      <span class="stat-note">{{ o.total_sets }} séries, {{ o.n_sessions }} séances</span>
+    </li>
+    <li class="stat">
+      <span class="stat-label">Rythme</span>
+      <span class="stat-value">{{ o.per_week|string|replace('.', ',') }}<small>/sem</small></span>
+      <span class="stat-note">assiduité {{ o.adherence }} %</span>
+    </li>
+    <li class="stat">
+      <span class="stat-label">Dernière séance</span>
+      <span class="stat-value">{{ o.days_since }}<small>j</small></span>
+      <span class="stat-note">le {{ o.last_date.strftime('%d/%m') }}, écart moyen {{ o.avg_gap|string|replace('.', ',') }} j</span>
+    </li>
+  </ul>
+  {% if volume_chart %}{{ chart.line(volume_chart, "Volume par séance") }}{% endif %}
 </div>
+<p><a href="{{ url_for('stats.dashboard') }}">Toutes les statistiques</a></p>
 {% endif %}
-<p><a href="{{ url_for('stats.dashboard') }}">📊 Toutes les statistiques →</a></p>
-{% endif %}
 
-<h3 class="section-title">Aujourd'hui</h3>
-<ul class="cards">
-  <li>
-    <a class="primary" href="{{ url_for('workout.session') }}">
-      <span class="ico">▶️</span>
-      <span><span class="label">Séance du jour</span>
-        <span class="desc">Coach guidé, série par série</span></span>
-    </a>
-  </li>
-  <li>
-    <a href="{{ url_for('jobs.daily_jobs') }}">
-      <span class="ico">💼</span>
-      <span><span class="label">Jobs du jour</span>
-        <span class="desc">Veille de 9h du pipeline Claude</span></span>
-    </a>
-  </li>
-</ul>
-
-<h3 class="section-title">Muscu</h3>
-<ul class="cards">
-  <li>
-    <a href="{{ url_for('workout.list_workouts') }}">
-      <span class="ico">🏋️</span>
-      <span><span class="label">Séances</span>
-        <span class="desc">Historique et progression</span></span>
-    </a>
-  </li>
-  <li>
-    <a href="{{ url_for('stats.dashboard') }}">
-      <span class="ico">📊</span>
-      <span><span class="label">Statistiques</span>
-        <span class="desc">Volume, progression, records</span></span>
-    </a>
-  </li>
-  <li>
-    <a href="{{ url_for('workout.programme') }}">
-      <span class="ico">📋</span>
-      <span><span class="label">Programme PPL</span>
-        <span class="desc">3 séances + plyométrie</span></span>
-    </a>
-  </li>
-  <li>
-    <a href="{{ url_for('calendar.view_calendar') }}">
-      <span class="ico">📅</span>
-      <span><span class="label">Calendrier</span>
-        <span class="desc">Séances faites et à venir</span></span>
-    </a>
-  </li>
-</ul>
-
-<h3 class="section-title">Nutrition</h3>
-<ul class="cards">
-  <li>
-    <a href="{{ url_for('meals.list_meals') }}">
-      <span class="ico">🍚</span>
-      <span><span class="label">Recettes meal prep</span>
-        <span class="desc">Ingrédients, macros, préparation</span></span>
-    </a>
-  </li>
-  <li>
-    <a href="{{ url_for('meals.nutrition') }}">
-      <span class="ico">🎯</span>
-      <span><span class="label">Plan nutrition</span>
-        <span class="desc">Objectif 64 → 72 kg</span></span>
-    </a>
-  </li>
-  <li>
-    <a href="{{ url_for('meals.shopping_list') }}">
-      <span class="ico">🛒</span>
-      <span><span class="label">Liste de courses</span>
-        <span class="desc">Générée selon tes portions</span></span>
-    </a>
-  </li>
-</ul>
-
-<h3 class="section-title">Recherche d'emploi</h3>
-<ul class="cards">
-  <li>
-    <a href="{{ url_for('jobs.letters') }}">
-      <span class="ico">📄</span>
-      <span><span class="label">Lettres de motivation</span>
-        <span class="desc">Générées par Claude, à télécharger</span></span>
-    </a>
-  </li>
-</ul>
+{# Les pages qui n'ont pas d'onglet : sans ces liens, on ne les atteint
+   qu'en passant par une autre page. #}
+<nav class="also" aria-label="Aussi dans Awen">
+  <span>Aussi dans Awen</span>
+  <a href="{{ url_for('workout.programme') }}">Programme</a>
+  <a href="{{ url_for('stats.dashboard') }}">Statistiques</a>
+  <a href="{{ url_for('meals.nutrition') }}">Plan nutrition</a>
+  <a href="{{ url_for('meals.shopping_list') }}">Liste de courses</a>
+  <a href="{{ url_for('jobs.letters') }}">Lettres de motivation</a>
+  <a href="{{ url_for('jarvis.hud') }}">Jarvis</a>
+</nav>
 {% endblock %}
