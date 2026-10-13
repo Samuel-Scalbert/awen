@@ -4,8 +4,8 @@ TROIS HORLOGES INDÉPENDANTES, ET C'EST VOLONTAIRE
 
   - les entrées sont lues à ~60 Hz, sinon un appui semble mou ;
   - l'écran n'est redessiné que si quelque chose a changé (`dirty`), et le
-    redessin partiel de grid.py fait qu'une horloge qui avance ne coûte
-    qu'une poignée de cellules ;
+    canevas ne repeint que les éléments différents : une horloge qui avance
+    d'une minute ne coûte que les segments qui changent ;
   - le serveur n'est interrogé que toutes les 30 secondes — sauf sur Spotify,
     où une piste change trop souvent pour attendre autant.
 
@@ -23,7 +23,14 @@ recharger serait pire que celui qui n'aurait jamais dormi.
 
 Ce qu'on cesse de faire, c'est de DESSINER. Pousser des pixels sur un
 panneau noir ne sert personne, et le panneau garde son image : au réveil, le
-redessin partiel n'envoie que ce qui a réellement changé.
+canevas n'envoie que ce qui a réellement changé.
+
+L'HEURE AVANCE TOUTE SEULE ENTRE DEUX RELEVÉS
+
+La carte n'a pas d'horloge sauvegardée, mais elle sait compter. Le serveur
+donne l'heure à la seconde près ; entre deux relevés, on ajoute le temps
+écoulé. La minute change donc à l'heure, et non jusqu'à trente secondes
+plus tard : sur une horloge qui occupe un quart de l'écran, cela se voit.
 
 LA MOLETTE ENVOIE UN DÉPLACEMENT
 
@@ -38,7 +45,7 @@ import network
 import urequests
 
 import backlight as backlight_mod
-from grid import Grid
+from canvas import Canvas
 from input import BTN_A, BTN_B, BTN_C, Input, LONG, REPEAT, SHORT, TURN
 import led as led_mod
 import presence as presence_mod
@@ -52,7 +59,7 @@ POLL_SPOTIFY_MS = 5000   # une piste change trop souvent pour attendre 30 s
 # l'ecran affirmer « HORS LIGNE » une demi-minute pour une socket avortee.
 RETRY_MS = 4000
 FRAME_MS = 16            # lecture des entrées
-BLINK_MS = 530           # demi-période du curseur
+BLINK_MS = 530           # battement de la LED en cas d'alerte
 # Huit positions a 150 ms : un tour de logo en 1,2 seconde. Plus vite,
 # il se lirait comme un sablier — donc comme une attente. Plus lent, on
 # ne verrait plus qu'il tourne.
@@ -93,7 +100,7 @@ class App:
     COVER = COVER
 
     def __init__(self, display, config):
-        self.g = Grid(display, theme.load())
+        self.g = Canvas(display, theme.load())
         self.io = Input(**config.get("pins", {}))
         self.led = led_mod.make(**config.get("led", {}))
         self.sensor = sensor_mod.make(**config.get("sensor", {}))
@@ -108,12 +115,15 @@ class App:
         self.in_boot = True
 
         # `online` distingue « pas encore de données » de « serveur injoignable ».
-        self.state = {"online": False, "time": "--:--", "ip": "",
-                      "blink": True, "spin": 0}
+        self.state = {"online": False, "ip": "", "spin": 0}
         self.dirty = True
         self.t_poll = 0
-        self.t_blink = 0
         self.t_spin = 0
+        self._hm = None             # minutes depuis minuit, au dernier relevé
+        self._sec = 0
+        self._hm_at = 0
+        self._min_vue = None        # la minute actuellement à l'écran
+        self._sonar_vu = None       # ce que l'écran montre du sonar
 
         self.wlan = None
         self._vol_pending = None
@@ -214,7 +224,7 @@ class App:
         r = None
         debut = time.ticks_ms()
         try:
-            r = urequests.get(self._url("/api/esp32/summary"),
+            r = urequests.get(self._url("/api/esp32/pages"),
                               timeout=NET_TIMEOUT)
             if r.status_code != 200:
                 raise OSError(r.status_code)
@@ -243,8 +253,12 @@ class App:
                 r.close()
 
         data["online"] = True
-        data["blink"] = self.state.get("blink", True)
+        data["spin"] = self.state.get("spin", 0)
         data["ip"] = self.state.get("ip", "")
+        if data.get("min") is not None:
+            self._hm = data["min"]
+            self._sec = data.get("sec", 0)
+            self._hm_at = time.ticks_ms()
 
         # Spotify met une seconde ou deux à refléter un changement de volume.
         # Sans ce garde-fou, un rafraîchissement qui tombe pendant qu'on
@@ -260,6 +274,15 @@ class App:
         self.dirty = True
         gc.collect()
         return True
+
+    def minutes(self):
+        """L'heure qu'il est, en minutes depuis minuit. None avant le
+        premier relevé : sans réseau, la carte ne sait pas l'heure."""
+        if self._hm is None:
+            return None
+        s = (self._hm * 60 + self._sec
+             + time.ticks_diff(time.ticks_ms(), self._hm_at) // 1000)
+        return (s // 60) % 1440
 
     def play_position(self):
         """La position de lecture, avancée localement depuis le dernier relevé.
@@ -296,10 +319,6 @@ class App:
                 r.close()
 
     # ------------------------------------------------- actions des écrans
-
-    def apply_advice(self, accept):
-        if self._post("/api/esp32/advice", {"accept": accept}):
-            self.t_poll = 0
 
     def fetch_cover(self, tag):
         """Écrit la pochette sur la flash, seulement quand elle a changé.
@@ -402,6 +421,11 @@ class App:
         self.index = (self.index + step) % len(self.screens)
         self.g.sweep(SWEEP_MS)       # au lieu d'un flash noir
         self.dirty = True
+        # En arrivant sur Spotify on relève tout de suite : sans ça la page
+        # montrerait la piste d'il y a trente secondes, et pas de pochette
+        # avant le prochain passage.
+        if self.current().NAME == "spotify":
+            self.t_poll = 0
 
     def handle(self, ev):
         if self.in_boot:
@@ -441,9 +465,8 @@ class App:
             return
 
         color = theme.SCREEN_RGB[self.index % len(theme.SCREEN_RGB)]
-        alert = (self.state.get("coach", {}).get("level") == "alert"
-                 or not self.state.get("online", True))
-        if alert and not self.state.get("blink", True):
+        alert = not self.state.get("online", True)
+        if alert and (time.ticks_ms() // BLINK_MS) & 1:
             # On respire entre pleine intensite et moitie, jamais jusqu'a
             # l'extinction. Une LED qui s'eteint fait perdre la couleur de
             # l'ecran une demi-seconde sur deux, et le clignotement franc
@@ -478,10 +501,9 @@ class App:
                 self.awake = True
                 self.backlight.wake()
                 # L'ecran a garde son image, mais le contenu a vieilli : on
-                # force un redessin, que le suivi cellule par cellule reduira
-                # a ce qui a reellement change.
+                # force un redessin, que le canevas reduira a ce qui a
+                # reellement change.
                 self.dirty = True
-                self.t_blink = now
             return
 
         if self.sonar.expired(now):
@@ -501,7 +523,6 @@ class App:
         self.awake = True
         self.backlight.wake()
         self.dirty = True
-        self.t_blink = now
         # Sans ca, _update_presence rendormirait l'ecran a l'image suivante :
         # le chronometre du sonar aurait toujours dix minutes de retard.
         self.sonar.seen(now)
@@ -510,9 +531,8 @@ class App:
     # ------------------------------------------------------------ boucle
 
     def _boot_draw(self):
-        self.g.clear()
+        self.state["spin"] = self.state.get("spin", 0) + 1
         self.boot.draw(self.g, self.state, self)
-        self.g.flush()
 
     def _boot_sequence(self):
         """Révèle les lignes d'amorçage une par une, à cadence fixe.
@@ -533,13 +553,12 @@ class App:
             time.sleep_ms(BOOT_STEP_MS)
 
         # Toutes les lignes sont affichées : on laisse au wifi le temps qui
-        # lui reste, sans figer l'ecran — le curseur continue de clignoter.
+        # lui reste, sans figer l'ecran : le logo continue de tourner.
         while not self._wifi_ok():
             if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
                 return False
-            self.state["blink"] = not self.state.get("blink", True)
             self._boot_draw()
-            time.sleep_ms(BLINK_MS)
+            time.sleep_ms(SPIN_MS)
         return True
 
     def _poll_interval(self):
@@ -595,18 +614,40 @@ class App:
         self._update_led()
         self._flush_volume(now)
 
-        # Ni le logo ni le curseur ne tournent dans le noir : ils forcent
-        # un redessin plusieurs fois par seconde et n'ont rien a dire a
-        # personne quand le panneau est eteint.
+        # LE LOGO TOURNE SANS REDESSINER LA PAGE.
+        #
+        # Il change sept fois par seconde : repasser par draw() pour si peu
+        # ferait redire quatre-vingts elements au canevas a chaque tour. On
+        # lui demande directement l'image suivante, un envoi de 16x16.
+        #
+        # Il ne tourne pas dans le noir : il n'a rien a dire a personne
+        # quand le panneau est eteint.
         if self.awake and time.ticks_diff(now, self.t_spin) >= SPIN_MS:
             self.t_spin = now
-            self.state["spin"] = self.state.get("spin", 0) + 1
+            spin = self.state.get("spin", 0) + 1
+            self.state["spin"] = spin
+            if not self.dirty:
+                self.g.logo(screens.LOGO_X, screens.LOGO_Y, spin,
+                            theme.LOGO_RING)
+
+        # La minute a tourne : c'est le seul evenement que rien d'autre ne
+        # signale, puisque l'heure est comptee ici et non recue.
+        m = self.minutes()
+        if m != self._min_vue:
+            self._min_vue = m
             self.dirty = True
 
-        if self.awake and time.ticks_diff(now, self.t_blink) >= BLINK_MS:
-            self.t_blink = now
-            self.state["blink"] = not self.state.get("blink", True)
-            self.dirty = True
+        # Le sonar n'interesse que l'accueil, qui affiche ce qu'il voit :
+        # la distance, et sa couleur selon qu'il y a quelqu'un. Les deux
+        # comptent : la presence ne se confirme qu'a la deuxieme lecture,
+        # donc une image APRES la distance qui l'a fait changer.
+        vu = self.sonar.distance if self.sonar.present else -self.sonar.distance - 1
+        if vu != self._sonar_vu:
+            self._sonar_vu = vu
+            if self.current().NAME == "home":
+                self.dirty = True
+
+        self.current().tick(now, self)
 
         if self.t_poll == 0 or                 time.ticks_diff(now, self.t_poll) >= self._poll_interval():
             self.t_poll = now
@@ -620,9 +661,7 @@ class App:
 
         if self.dirty and self.awake:
             self.dirty = False
-            self.g.clear()
             self.current().draw(self.g, self.state, self)
-            self.g.flush()
 
         time.sleep_ms(FRAME_MS)
 

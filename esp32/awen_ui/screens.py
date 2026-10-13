@@ -1,121 +1,47 @@
-"""Les huit écrans d'Awen, aux coordonnées des maquettes.
+"""Les trois pages d'Awen : Accueil, Spotify, Calendrier.
 
-Chaque écran expose :
-    NAME              libellé court, pour la trace série
-    draw(g, st, app)  compose la grille ; ne dessine jamais en pixels directs
-    on_input(ev, app) renvoie True si l'événement a été absorbé
+Chaque page expose :
+    NAME                 libellé court, pour la trace série
+    draw(c, st, app)     décrit toute la page au canevas, à chaque changement
+    on_input(ev, app)    renvoie True si l'événement a été absorbé
     on_turn(delta, app)  un cran d'encodeur : delta vaut -1 ou +1
+    tick(now, app)       appelé à chaque image, pour ce qui dépend du temps
 
-L'ENCODEUR EMET UN DEPLACEMENT
+DESSINER TOUT, À CHAQUE FOIS
 
-Il n'a pas de position : il dit « un cran vers la droite ». Les écrans
-reçoivent donc un ±1 et l'appliquent à ce qu'ils affichent. Rien à
-annoncer, rien à rattraper, aucun saut possible en changeant d'écran.
+draw() ne cherche jamais ce qui a changé : elle redit la page entière, et
+c'est le canevas qui ne repeint que les éléments différents. Une page reste
+ainsi une simple description, lisible de haut en bas comme sa maquette.
 
-Texte en ASCII majuscule sans accents : voir grid.py.
+La contrepartie : un élément qui disparaît doit être redit vide : un texte
+"" efface l'ancien, une forme se repeint de la couleur du fond. D'où les
+boucles qui parcourent toujours toutes les lignes, pleines ou non.
+
+LES COORDONNÉES SONT CELLES DES MAQUETTES
+
+Les pages ont été dessinées dans Lopaka (esp32/mockups/lopaka/). Les
+nombres qui suivent en viennent tels quels : marges à 16 et 224, bandeau
+sur 26 pixels, pied à partir de 292.
 """
 import time
 
 import backlight as backlight_mod
-from grid import COLS, ROWS
-from input import BTN_A, BTN_B, BTN_C, SHORT, LONG, REPEAT
+import fonts
+from input import BTN_A, BTN_B, BTN_C, REPEAT, SHORT
 import theme
 
+PX, S9, B9, B12, B18 = fonts.PX, fonts.S9, fonts.B9, fonts.B12, fonts.B18
 
-def _header(g, title, st, app, right=None, cursor=True):
-    """Barre haute : le logo, la marque, l'écran, le curseur, l'heure.
+G, D = 16, 224                  # bords gauche et droit du contenu
+LOGO_X, LOGO_Y = G, 5           # le logo du bandeau ; app.py l'anime
+LARGE = D - G
 
-    `right` remplace l'heure quand un écran a mieux à mettre là — l'accueil
-    y met le numéro de semaine, l'heure étant déjà en grand au milieu.
-    `cursor` se coupe pour la même raison : l'accueil a déjà son horloge qui
-    bouge, un second repère vivant n'y apporterait rien.
-
-    « AWEN » figure partout — c'est le nom de la machine, et un afficheur qui
-    ne dit jamais ce qu'il est ressemble à un écran de test.
-
-    C'est le seul mouvement permanent de l'interface. Sans lui un écran
-    immobile ne se distingue pas d'un écran gelé — surtout ici, où presque
-    rien ne bouge entre deux rafraîchissements espacés de trente secondes.
-    Un bloc qui bat une fois par seconde suffit à dire que la machine vit.
-
-    Il ne coûte qu'une cellule par battement, grâce au redessin partiel.
-
-    LE LOGO TOURNE À GAUCHE DU NOM
-
-    Le même objet que le 🌀 du site, et ses couleurs avec lui : une marque
-    qui changerait de teinte avec le thème ne serait plus une marque. Il
-    occupe deux cellules et tourne en 1,2 seconde — assez pour qu'on le voie
-    vivre, assez lent pour qu'on ne le regarde pas.
-    """
-    g.logo(0, 0, st.get("spin", 0), theme.LOGO_RING)
-    g.text(2, 0, "AWEN", g.p.FG)
-    g.text(7, 0, title, g.p.HI)
-    if cursor:
-        g.cursor(7 + len(title) + 1, 0, st.get("blink", True))
-    g.right(0, st.get("time", "") if right is None else right, g.p.DIM)
-    _dots(g, app)
-    g.rule(1)
+_WIFI = ("b.w0", "b.w1", "b.w2", "b.w3")
+_PAGES = ("p.0", "p.1", "p.2")
 
 
-def _dots(g, app):
-    """Les pastilles de navigation, ligne 1, aux couleurs des ecrans.
-
-    Meme code couleur que la LED : on sait ou l'on est sans lire, et combien
-    d'ecrans restent avant de revenir au debut.
-    """
-    g.dots(1, [theme.rgb565(c) for c in theme.SCREEN_RGB[:len(app.screens)]],
-           app.index)
-
-
-def _sonar_line(g, app):
-    """Ce que voit le sonar, et a partir de quand l'ecran s'eteint.
-
-    Ligne 1 a droite, sous le numero de semaine : les pastilles de navigation
-    s'arretent colonne 13, la place est libre.
-
-    Deux chiffres seulement, mais ils repondent aux deux questions qu'on se
-    pose devant une veille qui se declenche mal : « me voit-il ? » et « a
-    partir de quelle distance ? ». Sans eux, le seuil de main.py est un
-    nombre qu'on ne peut confronter a rien.
-
-    La valeur mesuree s'allume quand elle passe sous le seuil : c'est la
-    reponse a la premiere question, lisible sans comparer les deux nombres.
-    """
-    sonar = getattr(app, "sonar", None)
-    if sonar is None or not sonar.threshold:
-        return                      # pas de capteur : rien a dire
-
-    cm = sonar.distance
-    # Un echo perdu vaut 0. Afficher « 0 cm » ferait croire a un obstacle
-    # colle au capteur, soit exactement l'inverse de ce qui se passe.
-    vu = "{:>3}".format(cm) if cm > 0 else " --"
-    reste = "/{}cm".format(sonar.threshold)
-
-    col = COLS - len(vu) - len(reste)
-    g.text(col, 1, vu, g.p.HI if sonar.present else g.p.DIM)
-    g.text(col + len(vu), 1, reste, g.p.DIM)
-
-
-def _statusbar(g, left, right):
-    g.rule(ROWS - 2)
-    g.text(0, ROWS - 1, left, g.p.DIM)
-    g.right(ROWS - 1, right, g.p.DIM)
-
-
-def _wrap(text, width):
-    """Coupe aux espaces, jamais au milieu d'un mot."""
-    lines, line = [], ""
-    for word in text.split():
-        if not line:
-            line = word
-        elif len(line) + 1 + len(word) <= width:
-            line += " " + word
-        else:
-            lines.append(line)
-            line = word
-    if line:
-        lines.append(line)
-    return lines
+def _hhmm(m):
+    return "--:--" if m is None else "{:02d}:{:02d}".format(m // 60, m % 60)
 
 
 def _mmss(seconds):
@@ -123,12 +49,68 @@ def _mmss(seconds):
     return "{}:{:02d}".format(seconds // 60, seconds % 60)
 
 
+def _bandeau(c, nom, st, app, heure=True):
+    """Le bandeau du haut, commun aux trois pages.
+
+    Le logo, la marque, le nom de la page, puis à droite l'heure et le wifi.
+    L'accueil coupe l'heure, déjà en grand dessous, et met à sa
+    place ce que voit le sonar.
+
+    LE LOGO EST LE SEUL MOUVEMENT PERMANENT
+
+    Sans lui une page immobile ne se distingue pas d'une page gelée, surtout
+    ici où presque rien ne bouge entre deux relevés espacés de trente
+    secondes. Il tourne en 1,2 seconde : assez pour qu'on le voie vivre,
+    assez lent pour qu'on ne le regarde pas. C'est app.py qui le fait
+    avancer, sans repasser par draw().
+
+    Hors ligne, le nom de la page cède la place à l'annonce : c'est
+    l'endroit qu'on lit en premier, et la seule alerte qui concerne toutes
+    les pages à la fois.
+    """
+    p = c.p
+    c.logo(LOGO_X, LOGO_Y, st.get("spin", 0), theme.LOGO_RING)
+    c.text("b.awen", 38, 17, "A W E N", PX, p.FG)
+    if st.get("online", True):
+        c.text("b.nom", 90, 17, nom, PX, p.DIM)
+    else:
+        c.text("b.nom", 90, 17, "HORS LIGNE", PX, p.ALERT)
+    if heure:
+        c.text("b.d", 198, 17, _hhmm(app.minutes()), PX, p.HI, 1)
+
+    # Un dBm ne parle à personne : quatre barres, comme sur un téléphone.
+    rssi = app.wifi_rssi()
+    if rssi is None:
+        n = 0
+    else:
+        n = 4 if rssi >= -60 else (3 if rssi >= -70 else (2 if rssi >= -80 else 1))
+    for i in range(4):
+        h = 3 + 2 * i
+        c.rect(_WIFI[i], 207 + 5 * i, 18 - h, 3, h,
+               p.DIM if i < n else p.FAINT)
+    c.rect("b.filet", G, 26, LARGE, 1, p.RULE)
+
+
+def _pied(c, gauche, droite, actif):
+    """Le pied : où mènent A et C, et où l'on est parmi les trois pages."""
+    p = c.p
+    y = 306
+    c.rect("p.filet", G, 292, LARGE, 1, p.RULE)
+    c.tri("p.a", G, y, 6, 5, p.HI)
+    c.text("p.ga", 28, y + 4, gauche, PX, p.DIM)
+    c.tri("p.c", D - 1, y, -6, 5, p.HI)
+    c.text("p.dr", 212, y + 4, droite, PX, p.DIM, 1)
+    for i in range(3):
+        c.rect(_PAGES[i], 101 + 14 * i, y - 1, 10, 3,
+               p.FG if i == actif else p.FAINT)
+
+
 class Screen:
-    """Base commune. Par défaut, un écran n'absorbe rien et ignore la molette."""
+    """Base commune. Par défaut, une page n'absorbe rien et ignore la molette."""
 
     NAME = "?"
 
-    def draw(self, g, st, app):
+    def draw(self, c, st, app):
         raise NotImplementedError
 
     def on_input(self, ev, app):
@@ -137,369 +119,276 @@ class Screen:
     def on_turn(self, delta, app):
         pass
 
+    def tick(self, now, app):
+        pass
+
 
 # --------------------------------------------------------------------------
 
 
 class Boot(Screen):
-    """Amorçage. Les lignes tombent une par une — c'est tout le caractère."""
+    """Amorçage. Les lignes tombent une par une : c'est tout le caractère."""
 
     NAME = "boot"
-    CHECKS = ("RESEAU", "SERVEUR", "COACH", "VEILLE EMPLOI", "SPOTIFY")
+    CHECKS = ("RESEAU", "SERVEUR", "AGENDA", "SPOTIFY")
+    _L = ("o.l0", "o.l1", "o.l2", "o.l3")
+    _E = ("o.e0", "o.e1", "o.e2", "o.e3")
 
     def __init__(self):
         self.step = 0
 
-    def draw(self, g, st, app):
-        g.center(2, "A W E N", g.p.HI)
-        g.center(3, "assistant personnel", g.p.DIM)
-        g.rule(5)
-        for i, label in enumerate(self.CHECKS):
+    def draw(self, c, st, app):
+        p = c.p
+        c.logo(112, 64, st.get("spin", 0), theme.LOGO_RING)
+        c.text("o.awen", 120, 102, "A W E N", PX, p.FG, 2)
+        c.text("o.sous", 120, 124, "assistant personnel", S9, p.DIM, 2)
+        c.rect("o.f1", G, 142, LARGE, 1, p.RULE)
+        for i in range(len(self.CHECKS)):
+            y = 168 + 20 * i
             if i > self.step:
-                break
-            r = 7 + i
-            g.text(1, r, label, g.p.DIM)
+                c.text(self._L[i], G, y, "", PX, p.DIM)
+                c.text(self._E[i], D, y, "", PX, p.DIM, 1)
+                continue
             done = i < self.step
-            state = "OK" if done else "..."
-            g.text(COLS - 1 - len(state), r, state,
-                   g.p.FG if done else g.p.DIM)
-        if self.step >= len(self.CHECKS):
-            g.text(1, 13, "> demarrage", g.p.FG)
-            g.cursor(13, 13, st.get("blink", True))
-        _statusbar(g, "v3.0", st.get("ip", ""))
+            c.text(self._L[i], G, y, self.CHECKS[i], PX, p.DIM)
+            c.text(self._E[i], D, y, "OK" if done else "...", PX,
+                   p.FG if done else p.DIM, 1)
+        c.text("o.go", G, 262,
+               "DEMARRAGE" if self.step >= len(self.CHECKS) else "", PX, p.FG)
+        c.rect("o.f2", G, 292, LARGE, 1, p.RULE)
+        c.text("o.v", G, 310, "V4.0", PX, p.DIM)
+        c.text("o.ip", D, 310, st.get("ip", ""), PX, p.DIM, 1)
+
+
+# --------------------------------------------------------------------------
+# L'horloge à segments
+#
+# Sept pilules par chiffre, allumées ou éteintes. Les éteintes restent
+# visibles, à peine : c'est ce qui fait lire un afficheur d'instrument et non
+# une police, et un « 1 » n'a plus l'air perdu dans sa case.
+#
+# Chaque segment est un élément du canevas : quand 09:41 devient 09:42, seuls
+# les segments qui changent d'état sont repeints.
+
+_SEG = (                        # x, y, largeur, hauteur dans une case de 36x56
+    (7, 0, 22, 8),              # a  haut
+    (28, 6, 8, 20),             # b  haut droit
+    (28, 30, 8, 20),            # c  bas droit
+    (7, 48, 22, 8),             # d  bas
+    (0, 30, 8, 20),             # e  bas gauche
+    (0, 6, 8, 20),              # f  haut gauche
+    (7, 24, 22, 8),             # g  milieu
+)
+_CHIFFRES = (0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F)
+_CASES = (16, 66, 138, 188)
+_CLES = tuple("h{}{}".format(i, s) for i in range(4) for s in range(7))
+
+
+def _horloge(c, m, y):
+    p = c.p
+    if m is None:
+        a = b = d = e = 0x40                    # « --:-- »
+    else:
+        h, mn = m // 60, m % 60
+        a, b = _CHIFFRES[h // 10], _CHIFFRES[h % 10]
+        d, e = _CHIFFRES[mn // 10], _CHIFFRES[mn % 10]
+    k = 0
+    for bits in (a, b, d, e):
+        x = _CASES[k // 7]
+        for s in range(7):
+            g = _SEG[s]
+            c.rrect(_CLES[k], x + g[0], y + g[1], g[2], g[3], 4,
+                    p.FG if (bits >> s) & 1 else p.GHOST)
+            k += 1
+    c.disc("h.p1", 120, y + 19, 4, p.FG)
+    c.disc("h.p2", 120, y + 37, 4, p.FG)
 
 
 class Home(Screen):
-    """Le tableau de bord. Dense à dessein.
+    """Ce qu'on lit en passant : l'heure, le temps qu'il fait, la journée.
 
-    C'est l'écran qu'on regarde en passant, sans appuyer sur rien : il doit
-    répondre aux questions du matin — quel jour, quel temps, tout tourne-t-il,
-    y a-t-il des offres — et donner envie d'aller chercher le détail ailleurs.
+    Trois étages sous l'horloge. La météo en trois colonnes (la pièce, le
+    dehors, la pluie) parce que c'est l'écart entre les deux premières qui
+    dit s'il faut ouvrir la fenêtre. Puis l'agenda du jour, quatre lignes,
+    qui est avec la météo ce pour quoi on regarde cet écran.
 
-    Pas de séance ici : elle a son écran, et elle ne se consulte pas d'un
-    coup d'œil. La place gagnée sert à ce qui, lui, se lit en une seconde.
+    LA MOLETTE RÈGLE LA LUMINOSITÉ
+
+    Elle n'avait rien à faire sur l'accueil, et la luminosité n'avait plus
+    de page à elle. Quatre paliers, comme avant : on ne saurait pas viser
+    une valeur qu'on ne sait pas nommer. Zéro n'en fait pas partie : un
+    écran éteint par un cran de trop ressemblerait à une panne. Le palier
+    s'affiche deux secondes à la place du sonar, puis s'efface.
     """
 
     NAME = "home"
-
-    def draw(self, g, st, app):
-        jour = st.get("jour", {})
-        online = st.get("online", True)
-
-        # L'en-tete passe par _header comme partout ailleurs. Il etait
-        # recopie ici, et c'est precisement ce doublon qui a prive l'accueil
-        # du logo : une seule des deux copies avait ete modifiee.
-        #
-        # Le titre est la date, la droite le numero de semaine, et pas de
-        # curseur : l'horloge en grand juste en dessous dit deja que la
-        # machine vit. Le titre est tronque a 15 caracteres, le logo ayant
-        # pris deux colonnes.
-        _header(g, jour.get("long", st.get("date", ""))[:15], st, app,
-                right="S{}".format(jour.get("semaine", "")), cursor=False)
-        _sonar_line(g, app)
-
-        # Ligne 2 laissee VIDE, et c'est la seule facon d'aerer : un glyphe
-        # en echelle 4 fait exactement 32 px dans deux lignes de 16, il n'y a
-        # aucune marge a prendre dans le trace lui-meme.
-        g.big(5, 3, st.get("time", "--:--"), scale=4)
-        saint = jour.get("saint", "")
-        g.center(5, ("- saint " + saint + " -") if saint else "", g.p.DIM)
-        g.rule(6)
-
-        # --- meteo --------------------------------------------------------
-        #
-        # La police est ASCII, donc pas d'emoji : la couleur fait le travail a
-        # leur place, avec un marqueur colore par section.
-        m = st.get("meteo", {})
-        if m.get("ok"):
-            g.text(0, 7, m.get("icon", " "), g.p.HI)
-            g.text(2, 7, m.get("label", "")[:16], g.p.FG)
-            rain = m.get("rain_pct", 0)
-            g.right(7, "pluie {:>3}%".format(rain),
-                    g.p.ALERT if rain >= 60 else g.p.DIM)
-            # Le gros chiffre sous du texte normal, jamais sous un filet :
-            # un filet occupe le dernier pixel de sa ligne et le toucherait.
-            g.big(1, 8, "{}C".format(m.get("now_c", 0))[:6], 2)
-            g.right(8, "min {:>3}  max {:>3}".format(
-                m.get("min_c", 0), m.get("max_c", 0)), g.p.DIM)
-        else:
-            g.text(1, 7, "METEO INDISPONIBLE", g.p.DIM)
-
-        # --- la piece, juste sous le dehors -------------------------------
-        #
-        # Les deux cote a cote, c'est tout l'interet : l'API donne la ville,
-        # le capteur donne un metre autour de toi, et l'ecart entre les deux
-        # est ce qui dit s'il faut ouvrir la fenetre.
-        ti, hi = app.sensor.reading(time.ticks_ms())
-        g.text(0, 9, "#", g.p.DIM)
-        g.text(2, 9, "CHAMBRE", g.p.DIM)
-        if ti is None:
-            etat = app.sensor.state()
-            g.right(9, "pas cable" if etat == "absent" else "muet",
-                    g.p.DIM if etat == "absent" else g.p.ALERT)
-        else:
-            ecart = ti - (m.get("now_c", ti) if m.get("ok") else ti)
-            g.right(9, "{:>2}C  {:>2}%  {:+d}".format(ti, hi, ecart),
-                    g.p.HI)
-        g.rule(10)
-
-        # --- serveur ------------------------------------------------------
-        srv = st.get("serveur", {})
-        total = srv.get("total", 0)
-        ok = srv.get("ok")
-        g.text(0, 11, "+" if ok and total else "!",
-               g.p.FG if ok and total else g.p.ALERT)
-        g.text(2, 11, "SERVEUR", g.p.DIM)
-        if not total:
-            g.right(11, "PAS DE RELEVE", g.p.ALERT)
-        else:
-            g.right(11, "{}/{} SERVICES".format(srv.get("up", 0), total),
-                    g.p.FG if ok else g.p.ALERT)
-            if not ok:
-                g.text(2, 12, ("! " + ", ".join(srv.get("down", [])))[:26],
-                       g.p.ALERT)
-            else:
-                g.text(2, 12, "disque {}%  ram {}%  {}".format(
-                    srv.get("disk_pct", 0), srv.get("mem_pct", 0),
-                    srv.get("uptime", ""))[:27], g.p.DIM)
-
-        # --- ce qui attend une action de ta part -------------------------
-        n = st.get("jobs", {}).get("n", 0)
-        g.text(0, 13, ">" if n else " ", g.p.HI if n else g.p.DIM)
-        g.text(2, 13, "OFFRES DU JOUR", g.p.DIM)
-        g.right(13, str(n), g.p.HI if n else g.p.DIM)
-
-        c = st.get("coach", {})
-        alert = c.get("level") == "alert"
-        g.text(0, 14, c.get("icon") or " ", g.p.ALERT if alert else g.p.FG)
-        g.text(2, 14, "COACH", g.p.DIM)
-        g.right(14, (c.get("text") or "rien a signaler")[:20],
-                g.p.ALERT if alert else g.p.FG)
-
-        sp = st.get("spotify", {})
-        playing = sp.get("playing")
-        g.text(0, 15, ">" if playing else "|", g.p.FG if playing else g.p.DIM)
-        g.text(2, 15, "ECOUTE", g.p.DIM)
-        if sp.get("device"):
-            g.right(15, "{} - {}".format(sp.get("artist", ""),
-                                         sp.get("title", ""))[:20], g.p.FG)
-        else:
-            g.right(15, "rien", g.p.DIM)
-        g.rule(16)
-
-        # --- la liaison, en bas : c'est le moins urgent -------------------
-        rssi = app.wifi_rssi()
-        g.text(0, 17, "*" if online else "!",
-               g.p.FG if online else g.p.ALERT)
-        # DEUX MESURES QUI NE DISENT PAS LA MEME CHOSE.
-        #
-        # Le dBm dit si le signal arrive, le debit dit si les donnees
-        # arrivent. Les deux se degradent rarement ensemble, et c'est le
-        # second qui gene vraiment : un signal excellent avec un debit qui
-        # s'effondre, c'est un reseau sature, pas une antenne mal placee.
-        #
-        # La taille du transfert accompagne le debit. Sans elle le chiffre
-        # ment : sur deux kilo-octets la latence domine et le resultat parait
-        # mediocre alors que la liaison va tres bien.
-        # La taille du transfert n'est PAS affichee, faute de place : le pire
-        # cas a droite, « TRES FAIBLE -85 dBm », occupe deja les colonnes 11
-        # a 29. Elle reste dans la console au demarrage, et le debit se lit
-        # de toute facon en tendance, pas en valeur absolue.
-        kbs = getattr(app, "net_kbs", None)
-        if kbs is None:
-            g.text(2, 17, "WIFI", g.p.DIM)
-        else:
-            g.text(2, 17, "{}ko/s".format(min(kbs, 9999)), g.p.FG)
-        if rssi is None:
-            g.right(17, "EN LIGNE" if online else "HORS LIGNE",
-                    g.p.FG if online else g.p.ALERT)
-        else:
-            # Un dBm ne parle a personne : on le traduit, et on garde le
-            # chiffre pour qui veut comparer deux emplacements.
-            if rssi >= -60:
-                mot, col = "EXCELLENT", g.p.FG
-            elif rssi >= -70:
-                mot, col = "BON", g.p.FG
-            elif rssi >= -80:
-                mot, col = "FAIBLE", g.p.HI
-            else:
-                mot, col = "TRES FAIBLE", g.p.ALERT
-            g.right(17, "{} {} dBm".format(mot, rssi), col)
-        _statusbar(g, "A/C : ecrans", "B tenu: accueil")
-
-
-class Gym(Screen):
-    """Aperçu de la séance à venir, avec les charges décidées par le coach.
-
-    Volontairement en lecture seule. L'afficheur est posé sur un bureau, pas
-    dans la salle : quand tu soulèves, ton téléphone est en main, et une
-    série saisie ici n'aurait aucun sens. Ce que tu veux en rentrant, c'est
-    savoir ce qui t'attend et à quelle charge.
-
-    La molette fait défiler la liste — cinq exercices tiennent à l'écran.
-    """
-
-    NAME = "gym"
-    VISIBLE = 5
+    LUM_MS = 2000
+    _H = ("a.h0", "a.h1", "a.h2", "a.h3")
+    _T = ("a.t0", "a.t1", "a.t2", "a.t3")
+    _J = ("a.j0", "a.j1", "a.j2", "a.j3")
+    _M = ("a.m0", "a.m1", "a.m2", "a.m3")
 
     def __init__(self):
-        self.top = 0
-
-    def _rows(self, st):
-        return st.get("gym", {}).get("exercises") or []
+        self.lum_until = None
 
     def on_turn(self, delta, app):
-        extra = max(0, len(self._rows(app.state)) - self.VISIBLE)
-        self.top = max(0, min(extra, self.top + delta))
+        niveaux = backlight_mod.LEVELS
+        actuel = app.backlight.level
+        i = niveaux.index(actuel) if actuel in niveaux else len(niveaux) - 1
+        j = max(0, min(len(niveaux) - 1, i + delta))
+        if j != i:
+            app.backlight.set_level(niveaux[j])
+            backlight_mod.save(niveaux[j])
+        self.lum_until = time.ticks_add(time.ticks_ms(), self.LUM_MS)
         app.dirty = True
 
-    def draw(self, g, st, app):
-        gym = st.get("gym", {})
-        rows = self._rows(st)
-        _header(g, "SEANCE {}".format(gym.get("session_no", "--")), st, app)
+    def tick(self, now, app):
+        if (self.lum_until is not None
+                and time.ticks_diff(now, self.lum_until) >= 0):
+            self.lum_until = None
+            app.dirty = True
 
-        focus = (gym.get("focus") or "REPOS").upper()
-        g.big(1, 3, focus[:8], 2)
-        when = gym.get("today") and "AUJOURD HUI" or gym.get("next", "")
-        g.right(3, when, g.p.FG)
+    def _sonar(self, c, st, app):
+        """Ce que voit le sonar, et à partir de quand l'écran s'éteint.
 
-        if not rows:
-            g.text(1, 6, "AUCUN EXERCICE PROGRAMME", g.p.DIM)
-            _statusbar(g, "< PREC", "SUIV >")
-            return
-
-        for i in range(self.VISIBLE):
-            j = self.top + i
-            r = 5 + i * 2
-            if j >= len(rows):
-                break
-            ex = rows[j]
-            g.text(0, r, ">", g.p.DIM)
-            g.text(2, r, ex.get("name", "").upper(), g.p.HI)
-            g.right(r, ex.get("detail", ""), g.p.FG)
-
-        missed = gym.get("missed", 0)
-        if missed:
-            g.text(1, 16, "{} SEANCE(S) RATEE(S)".format(missed), g.p.ALERT)
-        else:
-            g.text(1, 16, "dernier : {}".format(gym.get("last", "")), g.p.DIM)
-
-        _statusbar(g, "< PREC", "{}/{}".format(
-            self.top + 1, max(1, len(rows) - self.VISIBLE + 1)))
-
-
-class Coach(Screen):
-    """Le conseil du moteur de règles. Deux boutons, pas de troisième voie."""
-
-    NAME = "coach"
-
-    def draw(self, g, st, app):
-        c = st.get("coach", {})
-        _header(g, "COACH", st, app)
-
-        if not c.get("text"):
-            g.text(1, 8, "RIEN A SIGNALER", g.p.DIM)
-            g.text(1, 10, "Tes charges sont dans", g.p.DIM)
-            g.text(1, 11, "la cible.", g.p.DIM)
-            _statusbar(g, "< PREC", "SUIV >")
-            return
-
-        level = c.get("level", "info")
-        color = g.p.ALERT if level == "alert" else g.p.FG
-        g.text(1, 3, ("! " + c.get("text", ""))[:28], color)
-
-        subject = c.get("subject", "")
-        g.text(1, 5, subject[:28].upper(), g.p.HI)
-        g.text(1, 6, subject[28:56].upper(), g.p.HI)
-
-        # Le serveur envoie deja le motif replie sur deux lignes de 28 : il
-        # connait la largeur de l'ecran, autant qu'il fasse la decoupe.
-        for i, line in enumerate((c.get("detail") or [])[:2]):
-            g.text(1, 8 + i, line, g.p.DIM)
-
-        g.rule(11)
-        if c.get("to_kg") is not None:
-            g.text(1, 12, "PROPOSITION", g.p.DIM)
-            g.text(1, 13, "de {:g} kg a".format(c.get("from_kg", 0)), g.p.DIM)
-            # La charge proposee est le seul chiffre qui compte ici : elle
-            # merite d'etre lisible depuis l'autre bout du bureau.
-            g.big(1, 15, "{:g} KG".format(c["to_kg"]), 2, g.p.HI)
-            # Pas de jauge de « confiance » : le moteur de règles n'en calcule
-            # aucune, et un pourcentage inventé donnerait à une décoration
-            # l'autorité d'une mesure.
-            _statusbar(g, "[B] APPLIQUER", "sinon : ignore")
-        else:
-            g.big(1, 15, "", 2)          # efface une proposition disparue
-            _statusbar(g, "< PREC", "SUIV >")
-
-    def on_input(self, ev, app):
-        """B applique. Ignorer, c'est simplement passer a l'ecran suivant.
-
-        Pas de bouton « ignorer » : il ne ferait rien de plus que partir, et
-        un bouton qui ne fait rien invite a se demander ce qu'il a fait.
+        La distance mesurée, puis le seuil : « me voit-il ? » et « à partir
+        de quelle distance ? ». La mesure s'allume quand elle passe sous le
+        seuil, ce qui répond à la première question sans comparer les deux
+        nombres. Un écho perdu s'affiche « -- » et non « 0 » : zéro ferait
+        croire à un obstacle collé au capteur, soit l'inverse.
         """
-        kind, arg = ev
-        if kind != BTN_B or arg != SHORT:
-            return False
-        if app.state.get("coach", {}).get("to_kg") is None:
-            return False
-        app.apply_advice(True)
-        return True
+        p = c.p
+        if self.lum_until is not None:
+            # « MAX » et non « 100% » : un caractère de plus, et le texte
+            # mordait sur le nom de la page.
+            niveau = app.backlight.level
+            c.text("b.d", 198, 17, "LUMIERE MAX" if niveau >= 100
+                   else "LUMIERE {}%".format(niveau), PX, p.HI, 1)
+            c.forget("b.s")             # recouvert : à retracer ensuite
+            return
+        sonar = getattr(app, "sonar", None)
+        # Pas de capteur : rien à dire. Hors ligne non plus : l'annonce
+        # prend la place, et elle compte davantage.
+        if (sonar is None or not sonar.threshold
+                or not st.get("online", True)):
+            c.text("b.s", 156, 17, "", PX, p.DIM, 1)
+            c.text("b.d", 198, 17, "", PX, p.DIM, 1)
+            return
+        c.text("b.d", 198, 17, "/{} CM".format(sonar.threshold), PX, p.DIM, 1)
+        cm = sonar.distance
+        c.text("b.s", 156, 17, str(cm) if cm > 0 else "--", PX,
+               p.FG if sonar.present else p.DIM, 1)
 
+    def draw(self, c, st, app):
+        p = c.p
+        # Hors ligne, l'annonce déborde sur la place du sonar : il s'efface
+        # donc AVANT qu'elle s'écrive, et se réécrit APRÈS qu'elle est partie.
+        en_ligne = st.get("online", True)
+        if not en_ligne:
+            self._sonar(c, st, app)
+        _bandeau(c, "ACCUEIL", st, app, heure=False)
+        if en_ligne:
+            self._sonar(c, st, app)
 
-class Jobs(Screen):
-    """Veille emploi. Trois offres à l'écran : à 30 colonnes, il faut trancher."""
+        _horloge(c, app.minutes(), 33)
+        jour = st.get("jour", {})
+        c.text("j.date", G, 110, jour.get("long", ""), S9, p.HI, 0, 170)
+        sem = jour.get("semaine")
+        c.text("j.sem", D, 110, "S{}".format(sem) if sem else "", S9, p.DIM, 1)
 
-    NAME = "jobs"
+        # --- le temps qu'il fait -------------------------------------------
+        y = 118
+        c.rect("m.f", G, y, LARGE, 1, p.RULE)
+        c.rect("m.s1", 82, y + 8, 1, 51, p.RULE)
+        c.rect("m.s2", 154, y + 8, 1, 51, p.RULE)
 
-    def __init__(self):
-        self.top = 0
+        # La pièce : le DHT11, à un mètre de toi. Précis à deux degrés près,
+        # donc pas de décimale : elle serait inventée.
+        ti, hi = app.sensor.reading(time.ticks_ms())
+        c.text("m.l1", G, y + 15, "DEDANS", PX, p.DIM)
+        c.value("m.v1", G, y + 45, "--" if ti is None else str(ti), B18,
+                p.HI, ucolor=p.HI, deg=0 if ti is None else y + 24)
+        c.text("m.h0", G, y + 59, "HUM", PX, p.DIM)
+        c.text("m.h1", 39, y + 59, "--" if hi is None else "{}%".format(hi),
+               PX, p.HI)
 
-    def _offers(self, st):
-        return st.get("jobs", {}).get("offers") or []
+        m = st.get("meteo", {})
+        ok = m.get("ok")
+        c.text("m.l2", 90, y + 15, "DEHORS", PX, p.DIM)
+        c.value("m.v2", 90, y + 45, str(m.get("now_c", 0)) if ok else "--",
+                B18, p.HI, ucolor=p.HI, deg=y + 24 if ok else 0)
+        c.text("m.mm", 90, y + 59,
+               "{} / {}".format(m.get("min_c", 0), m.get("max_c", 0)) if ok
+               else "", PX, p.DIM)
 
-    def on_turn(self, delta, app):
-        extra = max(0, len(self._offers(app.state)) - 3)
-        self.top = max(0, min(extra, self.top + delta))
-        app.dirty = True
+        # La pluie vire à l'alerte au-delà de 60 % : c'est le seul chiffre
+        # de l'écran qui peut te faire changer de chaussures.
+        pluie = m.get("rain_pct", 0) if ok else 0
+        c.text("m.l3", 162, y + 15, "PLUIE", PX, p.DIM)
+        # À 100, le signe ne tient plus dans la colonne : l'en-tête suffit.
+        c.value("m.v3", 162, y + 45, str(pluie) if ok else "--", B18,
+                p.ALERT if pluie >= 60 else p.HI,
+                "%" if ok and pluie < 100 else "", S9, p.DIM)
+        c.text("m.ciel", 162, y + 59, m.get("court", "") if ok else "", PX,
+               p.HI)
 
-    def draw(self, g, st, app):
-        jobs = st.get("jobs", {})
-        offers = self._offers(st)
-        _header(g, "VEILLE EMPLOI", st, app)
+        # --- la journée ----------------------------------------------------
+        ag = st.get("agenda", {})
+        ev = ag.get("jour") or []
+        c.rect("a.f", G, 182, LARGE, 1, p.RULE)
+        c.text("a.titre", G, 197, "AUJOURD'HUI", PX, p.DIM)
+        c.text("a.dans", D, 197, ag.get("dans", ""), PX, p.FG, 1)
+        for i in range(4):
+            b = 218 + 22 * i
+            heure = titre = journee = message = ""
+            etat = 2
+            if i < len(ev):
+                heure, titre, etat = ev[i][0], ev[i][1], ev[i][2]
+                if not heure:
+                    journee = "JOURNEE"
+            elif i == 0:
+                # La première ligne dit pourquoi les quatre sont vides.
+                message = ("Rien de prévu" if ag.get("ok", True)
+                           else "Agenda indisponible")
+            # Le repère de ce qui est en cours ou arrive, dans la marge.
+            c.rect(self._M[i], 8, b - 13, 3, 13, p.FG if etat == 1 else p.BG)
+            # L'heure, « JOURNEE » et le message se partagent la même place.
+            # Ce qui s'efface passe AVANT ce qui s'écrit, sinon l'effacement
+            # emporte le texte tout juste posé : d'où les deux passes.
+            for passe in (True, False):
+                if (not heure) == passe:
+                    c.text(self._H[i], G, b, heure, B9, p.PAST if etat == 0
+                           else (p.FG if etat == 1 else p.HI))
+                if (not journee) == passe:
+                    c.text(self._J[i], G, b - 3, journee, PX, p.DIM)
+                if (not titre) == passe:
+                    c.text(self._T[i], 72, b, titre, S9,
+                           p.PAST if etat == 0 else p.HI, 0, 152)
+                if i == 0 and (not message) == passe:
+                    c.text("a.vide", G, b, message, S9, p.PAST)
 
-        n = jobs.get("n", len(offers))
-        g.text(1, 3, str(n), g.p.HI)
-        g.text(3, 3, "OFFRES CE MATIN" if n else "AUCUNE OFFRE", g.p.FG)
-
-        for i in range(3):
-            j = self.top + i
-            r = 5 + i * 4
-            if j >= len(offers):
-                continue
-            # Le serveur envoie le titre deja replie sur trois lignes de 28.
-            # Aucun score de correspondance : la veille n'en calcule pas, et
-            # une jauge inventee donnerait a une decoration l'autorite d'une
-            # mesure.
-            g.text(0, r, ">", g.p.DIM)
-            for k, line in enumerate((offers[j].get("title") or [])[:3]):
-                g.text(2, r + k, line.upper(), g.p.HI if k == 0 else g.p.DIM)
-
-        _statusbar(g, "PIPELINE 09:00",
-                   "{}/{}".format(self.top + 1, max(1, len(offers) - 2))
-                   if len(offers) > 3 else "")
+        _pied(c, "CALENDRIER", "SPOTIFY", 0)
 
 
 class Spotify(Screen):
-    """Ce qui joue, et le volume à la molette.
+    """Ce qui joue, le volume à la molette, les pistes aux boutons.
 
     Un cran vaut deux pour cent : un tour complet couvre toute l'échelle,
     et le geste reste assez fin pour ajuster sans viser.
+
+    Le volume a sa colonne à droite de la pochette, en grand : c'est le seul
+    réglage de la page, et la molette le commande. Les trois gestes sont
+    dessinés en bas dans l'ordre des boutons, avec leur lettre.
     """
 
     NAME = "spotify"
 
-    VOL_STEP = 2                 # % par cran ; un tour couvre l'echelle
+    VOL_STEP = 2                 # % par cran ; un tour couvre l'échelle
+
+    def __init__(self):
+        self._mode = None
+        self._joue = None
+        self._sec = -1
 
     def on_turn(self, delta, app):
         sp = app.state.get("spotify") or {}
@@ -508,56 +397,100 @@ class Spotify(Screen):
         v = max(0, min(100, sp.get("volume", 0) + delta * self.VOL_STEP))
         app.set_volume(v)
 
-    def draw(self, g, st, app):
-        sp = st.get("spotify", {})
-        _header(g, "> SPOTIFY", st, app)
+    def tick(self, now, app):
+        """Fait avancer le compteur : une seconde par seconde, sans serveur."""
+        sp = app.state.get("spotify") or {}
+        if not sp.get("playing"):
+            return
+        pos = app.play_position()
+        if pos != self._sec:
+            self._sec = pos
+            app.dirty = True
 
-        if not sp.get("device"):
-            g.text(1, 8, "AUCUN APPAREIL", g.p.DIM)
-            g.text(1, 10, "Lance une lecture sur", g.p.DIM)
-            g.text(1, 11, "ton telephone.", g.p.DIM)
-            _statusbar(g, "< PREC", "SUIV >")
+    def draw(self, c, st, app):
+        p = c.p
+        sp = st.get("spotify", {})
+        actif = bool(sp.get("device"))
+        # Les deux états n'ont rien en commun : on repart d'un écran vide
+        # plutôt que de redire vide chacun des éléments de l'autre.
+        if actif != self._mode:
+            if self._mode is not None:
+                c.wipe()
+            self._mode = actif
+
+        _bandeau(c, "SPOTIFY", st, app)
+        _pied(c, "ACCUEIL", "CALENDRIER", 1)
+
+        if not actif:
+            c.text("s.vide", G, 150, "AUCUN APPAREIL", PX, p.DIM)
+            c.text("s.v1", G, 176, "Lance une lecture", S9, p.HI)
+            c.text("s.v2", G, 196, "sur ton téléphone.", S9, p.HI)
             return
 
-        # Le titre en 16x16 : 14 caracteres par ligne, deux lignes. Au-dela
-        # on tronque — un titre de chanson se reconnait a son debut.
-        # 112 px de cote : 14 colonnes sur 7 lignes, centrees, dans un
-        # contour. Sans lui une pochette sombre se fond dans le noir du
-        # panneau et on ne voit plus ou elle commence.
-        g.frame(7, 3, 16, 9)
-        g.image(8, 4, app.cover, app.COVER, sp.get("cover", ""))
+        # --- la pochette, 112 px, dans un contour --------------------------
+        # Sans lui une pochette sombre se fond dans le noir du panneau et on
+        # ne voit plus où elle commence.
+        c.frame("s.cadre", G - 1, 35, 114, 114, p.RULE)
+        c.image("s.pochette", G, 36, app.cover, app.COVER, sp.get("cover", ""))
 
-        # Le « + [""] » n'est pas une precaution de style : _wrap("") rend une
-        # liste vide, et indexer dessus planterait la boucle sur une piste
-        # sans titre.
-        title = (_wrap(sp.get("title", "").upper(), 14) + [""])[0]
-        g.big(1, 13, title[:14], 2)
-        g.text(1, 14, sp.get("artist", "")[:28], g.p.FG)
+        # --- le volume ------------------------------------------------------
+        vol = sp.get("volume", 0)
+        s = str(vol)
+        c.text("s.vl", 140, 46, "VOLUME", PX, p.DIM)
+        c.value("s.vv", 140, 78, s, B18, p.HI, "%", S9, p.DIM)
+        c.bar("s.vb", 140, 88, 84, 6, vol * 84 // 100, p.FG, p.RULE)
+        c.ring("s.mo", 144, 105, 4, p.DIM)
+        c.text("s.ml", 154, 108, "MOLETTE", PX, p.DIM)
 
-        # Position extrapolee localement : le compteur avance chaque seconde
-        # sans que le serveur soit interroge plus souvent. Voir app.py.
+        joue = bool(sp.get("playing"))
+        c.tri("s.et", 149, 141, -9, 6, p.FG if joue else p.BG)
+        c.text("s.el", 155, 145, "EN LECTURE" if joue else "EN PAUSE", PX,
+               p.FG if joue else p.DIM)
+
+        # --- la piste -------------------------------------------------------
+        c.text("s.titre", G, 176, sp.get("title", ""), B12, p.HI, 0, LARGE)
+        c.text("s.artiste", G, 198, sp.get("artist", ""), S9, p.DIM, 0, 140)
+        c.text("s.album", D, 198, sp.get("album", "").upper()[:10], PX,
+               p.FAINT, 1)
+
+        # Position extrapolée localement : le compteur avance chaque seconde
+        # sans que le serveur soit interrogé plus souvent. Voir app.py.
         pos = app.play_position()
         dur = sp.get("duration_s", 0)
-        g.text(1, 15, _mmss(pos), g.p.DIM)
-        g.right(15, _mmss(dur), g.p.DIM)
-        g.bar(1, 16, 28, (pos * 100 // dur) if dur else 0)
+        c.slider("s.pos", G, 208, LARGE, 4,
+                 (pos * LARGE // dur) if dur else 0, p.FG, p.RULE, 4, p.HI)
+        c.text("s.t0", G, 226, _mmss(pos), PX, p.HI)
+        c.text("s.t1", D, 226, _mmss(dur), PX, p.DIM, 1)
 
-        # Volume sur une seule ligne : etiquette, jauge et valeur cohabitent
-        # sans se toucher, faute de place pour une ligne de plus.
-        g.text(0, 17, "VOL", g.p.DIM)
-        g.bar(4, 17, 21, sp.get("volume", 0))
-        g.right(17, "{:>3}%".format(sp.get("volume", 0)), g.p.HI)
+        # --- les trois gestes, dans l'ordre des boutons --------------------
+        y = 258
+        c.rect("s.a1", 20, y - 6, 2, 13, p.HI)
+        c.tri("s.a2", 23, y, 10, 6, p.HI)
+        c.text("s.a3", G, 283, "A TENU", PX, p.DIM)
 
-        # 30 colonnes en tout : « [B] PAUSE » tient a gauche, le rappel du
-        # geste piste a droite. Le nom de l'appareil ne rentre pas, et il
-        # importe moins que de savoir comment sauter une piste.
-        _statusbar(g, "[B] " + ("PAUSE" if sp.get("playing") else "LIRE"),
-                   "A/C tenu: piste")
+        # Le bouton dit ce que B va FAIRE, pas l'état : en lecture il
+        # propose la pause. L'état, lui, est écrit à côté de la pochette.
+        if self._joue != joue:
+            self._joue = joue
+            c.forget("s.b1", "s.b2", "s.b3", "s.b4", "s.b5")
+        c.rrect("s.b1", 82, y - 13, 76, 26, 13, p.FG)
+        if joue:
+            c.rect("s.b2", 97, y - 6, 4, 13, p.BG)
+            c.rect("s.b3", 105, y - 6, 4, 13, p.BG)
+            c.text("s.b5", 116, y + 4, "PAUSE", PX, p.BG, 0, 0, p.FG)
+        else:
+            c.tri("s.b4", 107, y, -9, 6, p.BG)
+            c.text("s.b5", 116, y + 4, "LIRE", PX, p.BG, 0, 0, p.FG)
+        c.text("s.b6", 120, 283, "B", PX, p.DIM, 2)
+
+        c.tri("s.c1", 217, y, -10, 6, p.HI)
+        c.rect("s.c2", 218, y - 6, 2, 13, p.HI)
+        c.text("s.c3", D, 283, "C TENU", PX, p.DIM, 1)
 
     def on_input(self, ev, app):
-        """Piste precedente/suivante en MAINTENANT A ou C, pas en tapant.
+        """Piste précédente/suivante en MAINTENANT A ou C, pas en tapant.
 
-        L'appui court d'A et de C navigue entre les ecrans, partout et sans
+        L'appui court d'A et de C navigue entre les pages, partout et sans
         exception. Les faire changer de piste ici enfermerait dans Spotify :
         les trois boutons seraient pris, et seul l'appui long en sortirait.
         Maintenir pour sauter une piste est en plus le geste des autoradios.
@@ -572,186 +505,149 @@ class Spotify(Screen):
         return False
 
 
-class Settings(Screen):
-    """L'écran iconique de TARS, transposé au ton d'Awen.
+class Calendar(Screen):
+    """La semaine d'un coup d'œil, puis les jours qui viennent.
 
-    Ces pourcentages ne sont pas décoratifs : ils modulent la formulation des
-    conseils — jamais les charges, qui restent calculées par les règles.
+    L'accueil dit aujourd'hui ; cette page dit la suite. En haut la semaine,
+    avec un trait sous les jours occupés. Dessous, huit lignes : un jour,
+    ses rendez-vous, le jour suivant. La molette fait défiler, B revient à
+    aujourd'hui.
+
+    Toutes les lignes ont la même hauteur, titres de jour compris : c'est ce
+    qui permet de faire défiler d'un cran sans que rien ne saute.
     """
 
-    NAME = "settings"
-    KEYS = ("SINCERITE", "HUMOUR", "INSISTANCE", "VERBOSITE")
+    NAME = "calendar"
+    VISIBLE = 8
+    _TOP, _PAS = 114, 22
 
     def __init__(self):
-        self.sel = 1                     # HUMOUR, comme dans le film
-        self.values = [95, 75, 60, 40]
+        self.top = 0
+        n = range(self.VISIBLE)
+        self._kf = tuple("c.f{}".format(i) for i in n)
+        self._kt = tuple("c.t{}".format(i) for i in n)
+        self._kd = tuple("c.d{}".format(i) for i in n)
+        self._kh = tuple("c.h{}".format(i) for i in n)
+        self._kj = tuple("c.j{}".format(i) for i in n)
+        self._kx = tuple("c.x{}".format(i) for i in n)
+        self._km = tuple("c.m{}".format(i) for i in n)
+        self._kl = tuple("c.l{}".format(i) for i in range(7))
+        self._kn = tuple("c.n{}".format(i) for i in range(7))
+        self._kc = tuple("c.c{}".format(i) for i in range(7))
+        self._ka = tuple("c.a{}".format(i) for i in range(7))
 
-    STEP = 5                     # % par cran
+    def _lignes(self, st):
+        """Les jours et leurs rendez-vous, à plat, dans l'ordre d'affichage."""
+        out = []
+        for j in st.get("agenda", {}).get("jours") or []:
+            out.append((j.get("t", ""), j.get("d", "")))
+            for e in j.get("ev") or []:
+                out.append(e)
+        return out
 
     def on_turn(self, delta, app):
-        v = self.values[self.sel] + delta * self.STEP
-        self.values[self.sel] = max(0, min(100, v))
-        app.dirty = True
-
-    def draw(self, g, st, app):
-        _header(g, "PARAMETRES", st, app)
-        for i, name in enumerate(self.KEYS):
-            r = 4 + i * 3
-            focused = i == self.sel
-            g.text(1, r, name, g.p.HI if focused else g.p.FG)
-            # Le curseur marque la ligne que la molette commande. Une simple
-            # mise en surbrillance ne suffirait pas : sur cet ecran quatre
-            # lignes se ressemblent, et rien d'autre ne bouge.
-            if focused:
-                g.cursor(1 + len(name) + 1, r, st.get("blink", True))
-            g.right(r, "{:>3}%".format(self.values[i]), g.p.HI)
-            g.bar(1, r + 1, 28, self.values[i],
-                  g.p.FG if focused else g.p.DIM)
-        _statusbar(g, "[B] LIGNE", "MOLETTE : VALEUR")
+        reste = max(0, len(self._lignes(app.state)) - self.VISIBLE)
+        top = max(0, min(reste, self.top + delta))
+        if top != self.top:
+            self.top = top
+            app.dirty = True
 
     def on_input(self, ev, app):
         kind, arg = ev
         if kind == BTN_B and arg == SHORT:
-            self.sel = (self.sel + 1) % len(self.KEYS)
-            app.dirty = True
+            if self.top:
+                self.top = 0
+                app.dirty = True
             return True
         return False
 
+    def draw(self, c, st, app):
+        p = c.p
+        ag = st.get("agenda", {})
+        _bandeau(c, "CALENDRIER", st, app)
 
-class Theme(Screen):
-    """Choix de la palette en deux temps : viser, puis appliquer.
+        mois = ag.get("mois", "")
+        c.value("c.mois", G, 52, mois, B12, p.HI, str(ag.get("annee", "")),
+                B12, p.DIM, 7)
+        sem = st.get("jour", {}).get("semaine")
+        c.text("c.sem", D, 52, "S{}".format(sem) if sem else "", PX, p.DIM, 1)
 
-    RIEN NE CHANGE DE COULEUR TANT QU'ON N'A PAS APPUYÉ
+        # --- la semaine -----------------------------------------------------
+        semaine = ag.get("semaine") or []
+        auj = ag.get("auj", -1)
+        for i in range(7):
+            x = G + 30 * i
+            ici = i == auj
+            fond = p.FG if ici else p.BG
+            lettre, numero, occupe = (semaine[i] if i < len(semaine)
+                                      else ("", "", 0))
+            c.rrect(self._kc[i], x, 62, 28, 42, 5, fond)
+            c.text(self._kl[i], x + 14, 75, lettre, PX,
+                   p.BG if ici else p.DIM, 2, 0, fond)
+            c.text(self._kn[i], x + 14, 93, str(numero), B9,
+                   p.BG if ici else (p.DIM if i > 4 else p.HI), 2, 0, fond)
+            c.rect(self._ka[i], x + 12, 97, 4, 2,
+                   (p.BG if ici else p.FG) if occupe else fond)
+        c.rect("c.filet", G, 112, LARGE, 1, p.RULE)
 
-    La molette ne fait que déplacer un curseur ; B applique la teinte visée
-    et l'enregistre. C'est aussi ce qui rend le curseur fluide : appliquer à
-    chaque cran appelait set_palette(), donc wipe(), donc un repaint complet
-    des 240x320 — la molette semblait alors traîner d'un demi-tour.
+        # --- les jours qui viennent ----------------------------------------
+        lignes = self._lignes(st)
+        reste = max(0, len(lignes) - self.VISIBLE)
+        if self.top > reste:
+            self.top = reste
+        for i in range(self.VISIBLE):
+            y = self._TOP + self._PAS * i
+            k = self.top + i
+            gauche = droite = heure = journee = titre = message = ""
+            etat, entete = 2, False
+            if k < len(lignes):
+                l = lignes[k]
+                if len(l) == 2:
+                    entete = True
+                    gauche, droite = l
+                else:
+                    heure, titre, etat = l[0], l[1], l[2]
+                    if not heure:
+                        journee = "JOURNEE"
+            elif not lignes and i == 0:
+                message = ("Rien de prévu" if ag.get("ok", True)
+                           else "Agenda indisponible")
+            # Une ligne est tantôt un jour, tantôt un rendez-vous, et les
+            # deux se dessinent au même endroit. En défilant, ce qui
+            # s'efface doit passer AVANT ce qui s'écrit, sinon l'effacement
+            # emporte le texte tout juste posé : d'où les deux passes.
+            for passe in (True, False):
+                if (not gauche) == passe:
+                    c.text(self._kt[i], G, y + 15, gauche, PX,
+                           p.FG if gauche == "AUJOURD'HUI" else p.DIM)
+                if (not droite) == passe:
+                    c.text(self._kd[i], D, y + 15, droite, PX, p.DIM, 1)
+                if (not heure) == passe:
+                    c.text(self._kh[i], G, y + 16, heure, B9,
+                           p.FG if etat == 1 else p.HI)
+                if (not journee) == passe:
+                    c.text(self._kj[i], G, y + 13, journee, PX, p.DIM)
+                if (not titre) == passe:
+                    c.text(self._kx[i], 72, y + 16, titre, S9, p.HI, 0, 150)
+                if i == 0 and (not message) == passe:
+                    c.text("c.vide", G, y + 16, message, S9, p.PAST)
+            # Un filet au-dessus de chaque jour, sauf en tête de liste où le
+            # filet de la semaine fait déjà la séparation.
+            c.rect(self._kf[i], G, y + 1, LARGE, 1,
+                   p.RULE if entete and i else p.BG)
+            c.rect(self._km[i], 8, y + 3, 3, 13, p.FG if etat == 1 else p.BG)
 
-    Déplacer le curseur ne touche plus que deux lignes et le nom en grand,
-    et le redessin partiel de grid.py ne pousse que ces cellules-là.
-
-    LA LUMINOSITÉ EST UNE LIGNE DE PLUS DANS LA MÊME LISTE
-
-    Teinte et quantité de lumière sont deux réglages distincts — une
-    palette contrastée ne sauve pas un panneau trop sombre en plein jour
-    — mais on les cherche au même endroit : quand l'écran se lit mal.
-
-    Elle ne casse pas la règle du geste : B agit sur la ligne visée. Sur
-    une teinte il l'applique, sur la luminosité il passe au palier
-    suivant. Aucun mode, aucun second sens à retenir, et l'effet se voit
-    pendant l'appui — c'est le seul réglage qui se juge instantanément.
-    """
-
-    NAME = "theme"
-
-    def __init__(self):
-        # La palette active ne se lit qu'à travers app, qui n'existe pas
-        # encore ici : le curseur se cale au premier affichage.
-        self.sel = None
-        self.saved = False
-
-    def _active(self, app):
-        for i, p in enumerate(theme.PALETTES):
-            if p.name == app.g.p.name:
-                return i
-        return 0
-
-    def _cursor(self, app):
-        if self.sel is None:
-            self.sel = self._active(app)
-        return self.sel
-
-    # Une entrée de plus que les palettes : la dernière ligne est la
-    # luminosité. Les garder dans une seule liste évite d'inventer une
-    # navigation à deux dimensions pour un seul réglage de plus.
-    def _rows(self):
-        return len(theme.PALETTES) + 1
-
-    def _on_light(self, app):
-        return self._cursor(app) == len(theme.PALETTES)
-
-    def on_turn(self, delta, app):
-        self.sel = (self._cursor(app) + delta) % self._rows()
-        app.dirty = True
-
-    def draw(self, g, st, app):
-        _header(g, "THEME", st, app)
-
-        sel = self._cursor(app)
-        actif = self._active(app)
-        light = self._on_light(app)
-        niveau = app.backlight.level
-
-        # Le nom visé en grand, mais dans la couleur ACTIVE : c'est un
-        # libellé, pas un échantillon. Le peindre dans la teinte visée
-        # reviendrait à changer le thème avant qu'on l'ait choisi.
-        if light:
-            g.big(1, 3, "{}%".format(niveau), 2, g.p.HI)
-            g.right(3, "LUMIERE", g.p.DIM)
+        # L'ascenseur n'apparaît que s'il y a de quoi défiler.
+        haut = self._PAS * self.VISIBLE - 4
+        if reste:
+            taille = max(12, haut * self.VISIBLE // len(lignes))
+            c.vbar("c.asc", 231, self._TOP + 2, 2, haut,
+                   (haut - taille) * self.top // reste, taille, p.DIM, p.RULE)
         else:
-            g.big(1, 3, theme.PALETTES[sel].name[:10], 2, g.p.HI)
-            g.right(3, "{}/{}".format(sel + 1, len(theme.PALETTES)), g.p.DIM)
+            c.vbar("c.asc", 231, self._TOP + 2, 2, haut, 0, 0, p.DIM, p.BG)
 
-        for i, p in enumerate(theme.PALETTES):
-            r = 5 + i
-            ici = i == sel
-            g.text(0, r, ">" if ici else " ", g.p.FG)
-            g.text(2, r, p.name, g.p.HI if ici else g.p.DIM)
-            if ici:
-                g.cursor(2 + len(p.name) + 1, r, st.get("blink", True))
-            # Sans ce repère, rien ne distinguerait la teinte qu'on vise de
-            # celle qui est déjà en place, et B semblerait sans effet.
-            if i == actif:
-                g.right(r, "ACTIF", g.p.DIM)
-
-        # La luminosité, dernière ligne de la même liste. Une jauge plutôt
-        # qu'un nombre seul : c'est une quantité de lumière, pas une valeur
-        # qu'on saisit.
-        rl = 5 + len(theme.PALETTES)
-        g.text(0, rl, ">" if light else " ", g.p.FG)
-        g.text(2, rl, "LUMIERE", g.p.HI if light else g.p.DIM)
-        if light:
-            g.cursor(10, rl, st.get("blink", True))
-        g.bar(12, rl, 12, niveau, g.p.FG if light else g.p.DIM)
-        g.right(rl, "{:>3}%".format(niveau), g.p.HI if light else g.p.DIM)
-
-        # Il n'y a plus d'aperçu de teinte, et c'est le prix assumé du
-        # geste en deux temps : un échantillon ne peut pas montrer une
-        # couleur sans la peindre. La luminosité, elle, se juge à l'appui.
-        g.rule(12)
-
-        # Rien n'est affiché quand il n'y a rien de sûr à dire : au démarrage
-        # la palette vient bien du fichier, mais l'écran ne l'a pas écrite et
-        # n'a donc aucun titre à s'en attribuer le mérite.
-        if light:
-            g.text(1, 13, "[B] palier suivant", g.p.DIM)
-        elif sel != actif:
-            g.text(1, 13, "[B] pour appliquer", g.p.DIM)
-        elif self.saved:
-            g.text(1, 13, "applique et enregistre", g.p.DIM)
-
-        _statusbar(g, "[B] " + ("LUMIERE" if light else "APPLIQUER"),
-                   "MOLETTE : CHOIX")
-
-    def on_input(self, ev, app):
-        kind, arg = ev
-        if kind == BTN_B and arg == SHORT:
-            if self._on_light(app):
-                # Le palier s'applique tout de suite — c'est l'intérêt, on
-                # le juge en le voyant — et s'enregistre dans la foulée :
-                # rien à confirmer sur un réglage réversible d'un appui.
-                backlight_mod.save(app.backlight.next_level())
-            else:
-                pal = theme.PALETTES[self._cursor(app)]
-                # set_palette() vit sur la grille, pas sur l'app : c'est
-                # elle qui tient les couleurs et doit tout repeindre.
-                app.g.set_palette(pal)
-                self.saved = theme.save(pal)
-            app.dirty = True
-            return True
-        return False
+        _pied(c, "SPOTIFY", "ACCUEIL", 2)
 
 
 # L'ordre du carrousel. Boot n'y figure pas : il ne se voit qu'au démarrage.
-CAROUSEL = (Home, Gym, Spotify, Coach, Jobs, Settings, Theme)
+CAROUSEL = (Home, Spotify, Calendar)

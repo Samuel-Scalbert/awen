@@ -95,9 +95,9 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 
 ## Endpoint ESP32
 
-`GET /api/esp32/summary` — JSON compact (prochaine séance, prochain event calendrier, macros du jour) à afficher sur l'écran, authentifié via `ESP32_API_KEY`.
+`GET /api/esp32/pages` : JSON compact (heure, météo, agenda du flux ICS, lecture Spotify) pour les trois pages de l'afficheur, authentifié via `ESP32_API_KEY`.
 
-Le firmware de l'afficheur (squelette Arduino dans [esp32/](esp32/)) vit dans son propre dépôt : [esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display).
+Le firmware est dans [esp32/awen_ui/](esp32/awen_ui/), et [esp32/README.md](esp32/README.md) dit comment mettre une modification sur l'écran. Le pilote de l'écran vient d'un autre dépôt : [esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display).
 
 ## Déploiement serveur (Docker)
 

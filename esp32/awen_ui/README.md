@@ -1,44 +1,66 @@
-# Afficheur Awen — firmware MicroPython
+# Afficheur Awen, firmware MicroPython
 
-Les sept écrans de [`esp32/mockups.py`](../mockups.py), transposés en
-MicroPython pour le pilote `st7789_min.py` d'esp32-desk-display. Grille 30×20,
-police 8×8 sur un pas de 16, redessin partiel.
+Trois pages (Accueil, Spotify, Calendrier) dessinées dans Lopaka, dont les
+maquettes sont dans [`esp32/mockups/lopaka/`](../mockups/lopaka/), et
+transposées en MicroPython pour le pilote `st7789_min.py`
+d'esp32-desk-display. Dessin au pixel, polices avec accents, redessin
+partiel.
 
 ```
-theme.py     palettes RGB565 (ambre, phosphore, glacier)
-grid.py      grille 30x20 + redessin partiel  <- le coeur
+theme.py     les couleurs, en RGB565
+fonts.py     les polices bitmap   <- genere, ne pas editer
+canvas.py    dessin au pixel + redessin partiel  <- le coeur
 backlight.py luminosite du panneau (PWM) + extinction
 presence.py  sonar HC-SR04 : quelqu'un est-il la ?
 input.py     3 boutons + encodeur rotatif
-screens.py   les 7 ecrans
+screens.py   les 3 pages
 app.py       navigation, reseau, boucle principale
 main.py      cablage materiel  <- le seul fichier a adapter
 ```
+
+Hors de la carte, [`esp32/simulateur.py`](../simulateur.py) fait tourner ces
+mêmes fichiers sur le PC : voir « Vérifier sans flasher » plus bas.
 
 ## Ce que le firmware suppose
 
 Écrit contre **ton pilote maison `st7789_min.py`** du dépôt
 [esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display).
-`grid.py` n'appelle que **deux** de ses méthodes :
+`canvas.py` n'appelle que **trois** de ses méthodes :
 
 ```python
-tft.text(chaine, x, y, color=..., bg=..., scale=1)   # police 8x8 integree
 tft.fill_rect(x, y, largeur, hauteur, couleur)
+tft.blit_buffer(tampon, x, y, largeur, hauteur)
+tft.draw_image_file(chemin, x, y, largeur, hauteur)   # la pochette
 ```
 
-### La grille, et pourquoi 20 lignes et pas 40
+### Les polices ne viennent plus du pilote
 
-240 ÷ 8 = **30 colonnes**. La police intégrée de `framebuf` fait 8 pixels de
-haut, ce qui donnerait 40 lignes — mais on prend un pas vertical de **16**,
-soit 20 lignes avec 8 pixels de respiration.
+Le pilote n'a qu'une police, une 8×8 sans accents. Elle a porté les sept
+écrans d'avant, sur une grille de 30 × 20 caractères. Elle ne peut pas porter
+un agenda, où l'on lit « Séance » et « Réunion ».
 
-Ce n'est pas du gâchis. Une 8×8 collée ligne contre ligne sur 40 lignes donne
-un pavé illisible à un mètre, et l'écran est posé sur un bureau, pas tenu à la
-main. L'interligne double est aussi ce qui donne aux terminaux leur allure :
-TARS n'affiche jamais de texte serré.
+`fonts.py` en embarque cinq, dix kilo-octets en tout :
 
-L'heure de l'écran de veille passe par `scale=4` — le pilote multiplie le
-glyphe 8×8, ce qui donne du 32×32 franchement pixelisé. C'est voulu.
+| Nom | Ce que c'est | Où elle sert |
+| --- | --- | --- |
+| `S9` | FreeSans, 13 px de capitale, avec accents | le texte courant |
+| `B9` | FreeSans gras, chiffres seuls | les heures de l'agenda |
+| `B12` | FreeSans gras, 17 px, avec accents | le titre de la piste, le mois |
+| `B18` | FreeSans gras, 25 px, chiffres seuls | les températures, le volume |
+| `PX` | capitale 5×7 | les libellés |
+
+Le fichier est **généré** par `scripts/gen_fonts.py`, à partir de GNU
+FreeFont. Pour ajouter un caractère ou une taille, c'est le générateur qu'on
+modifie :
+
+```powershell
+python scripts\gen_fonts.py dossier_contenant_FreeSans.ttf
+```
+
+L'heure de l'accueil, elle, n'est pas une police : sept pilules par chiffre,
+allumées ou éteintes, comme sur un instrument. Les éteintes restent
+visibles, à peine. Chaque segment est un élément du canevas : quand la minute
+change, seuls ceux qui changent d'état sont repeints.
 
 ## Câblage complet
 
@@ -202,31 +224,27 @@ Une seule règle, valable partout, sans exception :
    [A] gauche          [B] milieu           [C] droite
     GPIO 26             GPIO 27              GPIO 14
 
-   ecran precedent    action de l'ecran    ecran suivant
+   page precedente    action de la page    page suivante
                       ─────────────────
                       maintenu : ACCUEIL
 ```
 
-**A et C naviguent toujours.** C'est ce qui garantit qu'aucun écran ne peut
+**A et C naviguent toujours.** C'est ce qui garantit qu'aucune page ne peut
 te piéger. **B agit**, et maintenu il ramène à l'accueil depuis n'importe où.
 
-Le carrousel : **Accueil → Séance → Spotify → Coach → Jobs → Paramètres →
-Thème**, puis retour au début.
+Le carrousel : **Accueil → Spotify → Calendrier**, puis retour au début. Le
+pied de chaque page dit où mènent A et C.
 
-### Ce que fait B, écran par écran
+### Ce que font B et la molette, page par page
 
-| Écran | Appui court sur B | La molette |
+| Page | Appui court sur B | La molette |
 | --- | --- | --- |
-| **Accueil** | — | — |
-| **Séance** | — *(lecture seule)* | fait défiler les exercices |
+| **Accueil** | rien | **la luminosité** |
 | **Spotify** | lecture / pause | **le volume** |
-| **Coach** | applique le conseil | — |
-| **Jobs** | — | fait défiler les offres |
-| **Paramètres** | ligne suivante | la valeur de la ligne |
-| **Thème** | applique et enregistre la teinte visée | déplace le curseur |
+| **Calendrier** | revient à aujourd'hui | fait défiler les jours |
 
-B est inactif sur trois écrans, et c'est assumé : y coller une action pour
-qu'il « serve » créerait des gestes qu'on déclenche par erreur. Un bouton
+B est inactif sur l'accueil, et c'est assumé : y coller une action pour
+qu'il « serve » créerait un geste qu'on déclenche par erreur. Un bouton
 inerte se remarque moins qu'un bouton qui fait quelque chose d'inattendu.
 
 Deux gestes en plus, uniquement sur Spotify :
@@ -239,69 +257,47 @@ Deux gestes en plus, uniquement sur Spotify :
 Maintenir plutôt que taper, parce que l'appui court d'A et de C doit rester la
 navigation partout. Les faire changer de piste enfermerait dans Spotify : les
 trois boutons seraient pris et seul l'appui long en sortirait. C'est aussi le
-geste des autoradios.
-
-Sur le Coach, il n'y a **pas de bouton « ignorer »** : passer à l'écran
-suivant *est* l'ignorer. Un bouton qui ne fait rien de plus que partir laisse
-surtout se demander ce qu'il a fait.
+geste des autoradios. La page le rappelle sous ses trois pictogrammes :
+`A TENU`, `B`, `C TENU`.
 
 **Les boutons trient, la molette règle.** C'est ce partage qui rend trois
-boutons suffisants pour sept écrans.
+boutons suffisants.
 
-## Thèmes
+## Couleurs et luminosité
 
-Six palettes : **ambre** (la teinte de TARS), **vert**, **bleu**, **violet**,
-**rubis**, **papier**. Le choix se fait **en deux temps** : la molette
-déplace un curseur dans la liste sans rien changer, **B applique** la teinte
-visée et l'enregistre dans un fichier sur la carte, qui survit donc à une
-coupure de courant.
+Une seule teinte, l'ambre, celle dans laquelle les trois pages ont été
+dessinées. Neuf rôles dans `theme.py` : le fond, l'accent (l'heure, ce qui
+est en cours), l'encre des valeurs, les libellés, l'alerte, les segments
+éteints, les filets, les repères inactifs, ce qui est déjà passé.
 
-**Rien ne change de couleur avant l'appui.** Le nom en grand annonce la
-teinte visée, mais dans l'encre de la teinte *active* : c'est un libellé, pas
-un échantillon. La ligne déjà en place porte la mention `ACTIF` — sans elle,
-rien ne distinguerait ce qu'on vise de ce qui est appliqué.
+Les six palettes au choix sont parties avec l'écran Thème. Une teinte qu'on
+n'a jamais vue sur ces pages ne peut pas être promise lisible : en rajouter
+une, c'est écrire une seconde `Palette` et la regarder dans le simulateur
+avant de la proposer.
 
-Il n'y a donc plus d'aperçu, et c'est le prix assumé : un échantillon ne peut
-pas montrer une teinte sans la peindre. On applique pour voir, et on retourne
-d'un cran si ça ne plaît pas.
+### La luminosité est sur la molette de l'accueil
 
-C'est aussi ce qui rend le curseur fluide. Appliquer à chaque cran appelait
-`set_palette()`, donc `wipe()`, donc un repaint complet des 240×320 : la
-molette traînait d'un demi-tour. Déplacer le curseur ne touche plus que
-**32 cellules sur 600**, que le redessin partiel pousse seules.
-
-### La luminosité est la 7e ligne de la même liste
-
-Une palette bien contrastée ne sauve pas un panneau trop sombre en plein
-jour : le contraste et la quantité de lumière sont deux réglages différents.
-Mais on les cherche au même endroit — quand l'écran se lit mal — donc la
-luminosité vit sur l'écran Thème, une ligne sous les six teintes.
-
-Elle ne casse pas la règle du geste : **B agit sur la ligne visée.** Sur une
-teinte il l'applique, sur `LUMIERE` il passe au palier suivant. Aucun mode,
-aucun second sens à retenir.
+Elle n'avait plus de page à elle, et la molette n'avait rien à faire sur
+l'accueil. Un cran vers la droite monte d'un palier, un cran vers la gauche
+en descend. Le palier s'affiche deux secondes dans le bandeau, à la place du
+sonar :
 
 ```
- > LUMIERE _ [##########]  100%
+LUMIERE 70%
 ```
 
-Quatre paliers — **15, 40, 70, 100 %** — plutôt qu'un pourcentage libre : on
+Quatre paliers, **15, 40, 70, 100 %**, plutôt qu'un pourcentage libre : on
 ne saurait pas viser une valeur qu'on ne sait pas nommer, alors que quatre
 crans couvrent la nuit, la pièce éclairée, la journée et le plein soleil.
 
-**Zéro n'est pas dans la liste.** Un écran éteint par un appui de trop
-ressemblerait à une panne, et on en chercherait la cause au lieu du bouton.
-L'extinction complète appartient à la veille, qui a une raison de la
-déclencher et sait la défaire — `Backlight` garde d'ailleurs son niveau
+**Zéro n'est pas dans la liste.** Un écran éteint par un cran de trop
+ressemblerait à une panne, et on en chercherait la cause au lieu de la
+molette. L'extinction complète appartient à la veille, qui a une raison de
+la déclencher et sait la défaire : `Backlight` garde d'ailleurs son niveau
 pendant l'extinction, pour y revenir au réveil.
 
-Le réglage est enregistré dans `awen_backlight.txt`, comme le thème dans
-`awen_theme.txt`.
-
-Chaque palette tient en cinq rôles : fond, encre de données, étiquette,
-valeur mise en avant, alerte. `DIM` est toujours la teinte principale
-assombrie, jamais un gris — un gris casserait l'unité et donnerait l'air d'un
-défaut d'affichage.
+Le réglage est enregistré dans `awen_backlight.txt`, et survit donc à une
+coupure de courant.
 
 ## La veille
 
@@ -359,80 +355,60 @@ l'heure d'il y a dix minutes le temps de se recharger serait pire que celui
 qui n'aurait jamais dormi.
 
 Ce qui s'arrête, c'est le **dessin**. Pousser des pixels sur un panneau noir
-ne sert personne, et le curseur cesse de battre — son clignotement force un
-redessin deux fois par seconde pour rien. Le panneau garde son image : au
-réveil, le redessin partiel n'envoie que ce qui a réellement changé.
+ne sert personne, et le logo cesse de tourner. Le panneau garde son image :
+au réveil, le canevas n'envoie que ce qui a réellement changé.
 
 `Backlight` conserve son niveau pendant l'extinction, pour y revenir au
 réveil au lieu d'un palier arbitraire.
 
 ### Ce que le sonar voit, écrit sur l'accueil
 
-Ligne 1 à droite, sous le numéro de semaine :
+Dans le bandeau, à droite, là où les autres pages mettent l'heure :
 
 ```
-                      72/120cm
+72/120 CM
 ```
 
-La distance mesurée, puis le seuil. Deux chiffres qui répondent aux deux
+La distance mesurée, puis le seuil. Deux nombres qui répondent aux deux
 seules questions qu'on se pose devant une veille qui se déclenche mal :
 **me voit-il ?** et **à partir de quelle distance ?** Sans eux, le
 `PRESENCE_CM` de `main.py` est un nombre qu'on ne peut confronter à rien.
 
-La valeur mesurée s'allume quand elle passe sous le seuil, ce qui répond à
+La distance s'allume en ambre quand elle passe sous le seuil, ce qui répond à
 la première question sans avoir à comparer les deux nombres. Un écho perdu
 s'affiche `--` et non `0` : zéro ferait croire à un obstacle collé au
 capteur, soit exactement l'inverse de ce qui se passe.
 
-Cette ligne a révélé deux limites du redessin partiel, corrigées depuis.
-L'invalidation des tracés hors grille raisonnait **par ligne** : un chiffre
-modifié colonne 23 faisait retracer les pastilles des colonnes 0 à 13, et
-`_draw_dots` les efface avant de les redessiner — elles clignotaient deux
-fois par seconde. Elle compare désormais **lignes et colonnes**.
-
-Et `flush()` repeignait les 16 pixels de hauteur d'une cellule, alors qu'un
-filet occupe le **dernier** pixel de la sienne : il était effacé puis
-retracé, ce qui donne un éclair noir sur un panneau qui écrit en direct. Les
-lignes portant un filet ne sont plus repeintes que sur 15 pixels. La police
-fait 8 px centrés, elle n'atteint jamais le 16e.
-
-Un chiffre qui change ne touche donc plus que **64 pixels**, ceux de son
-propre glyphe.
+Hors ligne, cette place est prise par l'annonce `HORS LIGNE`, qui compte
+davantage.
 
 ## Animations
 
-Deux règles de rythme, dans `app.py` :
+Trois rythmes, dans `app.py` :
 
 ```python
 BOOT_STEP_MS = 300   # apparition d'une ligne d'amorcage
 SWEEP_MS     = 14    # une ligne du balayage de transition
+SPIN_MS      = 150   # une image du logo
 ```
 
-**L'amorçage** révèle ses lignes une par une, à cadence fixe. La version
-précédente n'animait que pendant l'attente du wifi : connexion déjà établie,
-les cinq lignes apparaissaient d'un coup et l'écran semblait figé. Le rythme
-ne doit rien devoir au réseau — c'est une animation, pas une barre de
+**L'amorçage** révèle ses lignes une par une, à cadence fixe. Le rythme ne
+doit rien devoir au réseau : c'est une animation, pas une barre de
 progression.
 
-**Le changement d'écran** balaye une ligne lumineuse du haut vers le bas.
+**Le changement de page** balaye une ligne lumineuse du haut vers le bas.
 Repeindre les 240×320 d'un coup produit un flash noir qui se lit comme un gel
 de l'affichage : rien ne bouge, puis tout a changé. Le balayage prend le même
 temps mais raconte ce qui se passe.
 
-**Le curseur** bat une fois par seconde (`BLINK_MS = 530`) juste après le
-titre, sur tous les écrans. C'est le seul mouvement permanent : sans lui, un
-écran qui ne change qu'une fois par minute ne se distingue pas d'un écran
-gelé. Sur Paramètres et Thème, un second curseur marque la ligne que le
-molette commande — quatre lignes qui se ressemblent ont besoin d'un
-repère qui bouge, la surbrillance seule ne suffit pas.
+**Le logo** tourne dans le bandeau de toutes les pages, huit images en 1,2
+seconde. C'est le seul mouvement permanent : sans lui, une page qui ne change
+qu'une fois par minute ne se distingue pas d'une page gelée. Plus vite, il se
+lirait comme un sablier, donc comme une attente.
 
-Il ne coûte qu'une cellule par battement grâce au redessin partiel. Ce détail
-n'est pas gratuit : `clear()` ne vide **pas** le mémo des jauges, des filets
-et du texte agrandi, sinon chaque battement les retracerait deux fois par
-seconde et l'écran scintillerait. Seul un changement d'écran purge ce mémo.
-
-Si le rythme ne te convient pas, ces trois constantes sont les seules à
-toucher. Monter `SWEEP_MS` à 25 donne une transition nettement plus posée.
+Il ne repasse pas par le dessin de la page : `app.py` demande directement
+l'image suivante au canevas, un envoi de 16×16 pixels. Et il s'arrête pendant
+la veille, où il n'a rien à dire à personne.
 
 ## La molette n'envoie qu'un déplacement
 
@@ -476,69 +452,98 @@ de passe dupliqué finit desynchronisé, ou publié.
 dans le `.gitignore`, ne le versionne jamais, et `ESP32_API_KEY` doit
 correspondre exactement au `.env` du serveur.
 
-## Ce qui marche aujourd'hui
+## Ce que lit le firmware
 
-Le firmware lit `/api/esp32/summary`, qui renvoie tout **pré-découpé aux
-dimensions de l'écran** : titres repliés sur 28 colonnes, accents retirés,
-emoji remplacés par un marqueur ASCII. Le serveur connaît la largeur de
-l'afficheur, autant qu'il fasse la découpe — c'est du travail en moins pour un
-interpréteur MicroPython.
+Un seul appel, `GET /api/esp32/pages`, toutes les trente secondes (cinq sur
+Spotify). Le serveur y prépare tout, **déjà trié et étiqueté** : c'est du
+travail en moins pour un interpréteur MicroPython.
 
-| Écran | État |
-| --- | --- |
-| Amorçage, Accueil | ✅ |
-| Séance | ✅ aperçu des exercices et charges programmées |
-| Coach | ✅ conseil, motif, proposition chiffrée, boutons |
-| Jobs | ✅ titres des offres du jour |
-| Paramètres | ✅ local à l'afficheur |
-| Spotify | ⚠️ vide : le bloc `spotify` reste à écrire côté serveur |
+| Bloc | Ce qu'il contient | D'où il vient |
+| --- | --- | --- |
+| `min`, `sec` | l'heure, à la seconde | l'horloge du serveur |
+| `jour` | la date en toutes lettres, le numéro de semaine | idem |
+| `meteo` | température, mini, maxi, pluie, état du ciel en dix caractères | Open-Meteo, gardé une demi-heure |
+| `agenda` | les quatre lignes de l'accueil, les jours à venir, la semaine | le flux ICS d'Awen, gardé cinq minutes |
+| `spotify` | la piste, sa position, le volume, l'empreinte de la pochette | l'API Spotify |
 
-### La séance est en lecture seule, et c'est voulu
+La température et l'humidité de la pièce ne passent pas par le serveur : le
+DHT11 est lu sur la carte.
 
-L'afficheur est posé sur un bureau, pas dans la salle. Quand tu soulèves, ton
-téléphone est en main — une série saisie ici n'aurait aucun sens. Ce que tu
-veux en rentrant, c'est savoir ce qui t'attend et à quelle charge.
+### L'agenda vient du flux ICS
 
-C'est pourquoi `POST /weight` et `/set` n'existent pas. Seul `/advice` est
-exposé : trancher un conseil du coach depuis son bureau, ça, c'est naturel.
+C'est le calendrier déjà branché sur Awen (`SAMSUNG_CALENDAR_ICS_URL`). Le
+serveur le lit, déplie les évènements répétés (la séance du mardi revient
+chaque mardi), convertit en heure locale et n'envoie que ce que l'écran
+affiche.
 
-Et il n'envoie qu'une **intention**, jamais une charge : le serveur relit le
-conseil courant et applique sa propre valeur. Un chiffre qui voyagerait sur le
-réseau pourrait arriver périmé, et c'est le genre de nombre qu'on ne veut pas
-laisser décider ailleurs que dans le moteur de règles.
+Chaque ligne vaut `[heure, titre, état]`. L'heure est vide pour une journée
+entière. L'état : 0 passé, 1 celui qu'on met en avant (en cours, ou le
+prochain), 2 à venir. La carte ne compare aucune heure : elle colore selon
+l'état, et c'est tout.
 
-### Spotify, ce qui reste
+### L'heure avance toute seule
 
-Il faut un bloc `spotify{ title, artist, album, position_s, duration_s,
-volume, playing, device }` dans le résumé, et un `POST /api/esp32/spotify`
-pour lecture / pause / piste / volume.
+La carte n'a pas d'horloge sauvegardée. Le serveur donne l'heure à la seconde
+près ; entre deux relevés, `app.minutes()` ajoute le temps écoulé. La minute
+change donc à l'heure, et non jusqu'à trente secondes plus tard.
 
-**Garde le jeton sur le serveur.** Ton `spotify_screen.py` actuel embarque
-`CLIENT_ID`, `CLIENT_SECRET` et `REFRESH_TOKEN` sur la carte — c'est
-exactement ce qui a fuité par les `.pyc`. Le serveur détient le jeton, gère sa
-rotation, et l'afficheur n'est plus qu'une télécommande sans secret.
+### Garde les jetons sur le serveur
+
+L'afficheur ne parle ni à Spotify ni au calendrier. Le serveur détient les
+jetons et l'adresse du flux ; la carte n'est qu'une télécommande sans secret,
+à part sa clé d'API.
+
+## Vérifier sans flasher
+
+```powershell
+python esp32\simulateur.py
+```
+
+Le simulateur fait tourner `app.py`, `screens.py` et `canvas.py` tels quels,
+avec un faux écran, de fausses broches et un faux serveur. Il écrit les
+pages dans `esp32/mockups/simulateur/`, à côté des maquettes Lopaka pour
+comparer.
+
+Surtout, il **rejoue les enchaînements qui piègent un redessin partiel** : la
+température qui passe de 9 à 10, la pluie à 100 %, le calendrier qu'on fait
+défiler, Spotify qui s'arrête, le serveur qui tombe. Après chacun, il compare
+l'écran obtenu pas à pas avec le même écran repeint de zéro. Un seul pixel
+d'écart arrête tout, et dit où.
+
+Ce qu'il ne dit pas : la vitesse réelle du bus, la mémoire libre, le câblage.
+Pour ceux-là il reste la carte, et `upload.ps1 -Console`.
 
 ## Pourquoi le redessin partiel
 
-Repeindre 240×320 coûte une trentaine de millisecondes en MicroPython. À une
-image par seconde pour l'horloge, ça clignote et ça rame.
+Repeindre 240×320 coûte une trentaine de millisecondes en MicroPython. À
+chaque minute d'horloge, ça clignoterait.
 
-`grid.py` garde une copie de ce qui est réellement à l'écran et ne redessine
-que les cellules qui ont changé, en regroupant les voisines de mêmes couleurs
-en un seul appel au pilote. Une horloge qui passe de 21:47 à 21:48 coûte une
-cellule ; une jauge qui avance d'un pour cent, quelques pixels.
+Dans `canvas.py`, chaque élément d'une page porte une **clé**, et le canevas
+retient ce qu'il a tracé sous cette clé. Redemander la même chose ne coûte
+qu'une comparaison ; demander autre chose ne repeint que cet élément. Une
+page redit donc tout à chaque changement, sans chercher ce qui a bougé :
+09:41 qui devient 09:42 ne coûte que les segments qui changent d'état.
 
-Corollaire à ne pas oublier : au changement d'écran il faut appeler
-`g.wipe()`, sinon les cellules identiques d'un écran à l'autre ne seraient
-jamais repeintes. `App.go()` s'en charge.
+Deux règles en découlent, et ce sont elles que le simulateur surveille :
+
+- **Un élément qui disparaît se redit vide.** Un texte `""` efface l'ancien,
+  une forme se repeint de la couleur du fond.
+- **Ce qui s'efface passe avant ce qui s'écrit**, quand deux éléments
+  partagent une place (l'heure d'un rendez-vous et la mention `JOURNEE`).
+  Dans l'autre sens, l'effacement emporte le texte tout juste posé.
+
+Au changement de page, `App.go()` appelle `sweep()`, qui oublie tout.
 
 ## Caractères
 
-**ASCII uniquement.** La police bitmap n'a ni accents ni flèches : `SÉANCE`
-sortirait en `S?ANCE`. Écris en majuscules non accentuées, et utilise `<` `>`
-plutôt que `◀` `▶`. `grid.text()` remplace silencieusement tout caractère hors
-ASCII par une espace, pour que l'oubli se voie sans casser l'affichage.
+`S9` et `B12` écrivent l'ASCII et **les accents du français** : un agenda dit
+« Séance » et « Réunion ». Le serveur ramène le reste à ce que la carte sait
+tracer (`_latin()` dans `app/routes/esp32.py`) : une apostrophe courbe devient
+droite, un emoji devient une espace.
 
-Les jauges sont des **rectangles**, jamais des caractères de bloc : dans une
-police vectorielle ceux-ci débordent d'une cellule vers le haut et percutent
-la ligne au-dessus.
+**Les deux listes doivent rester identiques** : `ACCENTS` dans
+`scripts/gen_fonts.py`, `_ACCENTS` côté serveur. Un caractère envoyé mais
+absent de la police sortirait en point d'interrogation.
+
+Les libellés en petites capitales (`PX`) restent sans accents : ils sont
+écrits par le firmware, jamais par l'agenda, et une capitale s'en passe.
