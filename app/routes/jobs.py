@@ -3,7 +3,7 @@ from datetime import datetime
 from io import BytesIO
 
 import markdown as md
-from flask import (Blueprint, abort, current_app, jsonify, redirect,
+from flask import (Blueprint, abort, jsonify, redirect,
                    render_template, request, send_file, send_from_directory,
                    url_for)
 
@@ -96,7 +96,7 @@ def letters():
         "lettres.html", letters=get_cover_letters(), ecrites=ecrites,
         offres=lettres_svc.offres_recentes(),
         lecons=LetterLesson.query.order_by(LetterLesson.id.desc()).all(),
-        cle=bool(current_app.config.get("ANTHROPIC_API_KEY")),
+        moteur=lettres_svc.moteur(),
         choisie=request.args.get("offre", ""))
 
 
@@ -207,6 +207,15 @@ def letter_pdf(lettre_id):
     return send_file(BytesIO(contenu), mimetype="application/pdf",
                      as_attachment=True,
                      download_name=lettres_svc.nom_fichier(lettre))
+
+
+@bp.route("/lettres/<int:lettre_id>/md")
+def letter_markdown(lettre_id):
+    """La lettre en .md, pour la ranger dans le projet Recherche de CDI."""
+    lettre = db.session.get(CoverLetter, lettre_id) or abort(404)
+    return send_file(BytesIO(lettres_svc.markdown(lettre).encode("utf-8")),
+                     mimetype="text/markdown", as_attachment=True,
+                     download_name=lettres_svc.nom_markdown(lettre))
 
 
 @bp.route("/lettres/<int:lettre_id>/supprimer", methods=["POST"])

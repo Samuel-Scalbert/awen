@@ -12,8 +12,21 @@ ENV PYTHONUNBUFFERED=1 \
 # tzdata : sans lui le conteneur vit en UTC, et l'app calcule des « aujourd'hui »
 # (séance du jour, veille emploi) qui basculeraient deux heures trop tôt le soir.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tzdata \
+ && apt-get install -y --no-install-recommends tzdata curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+
+# L'utilisateur de l'app, créé tôt : Claude Code s'installe dans son dossier.
+RUN useradd --create-home --uid 1000 awen
+
+# Claude Code écrit les lettres de motivation avec l'abonnement Claude
+# (app/services/lettres.py). Installé avant le code : la couche reste en
+# cache d'un déploiement à l'autre. Pas de mise à jour automatique dans un
+# conteneur : on la fait en reconstruisant l'image.
+USER awen
+RUN curl -fsSL https://claude.ai/install.sh | bash
+USER root
+ENV PATH="/home/awen/.local/bin:${PATH}" \
+    DISABLE_AUTOUPDATER=1
 
 WORKDIR /app
 
@@ -22,9 +35,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# L'app ne doit jamais écrire en dehors de /app/data (volume monté).
-RUN useradd --create-home --uid 1000 awen \
- && mkdir -p /app/data \
+# L'app ne doit jamais écrire en dehors de /app/data (volume monté), hormis
+# le dossier de Claude Code dans /home/awen.
+RUN mkdir -p /app/data \
  && chown -R awen:awen /app
 USER awen
 

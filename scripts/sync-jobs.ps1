@@ -9,10 +9,12 @@
 
     On ne copie deliberement PAS tout le dossier de recherche d'emploi : les
     CV en PDF, notes d'entretien et documents divers n'ont rien a faire sur le
-    serveur. Trois fichiers texte y vont pourtant, parce que les lettres de
+    serveur. Quatre fichiers texte y vont pourtant, parce que les lettres de
     motivation ecrites dans Awen en ont besoin : la fiche profil et la source
-    du CV ATS (les faits, sans lesquels Claude inventerait), et les
-    instructions de la veille (la section 8 donne les regles des lettres).
+    du CV ATS (les faits, sans lesquels Claude inventerait), les
+    instructions de la veille (la section 8 donne les regles des lettres) et
+    le suivi des candidatures (les lettres qui ont obtenu un entretien
+    servent de modeles).
 
     Le script est concu pour tourner TRES souvent (toutes les 30 minutes).
     Il calcule une empreinte du contenu et ne transfere rien quand rien n'a
@@ -36,11 +38,12 @@ param(
 $ErrorActionPreference = 'Stop'
 
 # Ce que lisent app/services/job_watch.py (les deux dossiers) et
-# app/services/lettres.py (les trois fichiers).
+# app/services/lettres.py (les quatre fichiers).
 $Wanted = @('Veille quotidienne', 'Lettres de motivation',
             'Fiche profil - Samuel Scalbert.md',
             '_CV ATS (source modifiable).html',
-            '_Instructions veille PO (tache quotidienne).md')
+            '_Instructions veille PO (tache quotidienne).md',
+            'Suivi des candidatures.md')
 
 # L'empreinte du dernier envoi reussi. Hors du depot : c'est un etat local,
 # propre a cette machine, pas quelque chose a versionner.

@@ -18,7 +18,7 @@
        {% if lettre.etat not in ('generation', 'erreur') %}hidden{% endif %}>
     <p class="lt-wait" {% if lettre.etat != 'generation' %}hidden{% endif %}>
       <span class="lt-dot" aria-hidden="true"></span>
-      Claude écrit la lettre. Compte une demi-minute à une minute.</p>
+      Claude écrit la lettre. Compte deux à quatre minutes.</p>
     <p class="lt-error" {% if lettre.etat != 'erreur' %}hidden{% endif %}>{{ lettre.erreur }}</p>
   </div>
 
@@ -44,6 +44,8 @@
 
     <div class="lt-actions">
       <button class="cta" type="button" id="lt-pdf">⬇️ Générer et télécharger le PDF</button>
+      <a class="btn small btn-ghost lt-md" href="{{ url_for('jobs.letter_markdown', lettre_id=lettre.id) }}"
+         title="Pour la ranger dans le projet Recherche de CDI">Télécharger le .md</a>
       <p class="lt-count"><span id="lt-mots">{{ champs.mots }}</span> mots
         <span class="muted">· une page tient jusqu'à 340 environ</span></p>
       <p class="lt-saved muted" id="lt-saved" aria-live="polite"></p>

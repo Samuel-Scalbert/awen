@@ -26,12 +26,31 @@ LA GÉNÉRATION TOURNE EN ARRIÈRE-PLAN
 Une lettre prend une demi-minute à une minute. Gunicorn coupe une requête
 au bout de 120 secondes : on ne la fait donc pas attendre. La page lance la
 génération, puis demande l'état toutes les deux secondes.
+
+DEUX MOTEURS, UN SEUL SKILL
+
+La façon d'écrire vit dans un skill Claude Code,
+.claude/skills/lettre-motivation/SKILL.md : les règles, la méthode, le
+format. Il se retouche comme un texte, et sert aussi bien à la main dans
+Claude Code qu'au bouton d'Awen. Deux moteurs l'exécutent :
+
+- « abonnement » : Claude Code, installé dans l'image, tourne sans
+  interface avec l'abonnement Claude de Samuel (jeton créé par
+  `claude setup-token`). Aucun frais en plus ; l'usage compte dans les
+  limites de l'abonnement.
+- « api » : l'API Claude, facturée à l'usage (ANTHROPIC_API_KEY).
+
+Avec un jeton d'abonnement, c'est lui qui sert ; LETTRE_MOTEUR force l'un ou
+l'autre.
 """
 import difflib
 import hashlib
 import html
 import json
+import os
 import re
+import subprocess
+import tempfile
 import threading
 import unicodedata
 from datetime import date, datetime, timedelta
@@ -51,12 +70,21 @@ EFFORT = "high"
 BETAS = ["server-side-fallback-2026-07-01"]
 
 FICHE = "Fiche profil - Samuel Scalbert.md"
+SUIVI = "Suivi des candidatures.md"
 CV = "_CV ATS (source modifiable).html"
 INSTRUCTIONS = "_Instructions veille PO (tache quotidienne).md"
 DOSSIER = "Lettres de motivation"
 GABARIT = "_Modele de lettre (template).md"
 
-EXEMPLES = 3            # lettres envoyées montrées pour le ton
+# Le skill qui dit comment écrire : le même pour les deux moteurs.
+SKILL = (Path(__file__).resolve().parents[2]
+         / ".claude" / "skills" / "lettre-motivation" / "SKILL.md")
+# Claude Code met deux à quatre minutes ; au-delà de dix, il est bloqué.
+DELAI_CLAUDE_CODE = 600
+
+EXEMPLES = 2            # lettres montrées pour le ton
+# Du moins coûteux au plus approfondi : un plafond d'effort se compare ici.
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
 CORRECTIONS = 2         # dernières corrections montrées telles quelles
 SEUIL_LECON = 0.97      # au-delà de cette ressemblance, rien à apprendre
 # Un appel dure au pire 5 minutes, trois fois avec les nouvelles tentatives.
@@ -142,7 +170,29 @@ def _corps_lettre(texte):
     return (parts[1] if len(parts) > 1 else parts[0]).strip()
 
 
+def _cle(nom):
+    """« JCDecaux », « Hermès (Pantin) » : sans accents, casse ni précision."""
+    nom = unicodedata.normalize("NFKD", nom).encode("ascii", "ignore").decode()
+    return nom.split("(")[0].strip().lower()
+
+
+def _reussies():
+    """Les entreprises où la candidature a obtenu un entretien, d'après la
+    colonne Notes du suivi des candidatures."""
+    out = set()
+    for ligne in (_lire(SUIVI) or "").splitlines():
+        cols = [c.strip() for c in ligne.strip().strip("|").split("|")]
+        if len(cols) >= 6 and re.search(r"entretien", cols[-1], re.I):
+            out.add(_cle(cols[1]))
+    return out
+
+
 def _exemples():
+    """Les lettres montrées pour le ton : celles qui ont obtenu un entretien.
+
+    Les dernières écrites n'ont rien prouvé ; celles qui ont décroché un
+    entretien, si. À défaut de suivi, les plus récentes.
+    """
     base = _racine()
     if base is None:
         return []
@@ -153,8 +203,10 @@ def _exemples():
         (f for f in dossier.glob("*.md")
          if f.is_file() and not f.name.startswith("_")),
         key=lambda f: f.stat().st_mtime, reverse=True)
+    reussies = _reussies()
+    choisies = [f for f in fichiers if _cle(f.stem.split(" - ")[0]) in reussies]
     out = []
-    for f in fichiers[:EXEMPLES]:
+    for f in (choisies or fichiers)[:EXEMPLES]:
         try:
             out.append((f.stem, _corps_lettre(f.read_text(encoding="utf-8"))))
         except (OSError, UnicodeDecodeError):
@@ -224,19 +276,13 @@ def offres_recentes(jours=10):
 # Le prompt
 
 
-SYSTEME = """Tu écris les lettres de motivation de Samuel Scalbert, en français, pour des candidatures en CDI. Ses règles, son modèle, sa fiche profil, son CV et les lettres qu'il a déjà envoyées sont ci-dessous : c'est ta seule source sur lui.
+SYSTEME = """{consignes}
+
+# Les sources
 
 <regles>
 {regles}
 </regles>
-
-Ce qui s'ajoute à ces règles :
-- Aucun fait, outil, chiffre ou expérience absent de la fiche profil et du CV. Ce que l'offre demande et qu'il n'a pas, c'est la friction : nomme-la et dis comment il la comble, sans la nier.
-- Respecte la section « Les formulations à corriger » de la fiche profil.
-- Une page A4 au plus : 280 à 340 mots en tout, formule de politesse comprise.
-- Ni tiret long ni tiret moyen : une virgule, deux-points ou des parenthèses à la place.
-- Pas d'adjectif flatteur sans preuve (« passionné », « dynamique », « rigoureux ») : un fait vaut mieux.
-- Le ton suit les lettres envoyées : direct, concret, à la première personne.
 
 <modele>
 {gabarit}
@@ -252,15 +298,7 @@ Ce qui s'ajoute à ces règles :
 
 <lettres_envoyees>
 {exemples}
-</lettres_envoyees>
-
-Ta réponse remplit le schéma JSON demandé :
-- entreprise, poste : tels qu'ils doivent apparaître dans le nom du fichier.
-- destinataire : 1 à 3 lignes, comme dans les lettres envoyées (« À l'attention de… », l'entreprise, la ville si l'offre la donne).
-- objet : le texte après « Objet : », avec la référence de l'offre si elle en a une.
-- salutation : « Madame, Monsieur, » sauf si l'offre nomme la personne.
-- paragraphes : le corps puis la formule de politesse, un paragraphe par élément. Sans la signature.
-- notes : pour Samuel, trois à cinq lignes courtes : l'élément concret de l'entreprise retenu et d'où il vient, l'histoire choisie, la friction traitée, et ce qu'il doit vérifier avant d'envoyer."""
+</lettres_envoyees>"""
 
 DEMANDE = """<offre{ref}>
 {offre}
@@ -273,13 +311,25 @@ DEMANDE = """<offre{ref}>
 Écris la lettre pour cette offre. Les priorités de Samuel passent avant tes propres choix : chacune doit se retrouver explicitement dans la lettre. Si l'offre ne donne aucun élément concret sur l'entreprise, prends le plus précis qu'elle contienne et signale-le dans les notes."""
 
 
+def consignes():
+    """Le corps du skill, sans son en-tête : relu à chaque lettre, pour
+    qu'une retouche serve dès la suivante."""
+    try:
+        texte = SKILL.read_text(encoding="utf-8")
+    except OSError:
+        raise LettreErreur("Le skill des lettres est introuvable ({}).".format(SKILL))
+    morceaux = re.split(r"^---\s*$", texte, maxsplit=2, flags=re.M)
+    return (morceaux[2] if texte.startswith("---") and len(morceaux) == 3
+            else texte).strip()
+
+
 def _systeme(src):
     exemples = "\n\n".join(
         '<lettre titre="{}">\n{}\n</lettre>'.format(escape(t), c)
         for t, c in src["exemples"]) or "(aucune)"
-    return SYSTEME.format(regles=src["regles"], gabarit=src["gabarit"],
-                          profil=src["profil"], cv=src["cv"],
-                          exemples=exemples)
+    return SYSTEME.format(consignes=consignes(), regles=src["regles"],
+                          gabarit=src["gabarit"], profil=src["profil"],
+                          cv=src["cv"], exemples=exemples)
 
 
 def _lecons_actives():
@@ -328,6 +378,134 @@ def _demande(lettre):
 # L'appel à Claude
 
 
+PAS_DE_MOTEUR = (
+    "Claude n'est pas relié : avec ton abonnement, crée un jeton par "
+    "`claude setup-token` et mets-le dans CLAUDE_CODE_OAUTH_TOKEN ; avec "
+    "l'API facturée à l'usage, renseigne ANTHROPIC_API_KEY. Dans le .env du "
+    "serveur, puis redémarre Awen.")
+
+
+def moteur():
+    """« abonnement », « api », ou None si rien n'est relié."""
+    cfg = current_app.config
+    choix = (cfg.get("LETTRE_MOTEUR") or "auto").strip().lower()
+    if choix in ("abonnement", "api"):
+        return choix
+    if cfg.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        return "abonnement"
+    if cfg.get("ANTHROPIC_API_KEY"):
+        return "api"
+    return None
+
+
+def _appel(system, user, schema, effort, cache=True):
+    """Un appel structuré, par le moteur configuré.
+
+    Renvoie (données JSON, {"modele", "entree", "sortie"}).
+    """
+    m = moteur()
+    if m == "abonnement":
+        return _appel_claude_code(system, user, schema, effort)
+    if m == "api":
+        return _appel_api(system, user, schema, effort, cache)
+    raise LettreErreur(PAS_DE_MOTEUR)
+
+
+def _explique(texte):
+    """Un échec de Claude Code, dit en français et avec le geste qui répare."""
+    bas = (texte or "").lower()
+    if any(m in bas for m in ("usage limit", "limit reached", "quota", "rate limit")):
+        return ("Ton abonnement Claude a atteint sa limite d'utilisation pour "
+                "l'instant : réessaie quand elle sera réinitialisée.")
+    if any(m in bas for m in ("oauth", "401", "authentication", "unauthorized",
+                              "/login", "not logged in", "invalid api key",
+                              "credential")):
+        return ("Le jeton Claude Code est refusé ou expiré : refais "
+                "`claude setup-token` sur ton PC et remplace "
+                "CLAUDE_CODE_OAUTH_TOKEN dans le .env du serveur.")
+    extrait = " ".join((texte or "").split())[:240]
+    return "Claude Code a échoué : {}".format(extrait or "aucun message")
+
+
+def _appel_claude_code(system, user, schema, effort="medium"):
+    """Claude Code sans interface, avec l'abonnement de Samuel.
+
+    - Aucun outil : il n'a qu'à écrire, tout est dans le message système.
+    - Rien de la configuration du compte : ni connecteurs claude.ai, ni
+      skills, ni réglages. Les définitions d'outils des connecteurs (Canva,
+      Drive…) pesaient à elles seules 50 000 jetons par lettre.
+    - La réflexion plafonne à LETTRE_EFFORT_ABONNEMENT (medium) : c'est
+      elle qui consomme le plus, et une lettre n'a pas besoin du maximum.
+    - La sortie suit le schéma JSON (--json-schema), comme avec l'API.
+    - Les variables ANTHROPIC_* sont retirées de son environnement : avec
+      une clé d'API sous la main, Claude Code la facturerait au lieu
+      d'utiliser l'abonnement.
+    - Il tourne dans un dossier vide : aucun CLAUDE.md ni réglage de projet
+      ne s'invite dans la lettre.
+    Sans jeton, il se sert de la connexion déjà faite sur la machine (le PC).
+    """
+    cfg = current_app.config
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ANTHROPIC_")}
+    env["DISABLE_AUTOUPDATER"] = "1"
+    if cfg.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = cfg["CLAUDE_CODE_OAUTH_TOKEN"]
+    plafond = (cfg.get("LETTRE_EFFORT_ABONNEMENT") or "medium").lower()
+    if effort not in EFFORTS:
+        effort = "medium"
+    if plafond in EFFORTS and EFFORTS.index(effort) > EFFORTS.index(plafond):
+        effort = plafond
+    cmd = [cfg.get("CLAUDE_BIN") or "claude", "-p", "--output-format", "json",
+           "--json-schema", json.dumps(schema, ensure_ascii=False),
+           "--tools", "", "--no-session-persistence", "--effort", effort,
+           "--strict-mcp-config", "--disable-slash-commands",
+           "--setting-sources", ""]
+    if cfg.get("LETTRE_MODEL_ABONNEMENT"):
+        cmd += ["--model", cfg["LETTRE_MODEL_ABONNEMENT"]]
+    with tempfile.TemporaryDirectory(prefix="awen-lettre-") as dossier:
+        fichier = Path(dossier) / "systeme.md"
+        fichier.write_text(system, encoding="utf-8")
+        cmd += ["--system-prompt-file", str(fichier)]
+        try:
+            r = subprocess.run(cmd, input=user, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", cwd=dossier,
+                               env=env, timeout=DELAI_CLAUDE_CODE)
+        except FileNotFoundError:
+            raise LettreErreur("Claude Code n'est pas installé ici : l'image "
+                               "d'Awen l'installe, reconstruis-la "
+                               "(docker compose up -d --build).")
+        except subprocess.TimeoutExpired:
+            raise LettreErreur("Claude Code n'a pas répondu en dix minutes : "
+                               "réessaie.")
+    try:
+        sortie = json.loads(r.stdout)
+    except ValueError:
+        raise LettreErreur(_explique(r.stderr or r.stdout))
+    if sortie.get("is_error") or sortie.get("subtype") != "success":
+        raise LettreErreur(_explique("{} {}".format(sortie.get("result") or "",
+                                                     r.stderr or "")))
+    data = sortie.get("structured_output")
+    if not isinstance(data, dict):
+        try:
+            data = json.loads(sortie.get("result") or "")
+        except ValueError:
+            raise LettreErreur("Réponse illisible de Claude Code : réessaie.")
+    usage = sortie.get("usage") or {}
+    # Claude Code confie aussi de petites tâches à un modèle léger : celui
+    # qui a écrit la lettre est celui qui a produit le plus de texte.
+    par_modele = sortie.get("modelUsage") or {}
+
+    def ecrit(modele):
+        u = par_modele[modele]
+        return (u.get("outputTokens") or 0) if isinstance(u, dict) else 0
+
+    return data, {
+        "modele": max(par_modele, key=ecrit) if par_modele else "claude-code",
+        "entree": sum(usage.get(k) or 0 for k in (
+            "input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")),
+        "sortie": usage.get("output_tokens") or 0,
+    }
+
+
 def _client():
     import anthropic
     cle = current_app.config.get("ANTHROPIC_API_KEY")
@@ -340,8 +518,8 @@ def _client():
     return anthropic.Anthropic(api_key=cle, timeout=300.0, max_retries=2)
 
 
-def _appel(system, user, schema, effort, cache=True):
-    """Un appel structuré : renvoie (données JSON, message)."""
+def _appel_api(system, user, schema, effort, cache=True):
+    """L'API Claude, facturée à l'usage."""
     import anthropic
     client = _client()
     systeme = [{"type": "text", "text": system}]
@@ -383,9 +561,17 @@ def _appel(system, user, schema, effort, cache=True):
                            "réessaie.")
     texte = next((b.text for b in msg.content if b.type == "text"), "")
     try:
-        return json.loads(texte), msg
+        data = json.loads(texte)
     except ValueError:
         raise LettreErreur("Réponse illisible de Claude : réessaie.")
+    u = msg.usage
+    return data, {
+        "modele": msg.model,
+        "entree": ((u.input_tokens or 0)
+                   + (getattr(u, "cache_read_input_tokens", 0) or 0)
+                   + (getattr(u, "cache_creation_input_tokens", 0) or 0)),
+        "sortie": u.output_tokens or 0,
+    }
 
 
 def generer(lettre_id):
@@ -400,8 +586,8 @@ def generer(lettre_id):
                 "Il manque sur le serveur : {}. Relance la synchronisation "
                 "(scripts/sync-jobs.ps1) depuis le PC.".format(
                     ", ".join(src["manquants"])))
-        data, msg = _appel(_systeme(src), _demande(lettre), SCHEMA_LETTRE,
-                           current_app.config.get("LETTRE_EFFORT") or EFFORT)
+        data, meta = _appel(_systeme(src), _demande(lettre), SCHEMA_LETTRE,
+                            current_app.config.get("LETTRE_EFFORT") or EFFORT)
     except LettreErreur as e:
         lettre.etat, lettre.erreur = "erreur", str(e)
         db.session.commit()
@@ -426,12 +612,9 @@ def generer(lettre_id):
         "destinataire": lettre.destinataire, "objet": lettre.objet,
         "salutation": lettre.salutation, "corps": lettre.corps},
         ensure_ascii=False)
-    lettre.modele = msg.model
-    usage = msg.usage
-    lettre.jetons_entree = ((usage.input_tokens or 0)
-                            + (getattr(usage, "cache_read_input_tokens", 0) or 0)
-                            + (getattr(usage, "cache_creation_input_tokens", 0) or 0))
-    lettre.jetons_sortie = usage.output_tokens or 0
+    lettre.modele = (meta["modele"] or "")[:40]
+    lettre.jetons_entree = meta["entree"]
+    lettre.jetons_sortie = meta["sortie"]
     lettre.etat, lettre.erreur = "prete", ""
     db.session.commit()
 
@@ -493,8 +676,8 @@ def etudier(lettre_id):
                "<corrigee_par_samuel>\n{}\n</corrigee_par_samuel>").format(
                    connues, _texte_brouillon(lettre), apres)
     try:
-        data, _msg = _appel(LECONS, demande, SCHEMA_LECONS, "medium",
-                            cache=False)
+        data, _meta = _appel(LECONS, demande, SCHEMA_LECONS, "medium",
+                             cache=False)
     except Exception as e:
         current_app.logger.warning("leçons de la lettre %s : %s", lettre_id, e)
         return
@@ -590,6 +773,32 @@ def _p(texte):
 def nom_fichier(lettre):
     nom = re.sub(r'[\\/:*?"<>|]+', " ", lettre.entreprise or "Candidature")
     return "{} - Lettre de motivation.pdf".format(" ".join(nom.split()))
+
+
+def nom_markdown(lettre):
+    """« Yavin - Product Owner Core.md », comme les lettres du dossier."""
+    titre = " - ".join(x for x in (lettre.entreprise, lettre.poste) if x) or "Candidature"
+    return "{}.md".format(" ".join(re.sub(r'[\\/:*?"<>|]+', " ", titre).split()))
+
+
+def markdown(lettre, jour=None):
+    """La lettre au format des lettres du dossier « Lettres de motivation » :
+    un titre, la date, une ligne « --- », puis la lettre telle qu'envoyée.
+    Pour la ranger dans le projet Recherche de CDI à côté des autres."""
+    jour = jour or date.today()
+    exp = [l for l in lettre.expediteur.splitlines() if l.strip()]
+    titre = ", ".join(x for x in (lettre.entreprise, lettre.poste) if x) or "Candidature"
+    blocs = ["# {}".format(titre),
+             "- Date : {:%d/%m/%Y}\n- Écrite avec Awen".format(jour),
+             "---",
+             "\n".join(exp),
+             lettre.date_ligne,
+             lettre.destinataire.strip(),
+             "Objet : {}".format(lettre.objet),
+             lettre.salutation or "Madame, Monsieur,",
+             lettre.corps.strip(),
+             exp[0] if exp else ""]
+    return "\n\n".join(b for b in blocs if b) + "\n"
 
 
 def _histoire(lettre, interligne, apres):

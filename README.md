@@ -97,6 +97,7 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 | `ANTHROPIC_API_KEY`          | Clé de l'API Claude, pour écrire les lettres de motivation |
 | `LETTRE_MODEL`               | Modèle des lettres (`claude-opus-5-5` par défaut) |
 | `LETTRE_EFFORT`              | Effort de réflexion des lettres (`high` par défaut) |
+| `CLAUDE_CODE_OAUTH_TOKEN`    | Jeton de `claude setup-token` : lettres écrites avec l'abonnement Claude |
 | `RAPPEL_SEANCE_HEURE`        | Heure du rappel quand une séance commencée n'est pas terminée (`20:00`) |
 
 ## Lettres de motivation
@@ -107,11 +108,13 @@ veut voir en priorité, et Claude écrit la lettre en arrière-plan. Elle arrive
 dans un éditeur découpé comme une lettre Word (expéditeur, date,
 destinataire, objet, corps) ; chaque frappe s'enregistre seule, et *Générer
 et télécharger le PDF* rend une page A4 sans aucune métadonnée, nommée
-`{Entreprise} - Lettre de motivation.pdf`.
+`{Entreprise} - Lettre de motivation.pdf`. Elle se télécharge aussi en `.md`,
+au format des lettres du dossier, pour la ranger dans le projet.
 
 Claude ne lit que le projet *Recherche de CDI* : les règles de la section 8
-des instructions de la veille, le modèle et les trois dernières lettres
-envoyées, la fiche profil et le CV ATS. Ces fichiers arrivent sur le serveur
+des instructions de la veille, le modèle, la fiche profil, le CV ATS, et pour
+le ton deux lettres qui ont obtenu un entretien (d'après le suivi des
+candidatures ; à défaut, les dernières). Ces fichiers arrivent sur le serveur
 par `sync-jobs.ps1`, comme la veille.
 
 **Il apprend des corrections.** Le brouillon de Claude est gardé à côté de la
@@ -121,13 +124,33 @@ qui entrent dans chaque lettre suivante avec les deux dernières corrections.
 Elles s'affichent en bas de la page des lettres : une règle fausse se
 désactive ou se supprime d'un clic.
 
-Pour l'activer : créer une clé dans
-[la Claude Console](https://platform.claude.com), l'ajouter au `.env`
-du serveur (`ANTHROPIC_API_KEY=...`), puis `docker compose up -d --build`.
-Une lettre coûte de l'ordre de 10 à 20 centimes, surtout pour la réflexion
-de Claude ; l'analyse d'une correction, quelques centimes de plus. Le
-contexte du projet (environ 11 000 jetons) reste en cache cinq minutes : une
-nouvelle version demandée dans la foulée le relit presque gratuitement.
+**Le skill.** La façon d'écrire vit dans
+`.claude/skills/lettre-motivation/SKILL.md` : les règles, la méthode, le
+format rendu. Awen le relit à chaque lettre, et il sert tel quel dans une
+session Claude Code ouverte sur ce dépôt. Pour changer la manière d'écrire,
+c'est ce fichier qu'on retouche.
+
+**Deux façons de la faire écrire.**
+
+- *Avec l'abonnement Claude, sans frais en plus.* Claude Code est installé
+  dans l'image et tourne sans interface, sans aucun outil. Une fois, sur le
+  PC : `claude setup-token` ouvre la connexion au compte Claude dans le
+  navigateur et affiche un jeton ; le copier dans le `.env` du serveur
+  (`CLAUDE_CODE_OAUTH_TOKEN=...`), puis `docker compose up -d`. Une lettre
+  prend deux à quatre minutes et compte dans les limites d'utilisation de
+  l'abonnement. `LETTRE_MODEL_ABONNEMENT` choisit le modèle (`opus`,
+  `sonnet`) ; vide, c'est celui de l'abonnement. La réflexion plafonne à
+  `LETTRE_EFFORT_ABONNEMENT` (`medium`), et Claude Code ne charge rien de la
+  configuration du compte (connecteurs, skills) : ce surcoût valait à lui
+  seul 50 000 jetons par lettre.
+- *Avec l'API, facturée à l'usage.* Une clé de
+  [la Claude Console](https://platform.claude.com) dans `ANTHROPIC_API_KEY`.
+  Une lettre coûte de l'ordre de 10 à 20 centimes ; le contexte du projet
+  reste en cache cinq minutes, une nouvelle version demandée dans la foulée
+  le relit presque gratuitement.
+
+Avec un jeton d'abonnement, c'est lui qui sert ; `LETTRE_MOTEUR=api` force
+l'API.
 
 ## Rappel de séance dans Google Agenda
 

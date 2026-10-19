@@ -54,6 +54,17 @@ class Config:
     LETTRE_MODEL = os.getenv("LETTRE_MODEL", "claude-opus-5-5")
     # low, medium, high, xhigh ou max : plus haut, plus soigné et plus cher.
     LETTRE_EFFORT = os.getenv("LETTRE_EFFORT", "high")
+    # Ou, sans frais en plus : Claude Code avec l'abonnement Claude. Le jeton
+    # se crée sur le PC par `claude setup-token`. S'il est là, il passe avant
+    # la clé d'API ; LETTRE_MOTEUR (auto, abonnement ou api) force l'un ou
+    # l'autre. LETTRE_MODEL_ABONNEMENT choisit le modèle (« opus »,
+    # « sonnet »…) ; vide, c'est celui de l'abonnement.
+    CLAUDE_CODE_OAUTH_TOKEN = os.getenv("CLAUDE_CODE_OAUTH_TOKEN", "")
+    LETTRE_MOTEUR = os.getenv("LETTRE_MOTEUR", "auto")
+    LETTRE_MODEL_ABONNEMENT = os.getenv("LETTRE_MODEL_ABONNEMENT", "")
+    # La réflexion est ce qui consomme le plus l'abonnement : plafonnée.
+    LETTRE_EFFORT_ABONNEMENT = os.getenv("LETTRE_EFFORT_ABONNEMENT", "medium")
+    CLAUDE_BIN = os.getenv("CLAUDE_BIN", "claude")
     # Rappel du soir quand une séance commencée dans la journée n'est pas
     # terminée (heure locale, « HH:MM »), publié dans /calendar/rappels.ics.
     RAPPEL_SEANCE_HEURE = os.getenv("RAPPEL_SEANCE_HEURE", "20:00")

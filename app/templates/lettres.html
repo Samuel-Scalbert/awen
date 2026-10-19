@@ -12,10 +12,18 @@
 
 <section class="lt-new" aria-labelledby="lt-new-title">
   <h3 id="lt-new-title">Nouvelle lettre</h3>
-  {% if not cle %}
-  <p class="lt-warn">La clé d'API Claude n'est pas configurée : ajoute
-    <code>ANTHROPIC_API_KEY</code> dans le <code>.env</code> du serveur, puis
-    redémarre Awen. L'usage de l'API est facturé à part de l'abonnement Claude.</p>
+  {% if not moteur %}
+  <p class="lt-warn">Claude n'est pas relié. Avec ton abonnement, sans frais en
+    plus : crée un jeton par <code>claude setup-token</code> sur ton PC et
+    mets-le dans <code>CLAUDE_CODE_OAUTH_TOKEN</code>. Ou, avec l'API facturée
+    à l'usage : <code>ANTHROPIC_API_KEY</code>. Dans le <code>.env</code> du
+    serveur, puis redémarre Awen.</p>
+  {% elif moteur == 'abonnement' %}
+  <p class="muted lt-moteur">Écrite par Claude Code avec ton abonnement, en deux
+    à quatre minutes.</p>
+  {% else %}
+  <p class="muted lt-moteur">Écrite par l'API Claude, facturée à l'usage
+    (10 à 20 centimes la lettre).</p>
   {% endif %}
   <form class="lt-form" method="post" action="{{ url_for('jobs.letter_new') }}">
     <label class="field field-wide">
@@ -37,7 +45,7 @@
       <textarea name="priorites" rows="3"
                 placeholder="Ex. : citer le projet SOFTware-Viz, parler de leur levée de fonds, insister sur le télétravail partiel."></textarea>
     </label>
-    <button class="cta" type="submit" {% if not cle %}disabled{% endif %}>✍️ Générer avec Claude</button>
+    <button class="cta" type="submit" {% if not moteur %}disabled{% endif %}>✍️ Générer avec Claude</button>
   </form>
 </section>
 

@@ -9,8 +9,10 @@ réponse, jusqu'au PDF et aux leçons. La génération, qui tourne en
 arrière-plan dans l'app, est ici exécutée sur place.
 """
 import json
+import os
 import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timedelta
@@ -81,6 +83,10 @@ class ConfigTest(Config):
     ANTHROPIC_API_KEY = "cle-de-test"
     LETTRE_MODEL = "claude-opus-5-5"
     LETTRE_EFFORT = "high"
+    # Sans jeton d'abonnement, le moteur est l'API ; un jeton présent dans
+    # l'environnement de la machine ne doit pas changer le test.
+    CLAUDE_CODE_OAUTH_TOKEN = ""
+    LETTRE_MOTEUR = "auto"
 
 
 def reponse(data, stop="end_turn"):
@@ -259,6 +265,119 @@ class LettresTest(unittest.TestCase):
         self.assertEqual(etat["etat"], "generation")
 
     # --- l'éditeur et le PDF -----------------------------------------------------
+
+    # --- avec l'abonnement : Claude Code ----------------------------------------
+
+    def claude_code(self, sortie=None, code=0, stderr=""):
+        """Remplace Claude Code par un faux qui note sa commande, son
+        environnement, son entrée et son message système, puis répond."""
+        vu = {}
+
+        def faux_run(cmd, **kw):
+            vu.update(cmd=cmd, env=kw["env"], input=kw["input"], cwd=kw["cwd"])
+            fichier = cmd[cmd.index("--system-prompt-file") + 1]
+            vu["systeme"] = Path(fichier).read_text(encoding="utf-8")
+            corps = sortie if sortie is not None else {
+                "type": "result", "subtype": "success", "is_error": False,
+                "structured_output": LETTRE, "result": json.dumps(LETTRE),
+                "usage": {"input_tokens": 3, "output_tokens": 800,
+                          "cache_read_input_tokens": 0,
+                          "cache_creation_input_tokens": 12000},
+                "modelUsage": {"claude-haiku-5-5": {"outputTokens": 40},
+                               "claude-opus-5-5": {"outputTokens": 800}}}
+            stdout = json.dumps(corps) if isinstance(corps, dict) else corps
+            return subprocess.CompletedProcess(cmd, code, stdout=stdout, stderr=stderr)
+
+        self.app.config.update(CLAUDE_CODE_OAUTH_TOKEN="jeton-de-test")
+        self.addCleanup(self.app.config.update, CLAUDE_CODE_OAUTH_TOKEN="")
+        p = mock.patch.object(lettres.subprocess, "run", faux_run)
+        p.start()
+        self.addCleanup(p.stop)
+        return vu
+
+    def test_abonnement_par_claude_code(self):
+        vu = self.claude_code()
+        # Une clé d'API dans l'environnement serait facturée : elle doit rester
+        # hors de portée de Claude Code.
+        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "cle-qui-facturerait"}):
+            l = self._ecrire_sans_reponse()
+        self.assertEqual(l.etat, "prete", l.erreur)
+        self.assertEqual(self.claude.appels, [])                # pas d'API
+        cmd = vu["cmd"]
+        self.assertEqual(cmd[:2], ["claude", "-p"])
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "")       # aucun outil
+        # Rien de la configuration du compte : ses connecteurs pesaient
+        # 50 000 jetons par lettre.
+        self.assertIn("--strict-mcp-config", cmd)
+        self.assertIn("--disable-slash-commands", cmd)
+        self.assertEqual(cmd[cmd.index("--setting-sources") + 1], "")
+        # La lettre demande « high » ; l'abonnement plafonne à « medium ».
+        self.assertEqual(cmd[cmd.index("--effort") + 1], "medium")
+        self.assertEqual(cmd[cmd.index("--output-format") + 1], "json")
+        self.assertFalse(json.loads(cmd[cmd.index("--json-schema") + 1])["additionalProperties"])
+        self.assertNotIn("ANTHROPIC_API_KEY", vu["env"])
+        self.assertEqual(vu["env"]["CLAUDE_CODE_OAUTH_TOKEN"], "jeton-de-test")
+        self.assertIn("# Lettre de motivation de Samuel Scalbert", vu["systeme"])  # le skill
+        self.assertNotIn("name: lettre-motivation", vu["systeme"])                   # sans en-tête
+        self.assertIn("SOFTware-Viz/Hub/Sync", vu["systeme"])                         # la fiche
+        self.assertIn("Une offre.", vu["input"])
+        self.assertEqual(l.entreprise, "Yavin")
+        self.assertEqual((l.modele, l.jetons_entree, l.jetons_sortie),
+                         ("claude-opus-5-5", 12003, 800))
+        page = self.client.get("/jobs/lettres").get_data(as_text=True)
+        self.assertIn("avec ton abonnement", page)
+
+    def test_abonnement_a_sa_limite(self):
+        self.claude_code(sortie={"type": "result", "subtype": "success", "is_error": True,
+                                 "result": "Claude AI usage limit reached|1760900000"})
+        l = self._ecrire_sans_reponse()
+        self.assertEqual(l.etat, "erreur")
+        self.assertIn("limite d'utilisation", l.erreur)
+
+    def test_abonnement_jeton_refuse(self):
+        self.claude_code(sortie="", code=1,
+                         stderr="API Error: 401 OAuth token has expired")
+        l = self._ecrire_sans_reponse()
+        self.assertEqual(l.etat, "erreur")
+        self.assertIn("claude setup-token", l.erreur)
+
+    def test_les_exemples_sont_les_lettres_qui_ont_marche(self):
+        lettres_dir = self.dossier / "Lettres de motivation"
+        autre = lettres_dir / "Autre SAS - Product Owner.md"
+        autre.write_text("# Autre SAS\n\n---\n\nLettre d'Autre SAS, la plus récente.\n",
+                         encoding="utf-8")
+        suivi = self.dossier / "Suivi des candidatures.md"
+        suivi.write_text(
+            "| # | Entreprise | Poste | Date lettre | Langue | Notes |\n"
+            "|---|---|---|---|---|---|\n"
+            "| 1 | Autre SAS | Product Owner | 15/10/2026 | FR | |\n"
+            "| 2 | Exemple SA (Paris) | Data Analyst | 01/10/2026 | FR | **ENTRETIEN obtenu** |\n",
+            encoding="utf-8")
+        self.addCleanup(autre.unlink)
+        self.addCleanup(suivi.unlink)
+        self._ecrire()
+        systeme = self.claude.appels[0]["system"][0]["text"]
+        self.assertIn("rejoindre Exemple SA", systeme)        # a obtenu un entretien
+        self.assertNotIn("Lettre d'Autre SAS", systeme)       # plus récente, sans suite
+
+    def test_le_skill(self):
+        texte = lettres.SKILL.read_text(encoding="utf-8")
+        self.assertTrue(texte.startswith("---\nname: lettre-motivation\ndescription: "))
+        corps = lettres.consignes()
+        self.assertTrue(corps.startswith("# Lettre de motivation de Samuel Scalbert"))
+        self.assertNotIn("—", texte)
+
+    def test_telecharger_le_md(self):
+        l = self._ecrire()
+        r = self.client.get("/jobs/lettres/{}/md".format(l.id))
+        self.assertEqual(r.mimetype, "text/markdown")
+        self.assertIn("Yavin - Product Owner Core.md", r.headers["Content-Disposition"])
+        texte = r.get_data(as_text=True)
+        self.assertTrue(texte.startswith("# Yavin, Product Owner Core\n"))
+        self.assertIn("\n---\n", texte)
+        self.assertIn("Objet : Candidature au poste de Product Owner Core", texte)
+        self.assertNotIn("—", texte)
+        self.assertTrue(texte.rstrip().endswith(l.expediteur.splitlines()[0]))
 
     def test_pages(self):
         l = self._ecrire()
