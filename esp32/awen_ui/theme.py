@@ -3,13 +3,21 @@
 Elles sont converties une fois à l'import : l'ESP32 n'a aucune raison de
 refaire ce calcul à chaque image.
 
-UNE SEULE PALETTE, CELLE DES MAQUETTES
+UNE SEULE PALETTE : LE BLEU
 
-Les trois pages ont été dessinées dans une teinte, l'ambre, et chaque
-couleur y a un rôle. Les six palettes au choix des sept écrans sont parties
-avec l'écran Thème : une teinte qu'on n'a jamais vue sur ces pages ne peut
-pas être promise lisible. En rajouter une, c'est écrire une seconde
-Palette ici et la regarder dans le simulateur avant de la proposer.
+Les maquettes étaient en ambre ; sur le vrai panneau l'ambre tirait au
+jaune, et Samuel a préféré le bleu. Les six palettes au choix des sept
+écrans sont parties avec l'écran Thème : une teinte qu'on n'a jamais vue sur
+ces pages ne peut pas être promise lisible. En rajouter une, c'est écrire
+une seconde Palette ici et la regarder dans le simulateur, puis sur
+l'écran, avant de la proposer.
+
+LES TONS SOMBRES SONT PLUS CLAIRS QU'À L'ÉCRAN DU PC
+
+Le panneau écrase le bas de l'échelle : les repères inactifs des maquettes
+(un brun à 30 % de luminance) y étaient tout simplement invisibles, et les
+pages paraissaient amputées. Les rôles sombres ont donc été remontés à ce
+qui se voit vraiment sur la carte, pas sur un écran de PC.
 
 Neuf rôles, pas plus. Le noir absolu fait le contraste, pas la luminosité
 du texte : c'est ce qui distingue un instrument d'un écran d'ordinateur.
@@ -35,12 +43,12 @@ class Palette:
         self.PAST = past    # ce qui est déjà passé dans la journée
 
 
-AMBER = Palette("AMBRE",
-                rgb(0, 0, 0), rgb(255, 176, 0), rgb(242, 232, 208),
-                rgb(143, 134, 114), rgb(255, 91, 69), rgb(28, 21, 0),
-                rgb(42, 36, 24), rgb(74, 62, 34), rgb(106, 98, 80))
+BLUE = Palette("BLEU",
+               rgb(0, 0, 0), rgb(58, 160, 255), rgb(234, 242, 255),
+               rgb(131, 149, 170), rgb(255, 91, 69), rgb(16, 36, 60),
+               rgb(40, 58, 82), rgb(66, 92, 126), rgb(96, 114, 138))
 
-DEFAULT = AMBER
+DEFAULT = BLUE
 
 
 def load():

@@ -46,6 +46,13 @@ COVER_SIZE = 112
 # Une photo lissée sur un panneau de 240 px entouré de texte 8x8 jurerait.
 COVER_BLOCK = 4
 
+# Le firmware à trois pages demande sa taille (?size=144) et la veut nette :
+# ses polices sont lisses, une pochette en gros blocs y paraissait floue. Il
+# l'écrit au fil de l'eau sur sa flash, la taille ne lui coûte donc plus de
+# mémoire. Bornes : en dessous on ne voit plus rien, au-dessus la pochette
+# ne tient plus dans la page.
+COVER_MIN, COVER_MAX = 64, 176
+
 # Le panneau tourne avec _INVERT_COLORS = True dans st7789_min.py : le pilote
 # inverse chaque couleur avant de l'envoyer, SAUF pour les images, dont il
 # attend qu'elles arrivent déjà inversées. Sans ce XOR, la pochette sortirait
@@ -129,7 +136,7 @@ def now_playing():
     images = album.get("images") or []
     art = ""
     if images:
-        usable = [i for i in images if (i.get("width") or 0) >= COVER_SIZE]
+        usable = [i for i in images if (i.get("width") or 0) >= COVER_MAX]
         art = (min(usable, key=lambda i: i["width"]) if usable
                else max(images, key=lambda i: i.get("width") or 0))["url"]
 
@@ -146,11 +153,12 @@ def now_playing():
     }
 
 
-def cover_rgb565(url):
+def cover_rgb565(url, size=COVER_SIZE, block=COVER_BLOCK):
     """La pochette réduite en pixels bruts, prête pour blit_buffer().
 
-    Renvoie COVER_SIZE x COVER_SIZE pixels en RGB565 gros-boutiste, déjà
-    inversés pour ce panneau. None si l'image est introuvable.
+    Renvoie size x size pixels en RGB565 gros-boutiste, déjà inversés pour ce
+    panneau, en blocs de `block` pixels (1 : une image lisse). None si
+    l'image est introuvable.
 
     Le résultat est gardé en mémoire tant que l'URL ne change pas : l'ESP32
     interroge le serveur toutes les cinq secondes sur cet écran, et
@@ -159,7 +167,8 @@ def cover_rgb565(url):
     """
     if not url:
         return None
-    if _cover["url"] == url and _cover["data"] is not None:
+    cle = (url, size, block)
+    if _cover["url"] == cle and _cover["data"] is not None:
         return _cover["data"]
 
     try:
@@ -171,14 +180,15 @@ def cover_rgb565(url):
         # couleurs justes), puis on réagrandit au plus proche voisin pour
         # obtenir des blocs francs. Réduire directement à la taille finale
         # donnerait une image lisse, pas pixelisée.
-        small = COVER_SIZE // COVER_BLOCK
+        small = size // block
         img = img.resize((small, small), Image.LANCZOS)
-        img = img.resize((COVER_SIZE, COVER_SIZE), Image.NEAREST)
+        if block > 1:
+            img = img.resize((size, size), Image.NEAREST)
     except Exception as e:
         current_app.logger.warning("spotify cover: %s", e)
         return None
 
-    out = bytearray(COVER_SIZE * COVER_SIZE * 2)
+    out = bytearray(size * size * 2)
     i = 0
     for (red, green, blue) in img.getdata():
         px = ((red & 0xF8) << 8) | ((green & 0xFC) << 3) | (blue >> 3)
@@ -188,7 +198,7 @@ def cover_rgb565(url):
         out[i + 1] = px & 0xFF
         i += 2
 
-    _cover["url"] = url
+    _cover["url"] = cle
     _cover["data"] = bytes(out)
     return _cover["data"]
 

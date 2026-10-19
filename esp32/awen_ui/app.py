@@ -65,8 +65,11 @@ BLINK_MS = 530           # battement de la LED en cas d'alerte
 # ne verrait plus qu'il tourne.
 SPIN_MS = 150
 NET_TIMEOUT = 6          # secondes ; au-delà, on garde l'écran précédent
-COVER = 112              # côté de la pochette, doit égaler COVER_SIZE serveur
-COVER_FILE = "/cover.bin"   # 25 Ko : sur la flash, jamais en RAM
+COVER = 144              # côté de la pochette, demandé au serveur (?size=)
+COVER_FILE = "/cover.bin"   # 41 Ko : sur la flash, jamais en RAM
+
+# Toutes les dix minutes, la page est repeinte en place. Voir _tick().
+REPAINT_MS = 600000
 
 # Rythme des animations. Ces valeurs se lisent, elles ne s'expédient pas :
 # une ligne d'amorçage qui apparaît en 120 ms n'est pas une animation, c'est
@@ -119,6 +122,7 @@ class App:
         self.dirty = True
         self.t_poll = 0
         self.t_spin = 0
+        self.t_repaint = 0
         self._hm = None             # minutes depuis minuit, au dernier relevé
         self._sec = 0
         self._hm_at = 0
@@ -346,7 +350,10 @@ class App:
         r = None
         got = 0
         try:
-            r = urequests.get(self._url("/api/esp32/cover"),
+            # La taille voyage avec la demande : c'est la carte qui sait
+            # quelle place la page lui réserve, le serveur s'y plie.
+            r = urequests.get(self._url("/api/esp32/cover")
+                              + "&size={}".format(self.COVER),
                               timeout=NET_TIMEOUT)
             if r.status_code != 200:
                 raise OSError(r.status_code)
@@ -648,6 +655,18 @@ class App:
                 self.dirty = True
 
         self.current().tick(now, self)
+
+        # TOUTES LES DIX MINUTES, LA PAGE EST REPEINTE EN PLACE.
+        #
+        # Le canevas ne repeint que ce qui change : un pixel abime en route,
+        # par un parasite sur le bus, resterait la jusqu'au prochain
+        # changement de l'element, parfois des heures. On lui fait tout
+        # oublier SANS effacer l'ecran : chaque element se repeint sur
+        # lui-meme, il n'y a aucun eclair noir.
+        if self.awake and time.ticks_diff(now, self.t_repaint) >= REPAINT_MS:
+            self.t_repaint = now
+            self.g.forget_all()
+            self.dirty = True
 
         if self.t_poll == 0 or                 time.ticks_diff(now, self.t_poll) >= self._poll_interval():
             self.t_poll = now

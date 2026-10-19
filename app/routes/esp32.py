@@ -190,12 +190,20 @@ def spotify_cover():
     millisecondes au lieu de plusieurs secondes là-bas.
     """
     _check_key()
+    # Sans paramètre : l'ancien afficheur, 112 px en blocs. Avec ?size= : le
+    # firmware à trois pages, qui choisit sa taille et la veut lisse.
+    size = request.args.get("size", type=int)
+    if size is None:
+        size, block = spotify_svc.COVER_SIZE, spotify_svc.COVER_BLOCK
+    else:
+        size = max(spotify_svc.COVER_MIN, min(spotify_svc.COVER_MAX, size))
+        block = 1
     sp = spotify_svc.now_playing()
-    data = spotify_svc.cover_rgb565((sp or {}).get("art_url", ""))
+    data = spotify_svc.cover_rgb565((sp or {}).get("art_url", ""), size, block)
     if data is None:
         abort(404)
     return Response(data, mimetype="application/octet-stream",
-                    headers={"X-Cover-Size": str(spotify_svc.COVER_SIZE)})
+                    headers={"X-Cover-Size": str(size)})
 
 
 JOURS = ("Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi",

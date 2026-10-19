@@ -25,6 +25,7 @@ import gc
 import io
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -138,7 +139,8 @@ def _get(url, timeout=None):
     if not Monde.en_ligne:
         raise OSError("ECONNABORTED")
     if "/api/esp32/cover" in url:
-        return Reponse(pochette())
+        taille = re.search(r"size=(\d+)", url)
+        return Reponse(pochette(int(taille.group(1)) if taille else 112))
     return Reponse(json.dumps(Monde.reponse).encode())
 
 
@@ -234,13 +236,15 @@ class Ecran:
             self.blit_buffer(f.read(), x, y, w, h)
 
 
-def pochette():
-    """Une pochette de 112 px, dans le format que sert /api/esp32/cover."""
-    im = Image.new("RGB", (112, 112), (36, 24, 0))
+def pochette(cote=112):
+    """Une pochette carrée, dans le format que sert /api/esp32/cover."""
+    im = Image.new("RGB", (cote, cote), (10, 24, 44))
     d = ImageDraw.Draw(im)
-    for r, c in ((40, (255, 176, 0)), (27, (36, 24, 0)), (14, (242, 232, 208)),
-                 (3, (36, 24, 0))):
-        d.ellipse((56 - r, 56 - r, 56 + r, 56 + r), fill=c)
+    m = cote // 2
+    for part, c in ((0.36, (58, 160, 255)), (0.24, (10, 24, 44)),
+                    (0.125, (234, 242, 255)), (0.03, (10, 24, 44))):
+        r = int(cote * part)
+        d.ellipse((m - r, m - r, m + r, m + r), fill=c)
     out = bytearray()
     brut = im.tobytes()
     for k in range(0, len(brut), 3):
@@ -451,6 +455,21 @@ def scenarios(carte):
     etape("agenda indisponible", lambda: carte.recoit(variante(
         agenda={"ok": False, "jour": [], "dans": "", "jours": []})))
     etape("agenda revenu", lambda: carte.recoit(ETAT))
+    etape("deux rendez-vous : le lendemain complete l'accueil",
+          lambda: carte.recoit(variante(agenda={
+              "jour": [["11:00", "Entretien visio", 1],
+                       ["14:30", "Dentiste", 2]]})))
+    etape("journee vide : le message, puis le lendemain",
+          lambda: carte.recoit(variante(agenda={
+              "jour": [], "dans": "", "jours": ETAT["agenda"]["jours"][1:]})))
+    etape("le lendemain sans rendez-vous horaires",
+          lambda: carte.recoit(variante(agenda={
+              "jour": [["11:00", "Entretien visio", 1]],
+              "jours": [ETAT["agenda"]["jours"][2]]})))
+    etape("quatre rendez-vous : plus de place pour demain",
+          lambda: carte.recoit(ETAT))
+    etape("la repeinte des dix minutes",
+          lambda: (Horloge.avance(600001), carte.images(3)))
 
     def coupe():
         Monde.en_ligne = False

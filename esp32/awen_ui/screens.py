@@ -212,6 +212,10 @@ class Home(Screen):
     dit s'il faut ouvrir la fenêtre. Puis l'agenda du jour, quatre lignes,
     qui est avec la météo ce pour quoi on regarde cet écran.
 
+    Une journée légère ne laisse pas la moitié de l'écran vide : s'il reste
+    deux lignes ou plus, le prochain jour occupé vient les remplir, sous
+    son nom et en retrait de couleur. Le soir, on voit déjà demain.
+
     LA MOLETTE RÈGLE LA LUMINOSITÉ
 
     Elle n'avait rien à faire sur l'accueil, et la luminosité n'avait plus
@@ -227,9 +231,32 @@ class Home(Screen):
     _T = ("a.t0", "a.t1", "a.t2", "a.t3")
     _J = ("a.j0", "a.j1", "a.j2", "a.j3")
     _M = ("a.m0", "a.m1", "a.m2", "a.m3")
+    _K = ("a.k0", "a.k1", "a.k2", "a.k3")
+    _D = ("a.d0", "a.d1", "a.d2", "a.d3")
+    _F = ("a.f0", "a.f1", "a.f2", "a.f3")
 
     def __init__(self):
         self.lum_until = None
+
+    @staticmethod
+    def _lignes(ag):
+        """Les quatre lignes de l'agenda, chacune (sorte, contenu).
+
+        e : un rendez-vous d'aujourd'hui ; m : le message d'une journée
+        vide ; j : le nom du jour suivant ; d : un rendez-vous de ce jour-là.
+        """
+        out = [("e", e) for e in (ag.get("jour") or [])[:4]]
+        if not out:
+            out.append(("m", "Rien de prévu" if ag.get("ok", True)
+                        else "Agenda indisponible"))
+        if len(out) <= 2:
+            for j in ag.get("jours") or []:
+                if j.get("t") != "AUJOURD'HUI":
+                    out.append(("j", (j.get("t", ""), j.get("d", ""))))
+                    for e in (j.get("ev") or [])[:4 - len(out)]:
+                        out.append(("d", e))
+                    break
+        return out
 
     def on_turn(self, delta, app):
         niveaux = backlight_mod.LEVELS
@@ -334,36 +361,50 @@ class Home(Screen):
 
         # --- la journée ----------------------------------------------------
         ag = st.get("agenda", {})
-        ev = ag.get("jour") or []
         c.rect("a.f", G, 182, LARGE, 1, p.RULE)
         c.text("a.titre", G, 197, "AUJOURD'HUI", PX, p.DIM)
         c.text("a.dans", D, 197, ag.get("dans", ""), PX, p.FG, 1)
+        lignes = self._lignes(ag)
         for i in range(4):
             b = 218 + 22 * i
-            heure = titre = journee = message = ""
+            sorte, l = lignes[i] if i < len(lignes) else ("", None)
+            heure = titre = journee = message = gauche = droite = ""
             etat = 2
-            if i < len(ev):
-                heure, titre, etat = ev[i][0], ev[i][1], ev[i][2]
+            if sorte in ("e", "d"):
+                heure, titre, etat = l[0], l[1], l[2]
                 if not heure:
                     journee = "JOURNEE"
-            elif i == 0:
-                # La première ligne dit pourquoi les quatre sont vides.
-                message = ("Rien de prévu" if ag.get("ok", True)
-                           else "Agenda indisponible")
+            elif sorte == "m":
+                message = l
+            elif sorte == "j":
+                gauche, droite = l
+            if sorte == "d":
+                # Le jour suivant se lit en retrait : il complète, il ne
+                # rivalise pas avec aujourd'hui.
+                ch = ct = p.DIM
+            else:
+                ch = p.PAST if etat == 0 else (p.FG if etat == 1 else p.HI)
+                ct = p.PAST if etat == 0 else p.HI
             # Le repère de ce qui est en cours ou arrive, dans la marge.
-            c.rect(self._M[i], 8, b - 13, 3, 13, p.FG if etat == 1 else p.BG)
-            # L'heure, « JOURNEE » et le message se partagent la même place.
-            # Ce qui s'efface passe AVANT ce qui s'écrit, sinon l'effacement
-            # emporte le texte tout juste posé : d'où les deux passes.
+            c.rect(self._M[i], 8, b - 13, 3, 13,
+                   p.FG if etat == 1 and sorte == "e" else p.BG)
+            # Un filet au-dessus du nom du jour suivant.
+            c.rect(self._F[i], G, b - 17, LARGE, 1,
+                   p.RULE if sorte == "j" else p.BG)
+            # Heure, « JOURNEE », message et nom du jour se partagent la même
+            # place. Ce qui s'efface passe AVANT ce qui s'écrit, sinon
+            # l'effacement emporte le texte tout juste posé : deux passes.
             for passe in (True, False):
                 if (not heure) == passe:
-                    c.text(self._H[i], G, b, heure, B9, p.PAST if etat == 0
-                           else (p.FG if etat == 1 else p.HI))
+                    c.text(self._H[i], G, b, heure, B9, ch)
                 if (not journee) == passe:
                     c.text(self._J[i], G, b - 3, journee, PX, p.DIM)
                 if (not titre) == passe:
-                    c.text(self._T[i], 72, b, titre, S9,
-                           p.PAST if etat == 0 else p.HI, 0, 152)
+                    c.text(self._T[i], 72, b, titre, S9, ct, 0, 152)
+                if (not gauche) == passe:
+                    c.text(self._K[i], G, b - 4, gauche, PX, p.DIM)
+                if (not droite) == passe:
+                    c.text(self._D[i], D, b - 4, droite, PX, p.DIM, 1)
                 if i == 0 and (not message) == passe:
                     c.text("a.vide", G, b, message, S9, p.PAST)
 
@@ -376,14 +417,17 @@ class Spotify(Screen):
     Un cran vaut deux pour cent : un tour complet couvre toute l'échelle,
     et le geste reste assez fin pour ajuster sans viser.
 
-    Le volume a sa colonne à droite de la pochette, en grand : c'est le seul
-    réglage de la page, et la molette le commande. Les trois gestes sont
-    dessinés en bas dans l'ordre des boutons, avec leur lettre.
+    La pochette prend la place qu'il faut, 144 px, et la colonne à sa
+    droite porte le volume : sa valeur, et une jauge verticale de la hauteur
+    de la pochette, un pixel par pour cent. C'est le seul réglage de la page,
+    et la molette le commande. Les trois gestes sont dessinés en bas, dans
+    l'ordre des boutons.
     """
 
     NAME = "spotify"
 
     VOL_STEP = 2                 # % par cran ; un tour couvre l'échelle
+    _GRAD = ("s.g0", "s.g1", "s.g2", "s.g3")
 
     def __init__(self):
         self._mode = None
@@ -427,53 +471,51 @@ class Spotify(Screen):
             c.text("s.v2", G, 196, "sur ton téléphone.", S9, p.HI)
             return
 
-        # --- la pochette, 112 px, dans un contour --------------------------
+        # --- la pochette, 144 px, dans un contour --------------------------
         # Sans lui une pochette sombre se fond dans le noir du panneau et on
         # ne voit plus où elle commence.
-        c.frame("s.cadre", G - 1, 35, 114, 114, p.RULE)
-        c.image("s.pochette", G, 36, app.cover, app.COVER, sp.get("cover", ""))
+        c.frame("s.cadre", G - 1, 33, 146, 146, p.RULE)
+        c.image("s.pochette", G, 34, app.cover, app.COVER, sp.get("cover", ""))
 
-        # --- le volume ------------------------------------------------------
+        # --- le volume, en colonne ------------------------------------------
+        # La jauge fait cent pixels de haut, un par pour cent, et se tient
+        # contre le bord droit, à hauteur de la pochette.
         vol = sp.get("volume", 0)
-        s = str(vol)
-        c.text("s.vl", 140, 46, "VOLUME", PX, p.DIM)
-        c.value("s.vv", 140, 78, s, B18, p.HI, "%", S9, p.DIM)
-        c.bar("s.vb", 140, 88, 84, 6, vol * 84 // 100, p.FG, p.RULE)
-        c.ring("s.mo", 144, 105, 4, p.DIM)
-        c.text("s.ml", 154, 108, "MOLETTE", PX, p.DIM)
-
-        joue = bool(sp.get("playing"))
-        c.tri("s.et", 149, 141, -9, 6, p.FG if joue else p.BG)
-        c.text("s.el", 155, 145, "EN LECTURE" if joue else "EN PAUSE", PX,
-               p.FG if joue else p.DIM)
+        c.text("s.vl", 172, 41, "VOL", PX, p.DIM)
+        c.value("s.vv", 172, 64, str(vol), B12, p.HI,
+                "%" if vol < 100 else "", S9, p.DIM)
+        for k in range(4):
+            c.rect(self._GRAD[k], 206, 79 + 25 * k, 5, 1, p.DIM)
+        c.vmeter("s.vm", 214, 79, 10, 100, vol, p.FG, p.RULE)
 
         # --- la piste -------------------------------------------------------
-        c.text("s.titre", G, 176, sp.get("title", ""), B12, p.HI, 0, LARGE)
-        c.text("s.artiste", G, 198, sp.get("artist", ""), S9, p.DIM, 0, 140)
-        c.text("s.album", D, 198, sp.get("album", "").upper()[:10], PX,
+        c.text("s.titre", G, 202, sp.get("title", ""), B12, p.HI, 0, LARGE)
+        c.text("s.artiste", G, 226, sp.get("artist", ""), S9, p.DIM, 0, 140)
+        c.text("s.album", D, 226, sp.get("album", "").upper()[:10], PX,
                p.FAINT, 1)
 
         # Position extrapolée localement : le compteur avance chaque seconde
         # sans que le serveur soit interrogé plus souvent. Voir app.py.
         pos = app.play_position()
         dur = sp.get("duration_s", 0)
-        c.slider("s.pos", G, 208, LARGE, 4,
+        c.slider("s.pos", G, 238, LARGE, 4,
                  (pos * LARGE // dur) if dur else 0, p.FG, p.RULE, 4, p.HI)
-        c.text("s.t0", G, 226, _mmss(pos), PX, p.HI)
-        c.text("s.t1", D, 226, _mmss(dur), PX, p.DIM, 1)
+        c.text("s.t0", G, 255, _mmss(pos), PX, p.HI)
+        c.text("s.t1", D, 255, _mmss(dur), PX, p.DIM, 1)
 
         # --- les trois gestes, dans l'ordre des boutons --------------------
-        y = 258
+        y = 270
         c.rect("s.a1", 20, y - 6, 2, 13, p.HI)
         c.tri("s.a2", 23, y, 10, 6, p.HI)
-        c.text("s.a3", G, 283, "A TENU", PX, p.DIM)
+        c.text("s.a3", G, 288, "A TENU", PX, p.DIM)
 
-        # Le bouton dit ce que B va FAIRE, pas l'état : en lecture il
-        # propose la pause. L'état, lui, est écrit à côté de la pochette.
+        # Le bouton dit ce que B va FAIRE : en lecture il propose la pause,
+        # à l'arrêt la lecture. C'est aussi ce qui dit l'état de la piste.
+        joue = bool(sp.get("playing"))
         if self._joue != joue:
             self._joue = joue
             c.forget("s.b1", "s.b2", "s.b3", "s.b4", "s.b5")
-        c.rrect("s.b1", 82, y - 13, 76, 26, 13, p.FG)
+        c.rrect("s.b1", 82, y - 12, 76, 24, 12, p.FG)
         if joue:
             c.rect("s.b2", 97, y - 6, 4, 13, p.BG)
             c.rect("s.b3", 105, y - 6, 4, 13, p.BG)
@@ -481,11 +523,10 @@ class Spotify(Screen):
         else:
             c.tri("s.b4", 107, y, -9, 6, p.BG)
             c.text("s.b5", 116, y + 4, "LIRE", PX, p.BG, 0, 0, p.FG)
-        c.text("s.b6", 120, 283, "B", PX, p.DIM, 2)
 
         c.tri("s.c1", 217, y, -10, 6, p.HI)
         c.rect("s.c2", 218, y - 6, 2, 13, p.HI)
-        c.text("s.c3", D, 283, "C TENU", PX, p.DIM, 1)
+        c.text("s.c3", D, 288, "C TENU", PX, p.DIM, 1)
 
     def on_input(self, ev, app):
         """Piste précédente/suivante en MAINTENANT A ou C, pas en tapant.

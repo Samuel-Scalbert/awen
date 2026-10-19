@@ -33,6 +33,22 @@ tft.blit_buffer(tampon, x, y, largeur, hauteur)
 tft.draw_image_file(chemin, x, y, largeur, hauteur)   # la pochette
 ```
 
+### Le bus de l'écran tourne à 40 MHz, pas 80
+
+`tft_setup.py` ouvre le SPI à 80 MHz, au-delà des 62,5 MHz que le ST7789
+accepte en écriture. Sur les fils d'une breadboard, des bits se perdaient :
+de petits traits de couleur apparaissaient là où le firmware avait peint du
+noir, et y restaient, puisqu'il ne repeint que ce qui change. `main.py`
+ramène donc le bus à 40 MHz avant de lancer l'application, et la console
+l'affiche au démarrage :
+
+```
+ecran : SPI(id=2, baudrate=40000000, ...)
+```
+
+Par sécurité, `app.py` repeint aussi la page en place toutes les dix
+minutes, sans effacer l'écran : un pixel abîmé ne survit pas longtemps.
+
 ### Les polices ne viennent plus du pilote
 
 Le pilote n'a qu'une police, une 8×8 sans accents. Elle a porté les sept
@@ -257,18 +273,28 @@ Deux gestes en plus, uniquement sur Spotify :
 Maintenir plutôt que taper, parce que l'appui court d'A et de C doit rester la
 navigation partout. Les faire changer de piste enfermerait dans Spotify : les
 trois boutons seraient pris et seul l'appui long en sortirait. C'est aussi le
-geste des autoradios. La page le rappelle sous ses trois pictogrammes :
-`A TENU`, `B`, `C TENU`.
+geste des autoradios. La page le rappelle sous ses pictogrammes :
+`A TENU` et `C TENU`.
+
+La pochette fait 144 px, et la colonne à sa droite porte le volume : sa
+valeur et une jauge verticale, un pixel par pour cent. La carte demande
+cette taille au serveur (`/cover?size=144`), qui la lui sert nette ; sans
+paramètre, il sert toujours l'ancienne pochette de 112 px en blocs.
 
 **Les boutons trient, la molette règle.** C'est ce partage qui rend trois
 boutons suffisants.
 
 ## Couleurs et luminosité
 
-Une seule teinte, l'ambre, celle dans laquelle les trois pages ont été
-dessinées. Neuf rôles dans `theme.py` : le fond, l'accent (l'heure, ce qui
-est en cours), l'encre des valeurs, les libellés, l'alerte, les segments
-éteints, les filets, les repères inactifs, ce qui est déjà passé.
+Une seule teinte, le bleu. Les maquettes étaient en ambre ; sur le panneau
+l'ambre tirait au jaune, et le bleu l'a remplacé. Neuf rôles dans
+`theme.py` : le fond, l'accent (l'heure, ce qui est en cours), l'encre des
+valeurs, les libellés, l'alerte, les segments éteints, les filets, les
+repères inactifs, ce qui est déjà passé.
+
+Les rôles sombres sont plus clairs qu'ils n'en ont l'air sur un PC : le
+panneau écrase le bas de l'échelle, et les repères de page des maquettes y
+étaient invisibles. Une couleur se juge sur la carte.
 
 Les six palettes au choix sont parties avec l'écran Thème. Une teinte qu'on
 n'a jamais vue sur ces pages ne peut pas être promise lisible : en rajouter

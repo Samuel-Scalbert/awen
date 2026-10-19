@@ -173,6 +173,11 @@ class Canvas:
         for k in keys:
             self._m.pop(k, None)
 
+    def forget_all(self):
+        """Oublie tout sans rien effacer : la prochaine page repeint chaque
+        élément sur lui-même. C'est la réparation périodique d'app.py."""
+        self._m.clear()
+
     def wipe(self):
         """Efface l'écran et oublie tout, sans transition."""
         self.d.fill_rect(0, 0, W, H, self.p.BG)
@@ -473,6 +478,22 @@ class Canvas:
         self._m[key] = [filled, color]
         self._bar(x, y, w, h, filled, color, track)
         self._disc(x + filled, cy, kr, kcolor)
+
+    def vmeter(self, key, x, y, w, h, filled, color, track):
+        """Jauge verticale, pleine depuis le bas : le volume.
+
+        La partie pleine et le rail sont deux rectangles qui ne se
+        recouvrent pas : tourner la molette ne fait jamais clignoter la jauge.
+        """
+        m = self._m.get(key)
+        if m is not None and m[0] == filled and m[1] == color:
+            return
+        self._m[key] = [filled, color]
+        f = h if filled > h else (0 if filled < 0 else filled)
+        if h - f:
+            self.d.fill_rect(x, y, w, h - f, track)
+        if f:
+            self.d.fill_rect(x, y + h - f, w, f, color)
 
     def vbar(self, key, x, y, w, h, pos, size, color, track):
         """Ascenseur vertical : un rail et sa poignée."""

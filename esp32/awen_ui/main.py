@@ -16,6 +16,23 @@ la clé d'API et le mot de passe wifi, il ne doit jamais partir sur GitHub.
 """
 from tft_setup import tft
 
+# LE BUS DE L'ECRAN A 40 MHz, PAS 80.
+#
+# tft_setup.py l'ouvre a 80 MHz, au-dela des 62,5 MHz que le ST7789 accepte en
+# ecriture. Sur des fils de breadboard, des bits se perdaient en route : de
+# petits traits de couleur apparaissaient la ou le firmware avait peint du
+# noir, et y restaient, puisqu'il ne repeint que ce qui change. A 40 MHz le
+# bus reste rapide (un plein ecran en une trentaine de millisecondes) et
+# rentre dans la norme du controleur.
+#
+# Avant App(), et c'est voulu : le bus reclame le GPIO 19 comme MISO, que
+# l'encodeur reprend juste apres. Dans l'autre ordre, la molette serait morte.
+try:
+    tft.spi.init(baudrate=40000000)
+    print("ecran :", tft.spi)
+except Exception as e:
+    print("spi:", e)
+
 # Le wifi vient de wifi_config.py, deja sur la carte et deja utilise par
 # wifi.py et spotify_screen.py. On ne redemande pas un mot de passe qui existe
 # a un metre de la : un secret duplique est un secret qui finit desynchronise,
