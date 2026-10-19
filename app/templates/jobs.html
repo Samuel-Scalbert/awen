@@ -161,7 +161,6 @@ la tâche tourne chaque matin à 9h.</p>
       <div class="md">{{ o.links_note_html|safe }}</div></details>
     {% endif %}
 
-    {% if o.actions %}
     <footer class="jw-actions">
       {% for a in o.actions %}
       <a class="btn small{{ ' btn-ghost' if a.kind != 'apply' }}" href="{{ a.url }}"
@@ -169,8 +168,9 @@ la tâche tourne chaque matin à 9h.</p>
         {{- '✉️ Postuler' if a.kind == 'apply' else "🔗 Voir l'offre" }}
         <span class="host">{{ a.host }}</span></a>
       {% endfor %}
+      <a class="btn small btn-ghost"
+         href="{{ url_for('jobs.letters', offre=sel.dirname ~ '#' ~ (o.rank or loop.index)) }}">✍️ Écrire la lettre</a>
     </footer>
-    {% endif %}
   </article>
   {% else %}
   <p class="jw-empty">Aucune offre retenue ce jour-là. Zéro est une réponse

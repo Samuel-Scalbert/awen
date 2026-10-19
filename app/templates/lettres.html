@@ -3,41 +3,119 @@
 {% block content %}
 <div class="page-head">
   <h2>📄 Lettres de motivation</h2>
-  <p class="sub">Générées par Claude — à lire ici ou à télécharger pour postuler
-    depuis le téléphone.</p>
+  <p class="sub">Claude écrit la lettre selon les règles du projet de recherche de CDI.
+    Tu la corriges, tu télécharges le PDF, et il apprend de tes corrections.</p>
   <div class="page-links">
     <a href="{{ url_for('jobs.daily_jobs') }}">← Jobs du jour</a>
   </div>
 </div>
 
-{% if letters is none %}
-<p class="muted">Dossier introuvable — vérifie <code>JOB_SEARCH_DIR</code> dans le <code>.env</code>
-(il doit contenir un sous-dossier <code>Lettres de motivation</code>).</p>
+<section class="lt-new" aria-labelledby="lt-new-title">
+  <h3 id="lt-new-title">Nouvelle lettre</h3>
+  {% if not cle %}
+  <p class="lt-warn">La clé d'API Claude n'est pas configurée : ajoute
+    <code>ANTHROPIC_API_KEY</code> dans le <code>.env</code> du serveur, puis
+    redémarre Awen. L'usage de l'API est facturé à part de l'abonnement Claude.</p>
+  {% endif %}
+  <form class="lt-form" method="post" action="{{ url_for('jobs.letter_new') }}">
+    <label class="field field-wide">
+      <span>Offre de la veille</span>
+      <select name="offre_ref">
+        <option value="">Aucune : je colle l'offre ci-dessous</option>
+        {% for o in offres %}
+        <option value="{{ o.ref }}" {% if o.ref == choisie %}selected{% endif %}>{{ o.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field field-wide">
+      <span>Texte de l'offre <em>(ou un complément à celle choisie)</em></span>
+      <textarea name="offre" rows="5"
+                placeholder="Colle l'annonce, ou ce que tu sais du poste et de l'entreprise."></textarea>
+    </label>
+    <label class="field field-wide">
+      <span>À mettre en avant en priorité</span>
+      <textarea name="priorites" rows="3"
+                placeholder="Ex. : citer le projet SOFTware-Viz, parler de leur levée de fonds, insister sur le télétravail partiel."></textarea>
+    </label>
+    <button class="cta" type="submit" {% if not cle %}disabled{% endif %}>✍️ Générer avec Claude</button>
+  </form>
+</section>
 
-{% elif not letters %}
-<p class="muted">Aucune lettre pour l'instant — elles apparaîtront ici dès que Claude en génère.</p>
-
-{% else %}
-<p class="muted">{{ letters|length }} lettres, générées par le pipeline Claude — les plus récentes d'abord.</p>
-<ul class="letters">
-  {% for l in letters %}
-  <li>
-    <span class="letter-name">
-      {% if l.readable %}
-      <a href="{{ url_for('jobs.read_letter', filename=l.filename) }}">{{ l.title }}</a>
-      {% else %}
-      {{ l.title }}
-      {% endif %}
-      <small class="muted">{{ l.ext }} · {{ l.mtime.strftime('%d/%m/%Y') }} · {{ l.size_kb }} Ko</small>
-    </span>
-    <span class="letter-actions">
-      {% if l.readable %}
-      <a class="cta small" href="{{ url_for('jobs.read_letter', filename=l.filename) }}">👁️ Lire</a>
-      {% endif %}
-      <a class="cta small" href="{{ url_for('jobs.download_letter', filename=l.filename) }}">⬇️ Télécharger</a>
-    </span>
-  </li>
-  {% endfor %}
-</ul>
+{% if ecrites %}
+<section class="lt-section" aria-labelledby="lt-ecrites-title">
+  <h3 id="lt-ecrites-title">Écrites avec Claude</h3>
+  <ul class="lt-list">
+    {% for l in ecrites %}
+    <li>
+      <a href="{{ url_for('jobs.letter_edit', lettre_id=l.id) }}">
+        <span class="lt-who">{{ l.entreprise or "Entreprise à préciser" }}</span>
+        <span class="lt-what">{{ l.poste }}</span>
+      </a>
+      <span class="lt-meta">
+        {{ l.created_at.strftime('%d/%m') }}
+        {% if l.etat == 'generation' %}<span class="lt-badge run">en cours</span>
+        {% elif l.etat == 'erreur' %}<span class="lt-badge err">erreur</span>
+        {% elif l.exportee_le %}<span class="lt-badge ok">PDF {{ l.exportee_le.strftime('%d/%m') }}</span>
+        {% else %}<span class="lt-badge">à relire</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
 {% endif %}
+
+<section class="lt-section" id="lecons" aria-labelledby="lt-lecons-title">
+  <h3 id="lt-lecons-title">Ce que Claude a appris de tes corrections</h3>
+  {% if lecons %}
+  <p class="muted">Ces règles entrent dans chaque nouvelle lettre. Retire celles qui sont fausses :
+    une règle fausse appliquée à chaque lettre coûte plus cher que pas de règle.</p>
+  <ul class="lt-lessons">
+    {% for l in lecons %}
+    <li class="{{ '' if l.active else 'off' }}">
+      <span class="lt-lesson-text">{{ l.texte }}</span>
+      <form method="post" action="{{ url_for('jobs.lesson_toggle', lecon_id=l.id) }}">
+        <button class="btn small" type="submit" name="action" value="basculer">
+          {{ "Désactiver" if l.active else "Réactiver" }}</button>
+        <button class="btn small danger" type="submit" name="action" value="supprimer">Supprimer</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Rien encore. Quand tu télécharges le PDF d'une lettre que tu as vraiment
+    réécrite, Claude compare son brouillon à ta version et en tire au plus trois règles,
+    qui apparaîtront ici.</p>
+  {% endif %}
+</section>
+
+<section class="lt-section" aria-labelledby="lt-dossier-title">
+  <h3 id="lt-dossier-title">Lettres du dossier de recherche</h3>
+  {% if letters is none %}
+  <p class="muted">Dossier introuvable : vérifie <code>JOB_SEARCH_DIR</code> dans le <code>.env</code>
+  (il doit contenir un sous-dossier <code>Lettres de motivation</code>).</p>
+  {% elif not letters %}
+  <p class="muted">Aucune lettre dans le dossier pour l'instant.</p>
+  {% else %}
+  <ul class="letters">
+    {% for l in letters %}
+    <li>
+      <span class="letter-name">
+        {% if l.readable %}
+        <a href="{{ url_for('jobs.read_letter', filename=l.filename) }}">{{ l.title }}</a>
+        {% else %}
+        {{ l.title }}
+        {% endif %}
+        <small class="muted">{{ l.ext }} · {{ l.mtime.strftime('%d/%m/%Y') }} · {{ l.size_kb }} Ko</small>
+      </span>
+      <span class="letter-actions">
+        {% if l.readable %}
+        <a class="cta small" href="{{ url_for('jobs.read_letter', filename=l.filename) }}">👁️ Lire</a>
+        {% endif %}
+        <a class="cta small" href="{{ url_for('jobs.download_letter', filename=l.filename) }}">⬇️ Télécharger</a>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>
 {% endblock %}

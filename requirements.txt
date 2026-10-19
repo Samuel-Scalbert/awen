@@ -8,3 +8,6 @@ markdown>=3.5
 # microcontrôleur ne sait pas décoder un JPEG de 300 px.
 Pillow>=10.0
 gunicorn>=22.0
+# Lettres de motivation : Claude écrit le texte, reportlab le met en page.
+anthropic>=1.14,<2
+reportlab>=4.4,<6

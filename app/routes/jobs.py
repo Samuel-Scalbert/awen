@@ -1,9 +1,14 @@
 import re
+from datetime import datetime
+from io import BytesIO
 
 import markdown as md
-from flask import (Blueprint, abort, render_template, request,
-                   send_from_directory)
+from flask import (Blueprint, abort, current_app, jsonify, redirect,
+                   render_template, request, send_file, send_from_directory,
+                   url_for)
 
+from ..models import CoverLetter, LetterLesson, db
+from ..services import lettres as lettres_svc
 from ..services.job_watch import (FAMILIES, cap, family_totals, freshness,
                                   get_cover_letters, get_daily_reports,
                                   get_report, letters_dir, read_cover_letter)
@@ -84,7 +89,148 @@ def _prepare(report):
 
 @bp.route("/lettres")
 def letters():
-    return render_template("lettres.html", letters=get_cover_letters())
+    ecrites = CoverLetter.query.order_by(CoverLetter.id.desc()).limit(30).all()
+    for lettre in ecrites:
+        lettres_svc.abandonnee(lettre)
+    return render_template(
+        "lettres.html", letters=get_cover_letters(), ecrites=ecrites,
+        offres=lettres_svc.offres_recentes(),
+        lecons=LetterLesson.query.order_by(LetterLesson.id.desc()).all(),
+        cle=bool(current_app.config.get("ANTHROPIC_API_KEY")),
+        choisie=request.args.get("offre", ""))
+
+
+# --------------------------------------------------------------------------
+# Écrire une lettre avec Claude
+
+
+def _champs(lettre):
+    """Ce que la page sait de la lettre, pour l'éditeur et le suivi."""
+    return {
+        "id": lettre.id, "etat": lettre.etat, "erreur": lettre.erreur,
+        "entreprise": lettre.entreprise, "poste": lettre.poste,
+        "expediteur": lettre.expediteur, "date_ligne": lettre.date_ligne,
+        "destinataire": lettre.destinataire, "objet": lettre.objet,
+        "salutation": lettre.salutation, "corps": lettre.corps,
+        "notes": lettre.notes, "mots": lettres_svc.mots(lettre),
+    }
+
+
+def _nouvelle(offre, offre_ref, priorites, entreprise="", poste=""):
+    lettre = CoverLetter(
+        offre=offre, offre_ref=offre_ref, priorites=priorites,
+        entreprise=entreprise, poste=poste, etat="generation",
+        expediteur=lettres_svc.expediteur_par_defaut(),
+        date_ligne=lettres_svc.date_du_jour())
+    db.session.add(lettre)
+    db.session.commit()
+    lettres_svc.lancer(lettres_svc.generer, lettre.id)
+    return lettre
+
+
+@bp.route("/lettres/nouvelle", methods=["POST"])
+def letter_new():
+    """Une offre de la veille ou un texte collé, et ce qu'il faut mettre en avant."""
+    ref = request.form.get("offre_ref", "").strip()
+    texte = request.form.get("offre", "").strip()
+    priorites = request.form.get("priorites", "").strip()
+    entreprise = poste = ""
+    if ref:
+        o = next((o for o in lettres_svc.offres_recentes() if o["ref"] == ref),
+                 None)
+        if o is not None:
+            # Un texte collé en plus de l'offre choisie la complète.
+            texte = (o["texte"] + ("\n\n" + texte if texte else "")).strip()
+            entreprise, poste = o["entreprise"], o["poste"]
+    if not texte:
+        return redirect(url_for("jobs.letters"))
+    lettre = _nouvelle(texte, ref, priorites, entreprise, poste)
+    return redirect(url_for("jobs.letter_edit", lettre_id=lettre.id))
+
+
+@bp.route("/lettres/<int:lettre_id>")
+def letter_edit(lettre_id):
+    lettre = db.session.get(CoverLetter, lettre_id) or abort(404)
+    lettres_svc.abandonnee(lettre)
+    return render_template(
+        "lettre_edition.html", lettre=lettre, champs=_champs(lettre),
+        lecons=LetterLesson.query.filter_by(active=True).count())
+
+
+@bp.route("/lettres/<int:lettre_id>/etat")
+def letter_state(lettre_id):
+    lettre = db.session.get(CoverLetter, lettre_id) or abort(404)
+    lettres_svc.abandonnee(lettre)
+    return jsonify(_champs(lettre))
+
+
+def _maj(lettre, data):
+    for cle in ("expediteur", "date_ligne", "destinataire", "objet",
+                "salutation", "corps", "entreprise"):
+        if cle in data:
+            setattr(lettre, cle, (data.get(cle) or "").replace("\r\n", "\n"))
+
+
+@bp.route("/lettres/<int:lettre_id>/enregistrer", methods=["POST"])
+def letter_save(lettre_id):
+    lettre = db.session.get(CoverLetter, lettre_id) or abort(404)
+    _maj(lettre, request.get_json(silent=True) or request.form)
+    db.session.commit()
+    return jsonify(ok=True, mots=lettres_svc.mots(lettre))
+
+
+@bp.route("/lettres/<int:lettre_id>/regenerer", methods=["POST"])
+def letter_regenerate(lettre_id):
+    """Une nouvelle lettre pour la même offre : l'ancienne reste dans
+    l'historique, avec ses corrections, plutôt que d'être écrasée."""
+    ancienne = db.session.get(CoverLetter, lettre_id) or abort(404)
+    priorites = request.form.get("priorites", ancienne.priorites).strip()
+    lettre = _nouvelle(ancienne.offre, ancienne.offre_ref, priorites,
+                       ancienne.entreprise, ancienne.poste)
+    return redirect(url_for("jobs.letter_edit", lettre_id=lettre.id))
+
+
+@bp.route("/lettres/<int:lettre_id>/pdf", methods=["POST"])
+def letter_pdf(lettre_id):
+    """Enregistre la version corrigée, renvoie le PDF, et apprend de l'écart."""
+    lettre = db.session.get(CoverLetter, lettre_id) or abort(404)
+    _maj(lettre, request.form)
+    try:
+        contenu = lettres_svc.pdf(lettre)
+    except lettres_svc.LettreErreur as e:
+        db.session.commit()
+        return jsonify(ok=False, erreur=str(e)), 422
+    lettre.exportee_le = datetime.now()
+    db.session.commit()
+    if lettres_svc.a_etudier(lettre):
+        lettres_svc.lancer(lettres_svc.etudier, lettre.id)
+    return send_file(BytesIO(contenu), mimetype="application/pdf",
+                     as_attachment=True,
+                     download_name=lettres_svc.nom_fichier(lettre))
+
+
+@bp.route("/lettres/<int:lettre_id>/supprimer", methods=["POST"])
+def letter_delete(lettre_id):
+    lettre = db.session.get(CoverLetter, lettre_id) or abort(404)
+    # Ses leçons restent : elles valent pour les lettres suivantes, pas
+    # pour celle-ci. Elles perdent seulement leur lien.
+    LetterLesson.query.filter_by(lettre_id=lettre.id).update({"lettre_id": None})
+    db.session.delete(lettre)
+    db.session.commit()
+    return redirect(url_for("jobs.letters"))
+
+
+@bp.route("/lettres/lecons/<int:lecon_id>", methods=["POST"])
+def lesson_toggle(lecon_id):
+    """Active, désactive ou supprime une leçon."""
+    lecon = db.session.get(LetterLesson, lecon_id) or abort(404)
+    action = request.form.get("action")
+    if action == "supprimer":
+        db.session.delete(lecon)
+    else:
+        lecon.active = not lecon.active
+    db.session.commit()
+    return redirect(url_for("jobs.letters") + "#lecons")
 
 
 @bp.route("/lettres/lire/<path:filename>")

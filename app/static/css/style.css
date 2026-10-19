@@ -1817,3 +1817,160 @@ button.ghost {
 .todo-done { margin-top: var(--s-5); }
 .todo-done summary { cursor: pointer; color: var(--muted); }
 .page-head .late { color: var(--danger); }
+
+/* ---------- Lettres de motivation écrites avec Claude --------------------- */
+
+/* Le formulaire de départ est une surface à part : c'est l'action de la
+   page. Les listes qui suivent restent nues, séparées par un filet. */
+.lt-new {
+  margin-bottom: var(--s-6);
+  padding: var(--s-4) var(--s-5) var(--s-2);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.lt-new h3, .lt-section h3 { margin: 0 0 var(--s-3); font-size: 1.05rem; }
+.lt-form { margin-bottom: var(--s-3); }
+.lt-form em, .lt-field em { font-style: normal; color: var(--muted); font-weight: 400; }
+.lt-warn {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--danger-soft);
+  color: var(--text);
+  font-size: .92rem;
+}
+.lt-section { margin-bottom: var(--s-6); }
+
+.lt-list, .lt-lessons { list-style: none; margin: 0; padding: 0; }
+.lt-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+  padding: .55rem 0;
+  border-top: 1px solid var(--border);
+}
+.lt-list a { min-width: 0; display: flex; flex-wrap: wrap; gap: 0 var(--s-2); }
+.lt-who { font-weight: 600; color: var(--text); }
+.lt-what { color: var(--muted-strong); }
+.lt-meta { flex: none; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.lt-badge {
+  margin-left: var(--s-2);
+  padding: .1rem .5rem;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border-strong);
+  font-size: .78rem;
+}
+.lt-badge.ok { border-color: var(--accent-ring); color: var(--accent); }
+.lt-badge.run { border-color: var(--info); color: var(--info); }
+.lt-badge.err { border-color: var(--danger); color: var(--danger); }
+
+.lt-lessons li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: .6rem 0;
+  border-top: 1px solid var(--border);
+}
+.lt-lessons li.off .lt-lesson-text { color: var(--muted); text-decoration: line-through; }
+.lt-lesson-text { flex: 1; line-height: 1.45; }
+.lt-lessons form { flex: none; display: flex; gap: var(--s-2); margin: 0; }
+
+/* L'éditeur : la lettre à gauche, ce qui la sert à droite. */
+.lt-status { margin-bottom: var(--s-4); }
+.lt-wait { display: flex; align-items: center; gap: var(--s-3); color: var(--muted-strong); }
+.lt-dot {
+  width: .7rem; height: .7rem; border-radius: 50%;
+  background: var(--accent);
+  animation: lt-pulse 1.2s var(--ease) infinite;
+}
+@keyframes lt-pulse { 50% { opacity: .25; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .lt-dot { animation: none; } }
+.lt-error { color: var(--danger); margin: 0 0 var(--s-3); line-height: 1.45; }
+
+.lt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+  align-items: start;
+}
+.lt-paper {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;          /* le wrap global des formulaires gonfle l'en-tête */
+  gap: var(--s-3);
+  margin: 0;
+  padding: var(--s-5);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+.lt-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-3); }
+.lt-head .lt-field:first-child { flex: 1 1 16rem; }
+/* Chaque champ prend la hauteur de son texte : la lettre se relit d'un
+   bout à l'autre sans ascenseur dans l'ascenseur. Là où field-sizing
+   n'existe pas encore, les rows du gabarit suffisent. */
+.lt-paper textarea { field-sizing: content; }
+.lt-field { display: flex; flex-direction: column; gap: .3rem; }
+.lt-field > span { font-size: .8rem; color: var(--muted); font-weight: 600; }
+.lt-date { flex: 0 1 12rem; }
+.lt-date input { text-align: right; }
+.lt-objet input { font-weight: 650; }
+/* Le corps se lit comme la lettre : interligne large, mesure d'une page. */
+.lt-body textarea {
+  min-height: 28rem;
+  font-size: 1rem;
+  line-height: 1.65;
+  padding: var(--s-4);
+}
+
+.lt-side { display: flex; flex-direction: column; gap: var(--s-4); }
+.lt-actions .cta { width: 100%; }
+.lt-count { margin: var(--s-2) 0 0; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.lt-count.over #lt-mots { color: var(--warn); font-weight: 650; }
+.lt-saved { margin: .2rem 0 0; font-size: .82rem; min-height: 1.2em; }
+.lt-card {
+  padding: var(--s-4);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+.lt-card h4 { margin: 0 0 var(--s-2); font-size: .9rem; }
+.lt-card form { margin: 0; flex-direction: column; align-items: stretch; }
+.lt-notes p { margin: 0; white-space: pre-line; line-height: 1.5; font-size: .92rem; }
+.lt-small { font-size: .8rem; margin: var(--s-2) 0 0; }
+.lt-offre summary { cursor: pointer; font-size: .9rem; color: var(--muted-strong); }
+.lt-offre pre {
+  margin: var(--s-3) 0 0;
+  max-height: 22rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: inherit;
+  font-size: .85rem;
+  color: var(--muted-strong);
+}
+
+@media (min-width: 60rem) {
+  .lt-grid { grid-template-columns: minmax(0, 1fr) 19rem; grid-template-rows: auto 1fr; }
+  .lt-paper { grid-column: 1; grid-row: 1 / span 2; }
+  .lt-actions { grid-column: 2; grid-row: 1; }
+  .lt-side { grid-column: 2; grid-row: 2; }
+}
+/* Sur téléphone, le bouton du PDF reste à portée de pouce. */
+@media (max-width: 59.99rem) {
+  .lt-paper { padding: var(--s-4); }
+  .lt-actions {
+    position: sticky;
+    bottom: calc(var(--nav-h) + var(--s-2));
+    z-index: 2;
+    padding: var(--s-3);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    box-shadow: var(--shadow-2);
+  }
+  .lt-actions .cta { min-height: 2.75rem; padding-block: .55rem; }
+  .lt-actions .lt-count { margin-top: var(--s-1); font-size: .82rem; }
+  .lt-actions .lt-saved:empty { display: none; }
+}

@@ -47,3 +47,10 @@ class Config:
     OLLAMA_NUM_GPU = os.getenv("OLLAMA_NUM_GPU", "")
     # Voix Piper (.onnx). Vide : le navigateur parle a sa place.
     PIPER_MODEL = os.getenv("PIPER_MODEL", "")
+    # Lettres de motivation, écrites par Claude via l'API Anthropic. La clé
+    # se crée dans la Claude Console (platform.claude.com) ; l'usage est facturé à part de
+    # l'abonnement Claude. Vide : le bouton explique ce qui manque.
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    LETTRE_MODEL = os.getenv("LETTRE_MODEL", "claude-opus-5-5")
+    # low, medium, high, xhigh ou max : plus haut, plus soigné et plus cher.
+    LETTRE_EFFORT = os.getenv("LETTRE_EFFORT", "high")

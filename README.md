@@ -16,6 +16,7 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 - [Prérequis](#prérequis)
 - [Démarrage rapide](#démarrage-rapide)
 - [Configuration](#configuration)
+- [Lettres de motivation](#lettres-de-motivation)
 - [Endpoint ESP32](#endpoint-esp32)
 - [Dépannage](#dépannage)
 - [Roadmap](#roadmap)
@@ -92,6 +93,39 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 | `SAMSUNG_CALENDAR_ICS_URL`   | URL d'export ICS du calendrier Samsung        |
 | `ESP32_API_KEY`              | Clé partagée avec l'ESP32                    |
 | `JOB_SEARCH_DIR`             | Dossier du pipeline Claude cowork de recherche d'emploi (page Jobs) |
+| `ANTHROPIC_API_KEY`          | Clé de l'API Claude, pour écrire les lettres de motivation |
+| `LETTRE_MODEL`               | Modèle des lettres (`claude-opus-5-5` par défaut) |
+| `LETTRE_EFFORT`              | Effort de réflexion des lettres (`high` par défaut) |
+
+## Lettres de motivation
+
+Page **Jobs → Lettres** (ou le bouton *Écrire la lettre* sous chaque offre de
+la veille) : on choisit une offre ou on colle une annonce, on dit ce qu'on
+veut voir en priorité, et Claude écrit la lettre en arrière-plan. Elle arrive
+dans un éditeur découpé comme une lettre Word (expéditeur, date,
+destinataire, objet, corps) ; chaque frappe s'enregistre seule, et *Générer
+et télécharger le PDF* rend une page A4 sans aucune métadonnée, nommée
+`{Entreprise} - Lettre de motivation.pdf`.
+
+Claude ne lit que le projet *Recherche de CDI* : les règles de la section 8
+des instructions de la veille, le modèle et les trois dernières lettres
+envoyées, la fiche profil et le CV ATS. Ces fichiers arrivent sur le serveur
+par `sync-jobs.ps1`, comme la veille.
+
+**Il apprend des corrections.** Le brouillon de Claude est gardé à côté de la
+version corrigée. À l'export, si la lettre a vraiment été réécrite (pas une
+coquille), Claude compare les deux et en tire au plus trois règles générales,
+qui entrent dans chaque lettre suivante avec les deux dernières corrections.
+Elles s'affichent en bas de la page des lettres : une règle fausse se
+désactive ou se supprime d'un clic.
+
+Pour l'activer : créer une clé dans
+[la Claude Console](https://platform.claude.com), l'ajouter au `.env`
+du serveur (`ANTHROPIC_API_KEY=...`), puis `docker compose up -d --build`.
+Une lettre coûte de l'ordre de 10 à 20 centimes, surtout pour la réflexion
+de Claude ; l'analyse d'une correction, quelques centimes de plus. Le
+contexte du projet (environ 11 000 jetons) reste en cache cinq minutes : une
+nouvelle version demandée dans la foulée le relit presque gratuitement.
 
 ## Endpoint ESP32
 
@@ -196,9 +230,11 @@ Côté Windows, une fois :
 .\scripts\install-jobs-sync.ps1
 ```
 
-Le script ne copie que `Veille quotidienne/` et `Lettres de motivation/` — les
-deux seuls dossiers lus par `app/services/job_watch.py`. Les CV et notes
-d'entretien restent sur le PC.
+Le script ne copie que `Veille quotidienne/` et `Lettres de motivation/`, lus
+par `app/services/job_watch.py`, et trois fichiers texte dont les lettres
+écrites avec Claude ont besoin : la fiche profil, la source du CV ATS et les
+instructions de la veille. Les CV en PDF et les notes d'entretien restent sur
+le PC.
 
 **Pourquoi toutes les 30 minutes plutôt qu'une fois le matin :** le pipeline
 finit quand il finit — un jour à 9h05, un autre à 12h47. Une synchronisation à
@@ -247,6 +283,7 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 - [x] Recettes / meal prep + liste de courses en portions
 - [x] Calendrier (séances + planning + événements Samsung ICS)
 - [x] Module recherche d'emploi (veille quotidienne du pipeline Claude cowork)
+- [x] Lettres de motivation écrites par Claude, corrigées dans Awen, exportées en PDF
 - [x] Statistiques (tableau de bord, page par exercice, graphiques SVG)
 - [x] Déploiement Docker + auto-update et sauvegardes sur le serveur maison
 - [x] Coach à base de règles (RIR, stagnation, deload, pesées, tests de détente)

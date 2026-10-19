@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Lettre {{ lettre.entreprise or "" }} | Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>✍️ {{ lettre.entreprise or "Nouvelle lettre" }}</h2>
+  <p class="sub">{{ lettre.poste }}</p>
+  <div class="page-links">
+    <a href="{{ url_for('jobs.letters') }}">← Toutes les lettres</a>
+  </div>
+</div>
+
+<div class="lt-editor" id="lt-editor"
+     data-etat="{{ url_for('jobs.letter_state', lettre_id=lettre.id) }}"
+     data-enregistrer="{{ url_for('jobs.letter_save', lettre_id=lettre.id) }}"
+     data-pdf="{{ url_for('jobs.letter_pdf', lettre_id=lettre.id) }}">
+
+  <div class="lt-status" id="lt-status" role="status" aria-live="polite"
+       {% if lettre.etat not in ('generation', 'erreur') %}hidden{% endif %}>
+    <p class="lt-wait" {% if lettre.etat != 'generation' %}hidden{% endif %}>
+      <span class="lt-dot" aria-hidden="true"></span>
+      Claude écrit la lettre. Compte une demi-minute à une minute.</p>
+    <p class="lt-error" {% if lettre.etat != 'erreur' %}hidden{% endif %}>{{ lettre.erreur }}</p>
+  </div>
+
+  <div class="lt-grid" {% if lettre.etat != 'prete' %}hidden{% endif %} id="lt-grid">
+    <form class="lt-paper" id="lt-form" autocomplete="off">
+      <div class="lt-head">
+        <label class="lt-field"><span>Expéditeur</span>
+          <textarea name="expediteur" rows="4">{{ lettre.expediteur }}</textarea></label>
+        <label class="lt-field lt-date"><span>Date</span>
+          <input name="date_ligne" value="{{ lettre.date_ligne }}"></label>
+      </div>
+      <label class="lt-field"><span>Destinataire</span>
+        <textarea name="destinataire" rows="3">{{ lettre.destinataire }}</textarea></label>
+      <label class="lt-field lt-objet"><span>Objet</span>
+        <input name="objet" value="{{ lettre.objet }}"></label>
+      <label class="lt-field"><span>Salutation</span>
+        <input name="salutation" value="{{ lettre.salutation }}"></label>
+      <label class="lt-field lt-body"><span>Lettre <em>(un paragraphe par bloc, séparés par une ligne vide)</em></span>
+        <textarea name="corps" id="lt-corps" rows="18" spellcheck="true" lang="fr">{{ lettre.corps }}</textarea></label>
+      <label class="lt-field"><span>Entreprise <em>(nom du fichier PDF)</em></span>
+        <input name="entreprise" value="{{ lettre.entreprise }}"></label>
+    </form>
+
+    <div class="lt-actions">
+      <button class="cta" type="button" id="lt-pdf">⬇️ Générer et télécharger le PDF</button>
+      <p class="lt-count"><span id="lt-mots">{{ champs.mots }}</span> mots
+        <span class="muted">· une page tient jusqu'à 340 environ</span></p>
+      <p class="lt-saved muted" id="lt-saved" aria-live="polite"></p>
+      <p class="lt-error" id="lt-pdf-error" hidden></p>
+    </div>
+
+    <aside class="lt-side">
+      <div class="lt-card lt-notes" id="lt-notes-box" {% if not lettre.notes %}hidden{% endif %}>
+        <h4>À vérifier avant d'envoyer</h4>
+        <p id="lt-notes">{{ lettre.notes }}</p>
+      </div>
+
+      <div class="lt-card">
+        <h4>Recommencer</h4>
+        <form method="post" action="{{ url_for('jobs.letter_regenerate', lettre_id=lettre.id) }}">
+          <label class="field field-wide"><span>Priorités</span>
+            <textarea name="priorites" rows="3">{{ lettre.priorites }}</textarea></label>
+          <button class="btn small" type="submit">↻ Nouvelle version</button>
+        </form>
+        <p class="muted lt-small">La lettre actuelle reste dans l'historique avec tes corrections.
+          {% if lecons %}{{ lecons }} règle{{ 's' if lecons > 1 }} apprise{{ 's' if lecons > 1 }} entre{{ 'nt' if lecons > 1 }} dans chaque génération.{% endif %}</p>
+      </div>
+
+      <details class="lt-card lt-offre">
+        <summary>L'offre telle que Claude l'a lue</summary>
+        <pre>{{ lettre.offre }}</pre>
+      </details>
+
+      <form method="post" action="{{ url_for('jobs.letter_delete', lettre_id=lettre.id) }}"
+            onsubmit="return confirm('Supprimer cette lettre ?');">
+        <button class="btn small danger" type="submit">Supprimer la lettre</button>
+      </form>
+    </aside>
+  </div>
+
+  {% if lettre.etat == 'erreur' %}
+  <form method="post" action="{{ url_for('jobs.letter_regenerate', lettre_id=lettre.id) }}">
+    <button class="cta" type="submit">↻ Réessayer</button>
+  </form>
+  {% endif %}
+</div>
+<script src="{{ url_for('static', filename='js/lettres.js') }}"></script>
+{% endblock %}
