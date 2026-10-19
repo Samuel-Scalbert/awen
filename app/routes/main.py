@@ -1,13 +1,14 @@
-from datetime import date, timedelta
+from datetime import date
 
 from flask import Blueprint, render_template
 
 from ..models import Workout
-from ..services import charts, coach, todos
+from ..services import charges, charts, coach, todos
 from ..services.job_watch import date_fr, freshness, get_daily_reports
-from ..services.progression import CYCLE, REPRISE, plan_upcoming
+from ..services.progression import (REPRISE, TRAINING_WEEKDAYS, rotation,
+                                    upcoming)
 from ..services.stats import overview
-from .workout import _current_workout, _last_focus, session_exercises
+from .workout import _current_workout, exercises_for
 
 bp = Blueprint("main", __name__)
 
@@ -17,19 +18,20 @@ APERCU = 5
 
 
 def _cible(pe):
-    """« 4 × 8-12 à 34,5 kg » : ce qu'il faut faire, en une ligne."""
+    """« 4 × 8-12 à 80 lb » : ce qu'il faut faire, en une ligne."""
     if pe.rep_min and pe.rep_max and pe.rep_min != pe.rep_max:
         reps = f"{pe.rep_min}-{pe.rep_max}"
     else:
         reps = str(pe.rep_max or pe.rep_min or "")
-    cible = f"{pe.sets} × {reps}" + (" s" if pe.unit == "duree" else "")
-    if pe.weight_kg:
-        cible += f" à {pe.weight_kg:g} kg".replace(".", ",")
+    cible = f"{pe.sets} × {reps}" + (" s" if pe.unit == "sec" else "")
+    if pe.weight_kg and pe.block != "plyo":
+        cible += " à " + charges.label(pe.weight_kg, pe)
     return cible
 
 
 def _apercu(focus):
-    exercices = [] if focus == REPRISE else session_exercises(focus)
+    # La reprise contient tout le programme : la lister ici ferait un mur.
+    exercices = [] if focus == REPRISE else exercises_for(focus)
     return {
         "exercices": [{"nom": pe.name, "cible": _cible(pe)}
                       for pe in exercices[:APERCU]],
@@ -43,10 +45,16 @@ def _seance(today):
     """La séance du jour, telle que l'accueil la résume.
 
     Quatre états, parce qu'ils appellent quatre gestes : en cours (reprendre),
-    prévue (commencer), faite (rien à faire), repos (savoir quand vient la
-    suivante). Lire la page ne crée jamais de séance : seul le bouton le fait.
+    jour d'entraînement (choisir), faite (rien à faire), repos (savoir quand
+    vient la suivante). La séance proposée n'est qu'une suggestion, celle qui
+    attend depuis le plus longtemps : le choix se fait à la salle. Lire la
+    page ne crée jamais de séance.
     """
     current = _current_workout()
+    # Une séance ouverte un autre jour et jamais remplie ne sera pas
+    # reprise : elle disparaît au prochain choix, l'accueil l'ignore déjà.
+    if current is not None and not current.sets and current.date.date() != today:
+        current = None
     if current is not None:
         a = _apercu(current.focus)
         faites = (sum(1 for s in current.sets if s.program_exercise_id in a["ids"])
@@ -63,15 +71,10 @@ def _seance(today):
     if faite is not None:
         return {"etat": "faite", "focus": faite.focus, "faites": len(faite.sets)}
 
-    derniere = (Workout.query.filter(Workout.focus.in_(CYCLE))
-                .order_by(Workout.date.desc()).first())
-    apres = max(filter(None, [derniere.date.date() if derniere else None,
-                              today - timedelta(days=1)]))
-    prevues = plan_upcoming(_last_focus(), apres, count=4)
-    focus = next((f for d, f in prevues if d == today), None)
-    if focus is not None:
-        return dict(_apercu(focus), etat="prevue", focus=focus)
-    jour, focus = prevues[0]
+    suggestion = rotation()[0]
+    if today.weekday() in TRAINING_WEEKDAYS:
+        return dict(_apercu(suggestion), etat="prevue", focus=suggestion)
+    jour, focus = upcoming(today, count=1)[0]
     # « mercredi 14 octobre », sans l'année : on parle de cette semaine.
     return {"etat": "repos", "focus": focus,
             "prochaine": date_fr(jour).rsplit(" ", 1)[0].lower()}

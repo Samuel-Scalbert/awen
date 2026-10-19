@@ -5,7 +5,7 @@
 <div class="page-head">
   <h2>📈 {{ pe.name }}</h2>
   <p class="sub">{{ pe.session_type|upper }} · objectif {{ pe.sets }} × {{ pe.rep_min }}-{{ pe.rep_max }} reps
-    @ {{ '%g'|format(pe.weight_kg) }} kg{% if pe.notes %} — {{ pe.notes }}{% endif %}</p>
+    à {{ pe.weight_kg|charge(pe) }}{% if pe.notes %} — {{ pe.notes }}{% endif %}</p>
   <div class="page-links">
     <a href="{{ url_for('stats.dashboard') }}">← Toutes les statistiques</a>
     <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
@@ -19,7 +19,7 @@
 <ul class="stats">
   <li class="stat accent">
     <span class="stat-label">Charge de travail</span>
-    <span class="stat-value">{{ '%g'|format(pe.weight_kg) }}<small>kg</small></span>
+    <span class="stat-value">{{ pe.weight_kg|charge(pe) }}</span>
     <span class="stat-note">
       {% if gain > 0 %}+{{ '%g'|format(gain) }} kg (+{{ gain_pct }} %) depuis le début
       {% elif gain < 0 %}{{ '%g'|format(gain) }} kg depuis le début
@@ -59,8 +59,8 @@
       {% for h in history|reverse %}
       <tr>
         <td>{{ h.date.strftime('%d/%m/%Y') }}</td>
-        <td><strong>{{ '%g'|format(h.weight) }} kg</strong></td>
-        <td>{% for s in h.sets %}{{ s.reps }}×{{ '%g'|format(s.weight_kg or 0) }}{{ ' · ' if not loop.last }}{% endfor %}</td>
+        <td><strong>{{ h.weight|charge(pe) }}</strong></td>
+        <td>{% for s in h.sets %}{{ s.reps }}×{{ s.weight_kg|charge(pe) }}{{ ' · ' if not loop.last }}{% endfor %}</td>
         <td>{{ kg(h.volume) }}</td>
         <td>{{ h.best_e1rm ~ ' kg' if h.best_e1rm else '—' }}</td>
         <td>{{ '✅' if h.in_range else '—' }}</td>

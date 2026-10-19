@@ -54,3 +54,14 @@ class Config:
     LETTRE_MODEL = os.getenv("LETTRE_MODEL", "claude-opus-5-5")
     # low, medium, high, xhigh ou max : plus haut, plus soigné et plus cher.
     LETTRE_EFFORT = os.getenv("LETTRE_EFFORT", "high")
+    # Rappel du soir quand une séance commencée dans la journée n'est pas
+    # terminée (heure locale, « HH:MM »), publié dans /calendar/rappels.ics.
+    RAPPEL_SEANCE_HEURE = os.getenv("RAPPEL_SEANCE_HEURE", "20:00")
+    # Ce rappel est écrit par le serveur dans un agenda Google « Awen », que
+    # le téléphone synchronise sans Tailscale (services/agenda_google.py).
+    # L'identifiant se lit dans Google Agenda (paramètres de l'agenda,
+    # « Intégrer l'agenda ») ; la clé du compte de service est un fichier
+    # JSON posé dans data/, ignoré par git. Vide : pas de rappel Google.
+    GOOGLE_CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "")
+    GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv(
+        "GOOGLE_SERVICE_ACCOUNT_FILE", str(BASE_DIR / "data" / "google-agenda.json"))

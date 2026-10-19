@@ -11,3 +11,5 @@ gunicorn>=22.0
 # Lettres de motivation : Claude écrit le texte, reportlab le met en page.
 anthropic>=1.14,<2
 reportlab>=4.4,<6
+# Rappel de séance écrit dans un agenda Google par le serveur (compte de service).
+google-auth>=2.30,<3

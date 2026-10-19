@@ -13,6 +13,18 @@ def create_app(config_class=Config):
 
     db.init_app(app)
 
+    # Les charges s'affichent en kilos, sur les crans de la machine :
+    # « {{ s.weight_kg|charge(pe) }} » donne « 31,8 kg ».
+    from .services import charges
+    app.jinja_env.filters["charge"] = (
+        lambda kg, pe=None: charges.label(kg, pe) if pe is not None
+        else "{} kg".format(charges.number(kg)))
+    app.jinja_env.filters["nombre"] = charges.number
+    # Pour les champs de saisie : un nombre à point.
+    app.jinja_env.filters["valeur"] = lambda kg, pe: "%g" % charges.shown(kg, pe)
+    app.jinja_env.filters["cran"] = lambda pe: "%g" % charges.step_of(pe)
+    app.jinja_env.filters["machine"] = charges.machine_label
+
     from .routes.main import bp as main_bp
     from .routes.workout import bp as workout_bp
     from .routes.meals import bp as meals_bp
@@ -37,8 +49,9 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        from .seed import (apply_pull_feedback, ensure_program_block,
-                           ensure_recipe_servings, ensure_set_rir,
+        from .seed import (apply_october_feedback, apply_pull_feedback,
+                           ensure_program_block, ensure_recipe_servings,
+                           ensure_set_rir, gym_in_pounds, plyo_as_session,
                            seed_default_recipes, seed_plyo_block, seed_program)
         # Les migrations de schéma d'abord : les fonctions de seed passent par
         # l'ORM, qui sélectionne toutes les colonnes du modèle — une colonne
@@ -50,6 +63,10 @@ def create_app(config_class=Config):
         seed_program()
         seed_plyo_block()
         apply_pull_feedback()
+        # Retours du 19/10/2026, chacun appliqué une seule fois : voir _once.
+        plyo_as_session()
+        gym_in_pounds()
+        apply_october_feedback()
         # Rattrapage unique : la base est antérieure à la distinction entre
         # « raté » et « absent », et tous ses trous venaient d'absences. Ne
         # fait rien dès qu'une qualification existe — voir attendance.py.

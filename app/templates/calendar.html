@@ -3,8 +3,8 @@
 {% block content %}
 <div class="page-head">
   <h2>Calendrier</h2>
-  <p class="sub">Séances faites, en cours et planifiées selon la rotation
-    — plus les évènements de ton calendrier Samsung.</p>
+  <p class="sub">Séances faites et en cours, suggestions pour les prochains
+    jours d'entraînement, et les évènements de ton calendrier Samsung.</p>
 </div>
 
 <nav class="cal-nav">
@@ -29,8 +29,8 @@
           ><i class="badge-ico">{% if w.completed %}✅{% else %}⏳{% endif %}</i>{{ w.focus }}</span>
       {% endfor %}
       {% if cell.planned %}
-        <a class="badge plan" href="{{ url_for('workout.session') }}"
-           title="Séance {{ cell.planned }} prévue — clique pour la démarrer"
+        <a class="badge plan" href="{{ url_for('workout.list_workouts') }}"
+           title="Suggestion : {{ cell.planned }}, la séance qui attend depuis le plus longtemps"
           ><i class="badge-ico">🏋️</i>{{ cell.planned }}</a>
       {% endif %}
       {% for ev in cell.events[:2] %}
@@ -52,9 +52,37 @@
 <ul class="legend">
   <li><span class="badge done">✅ Push</span> séance faite</li>
   <li><span class="badge done pending">⏳</span> en cours</li>
-  <li><span class="badge plan">🏋️ Pull</span> prévue — clique pour la lancer</li>
+  <li><span class="badge plan">🏋️ Pull</span> suggérée, au choix à la salle</li>
   <li><span class="badge event"><i class="ev-time">9h</i>…</span> évènement agenda</li>
 </ul>
+
+<h3 class="section-title">Rappel du soir</h3>
+<p>Si tu commences une séance et qu'elle n'est pas terminée le soir, un
+rappel sonne à {{ config.RAPPEL_SEANCE_HEURE or '20:00' }} (une heure et demie
+après le début si tu t'entraînes tard) : c'est le bouton de fin qui applique
+la progression.</p>
+{% if agenda_google %}
+<p>Awen le pose dans ton agenda Google « Awen » dès que la séance commence, et
+le retire quand tu la termines : ton téléphone le reçoit comme tes autres
+évènements, sans Tailscale.</p>
+{% else %}
+<p class="muted">Pas encore relié à Google Agenda : la mise en place, en cinq
+étapes, est dans le README (« Rappel de séance dans Google Agenda »). En
+attendant, le même rappel existe en agenda auquel s'abonner, avec Tailscale
+actif sur le téléphone :</p>
+<p class="feed-url"><code id="flux-rappels">{{ flux_rappels }}</code>
+  <button type="button" class="btn-ghost small" id="copier-flux">Copier</button></p>
+{% endif %}
+<script>
+  document.getElementById("copier-flux")?.addEventListener("click", async (e) => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById("flux-rappels").textContent);
+      e.target.textContent = "Copiée";
+    } catch (err) {
+      e.target.textContent = "Copie impossible, sélectionne l'adresse";
+    }
+  });
+</script>
 
 <h3 class="section-title">Prochains évènements</h3>
 {% if cal_status != 'ok' %}

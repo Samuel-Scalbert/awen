@@ -25,8 +25,9 @@ from ..services import saints
 from ..services import todos as todos_svc
 from ..services import spotify as spotify_svc
 from ..services import weather as weather_svc
-from ..services.progression import (CYCLE, TRAINING_WEEKDAYS,
-                                    next_session_type, plan_upcoming)
+from ..services import charges
+from ..services.progression import (CYCLE, TRAINING_WEEKDAYS, rotation,
+                                    upcoming)
 
 bp = Blueprint("esp32", __name__, url_prefix="/api/esp32")
 
@@ -103,10 +104,13 @@ def _session_preview(focus, last_workout):
             .order_by(ProgramExercise.position))
     out = []
     for pe in rows:
-        if pe.unit == "duree":
+        if pe.unit == "sec":
             detail = "{} x {}s".format(pe.sets, pe.rep_max or 0)
         elif pe.weight_kg:
-            detail = "{:g} kg x {}".format(pe.weight_kg, pe.rep_max or 0)
+            # Sur les crans de la machine (« 36.3 kg x 12 ») ; la police de
+            # l'écran n'a pas de virgule.
+            charge = charges.label(pe.weight_kg, pe).replace(",", ".")
+            detail = "{} x {}".format(charge, pe.rep_max or 0)
         else:
             detail = "{} x {}".format(pe.sets, pe.rep_max or 0)
         # Le nom et la charge partagent une ligne de 30 colonnes : le nom
@@ -250,8 +254,11 @@ def summary():
             last_focus, last_date, last_workout = w.focus, w.date.date(), w
             break
 
-    after = max(filter(None, [last_date, today - timedelta(days=1)]))
-    planned = plan_upcoming(last_focus, after, count=8)
+    # Suggestions, plus planning : la séance se choisit à la salle, et la
+    # première proposée est celle qui attend depuis le plus longtemps.
+    fait = any(w.sets for w in workouts if w.date.date() == today)
+    after = today if fait else today - timedelta(days=1)
+    planned = upcoming(after, count=8)
     planned_today = next((f for d, f in planned if d == today), None)
     next_day, next_focus = planned[0] if planned else (None, None)
 
@@ -293,7 +300,7 @@ def summary():
             "missed": missed,
             "next": "{} {}".format(_short_date(next_day), next_focus)
                     if next_day else "",
-            "next_focus": next_focus or next_session_type(last_focus),
+            "next_focus": next_focus or rotation()[0],
             "last": "{} {}".format(last_focus, _short_date(last_date))
                     if last_date else "",
             "session_no": len([w for w in workouts if w.focus in CYCLE]),

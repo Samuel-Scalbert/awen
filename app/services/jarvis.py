@@ -36,7 +36,8 @@ from flask import current_app
 
 from ..models import ProgramExercise, Workout
 from . import attendance, calendar_sync, coach, host, job_watch, stats, todos
-from .progression import plan_upcoming
+from .charges import label
+from .progression import upcoming
 
 # Sur le processeur — le repli impose par l'alimentation de ce serveur — un
 # 4B tourne a une dizaine de mots par seconde, et une question a outil demande
@@ -77,30 +78,30 @@ ECRAN: 3 taches, 1 en retard"""
 # ---------------------------------------------------------------- les outils
 
 def _seance_du_jour():
-    """Le focus prevu aujourd'hui, ou le prochain si c'est un jour de repos.
+    """La seance suggeree aujourd'hui, ou la prochaine si c'est un jour de repos.
 
-    `plan_upcoming` projette STRICTEMENT apres la date donnee : partir
-    d'aujourd'hui sauterait la seance du jour. On part donc de la veille, ou
-    de la derniere seance faite si elle est plus recente — la meme regle que
-    dans routes/esp32.py, et pour la meme raison.
+    Une suggestion, plus une consigne : la seance se choisit a la salle, et
+    la premiere proposee est celle qui attend depuis le plus longtemps.
+    `upcoming` projette STRICTEMENT apres la date donnee : on part donc de la
+    veille, sauf si une seance a deja ete faite aujourd'hui.
     """
     today = date.today()
-    last = (Workout.query.filter_by(completed=True)
-            .order_by(Workout.date.desc()).first())
-    last_focus = last.focus if last else None
-    last_date = last.date.date() if last else None
-    after = max(d for d in (last_date, today - timedelta(days=1)) if d)
-    plan = plan_upcoming(last_focus, after, count=8)
+    fait = any(w.sets for w in Workout.query.filter_by(completed=True)
+               if w.date.date() == today)
+    after = today if fait else today - timedelta(days=1)
+    plan = upcoming(after, count=8)
     aujourdhui = next((f for d, f in plan if d == today), None)
     prochain_jour, prochain_focus = plan[0] if plan else (None, None)
     focus = aujourdhui or prochain_focus
     exos = [{"nom": pe.name, "charge_kg": pe.weight_kg,
+             "charge": label(pe.weight_kg, pe) if pe.weight_kg else None,
              "reps": "{}-{}".format(pe.rep_min, pe.rep_max)}
             for pe in ProgramExercise.query
             .filter(ProgramExercise.active.is_(True),
                     ProgramExercise.session_type == (focus or "").lower())
             .order_by(ProgramExercise.position)]
     return {"aujourd_hui": bool(aujourdhui),
+            "suggestion": True,
             "focus": focus,
             "prochaine_date": (today if aujourdhui else prochain_jour).isoformat()
                               if (aujourdhui or prochain_jour) else None,

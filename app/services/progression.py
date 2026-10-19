@@ -1,46 +1,61 @@
-"""Rotation PPL continue et double progression automatique."""
-from datetime import timedelta
+"""Séances au choix, suggestion PPL et double progression automatique."""
+from datetime import datetime, timedelta
+
+from sqlalchemy import func
 
 from ..models import db
+from .charges import label, snap
 
-# L'ordre du cycle fixe le jour de chaque séance : avec 3 séances par
-# semaine sur lun/mer/ven, Pull tombe le lundi, Push le mercredi, Legs le
-# vendredi — tant qu'aucune séance n'est sautée.
 CYCLE = ["Pull", "Push", "Legs"]
-# 3 séances par semaine : lundi, mercredi, vendredi. Avec un cycle de 3 séances,
-# chaque muscle passe une fois par semaine et tombe le même jour d'une semaine
-# sur l'autre. La rotation reste continue (et non figée par jour) : si une
-# séance saute, la suivante reprend là où le cycle s'était arrêté, plutôt que de
-# sacrifier définitivement un groupe musculaire.
+# 3 séances par semaine : lundi, mercredi, vendredi. Ce sont les jours où le
+# coach attend une séance, où l'accueil en propose une et où le rappel du
+# soir se déclenche si rien n'a été noté.
 TRAINING_WEEKDAYS = [0, 2, 4]
 
-# Le focus des séances hors cycle. Il n'est jamais dans CYCLE, ce qui suffit à
-# le faire ignorer par la rotation — mais PAS par les fonctions qui lisent
-# l'historique, qui doivent l'exclure explicitement.
+# Les focus hors PPL. Ils ne sont jamais dans CYCLE, ce qui suffit à les
+# faire ignorer par la suggestion, mais PAS par les fonctions qui lisent
+# l'historique, qui doivent les exclure explicitement.
 REPRISE = "Reprise"
+PLYO = "Plyo"
+
+# L'écran de la salle propose les cinq séances dans cet ordre, toujours le
+# même : c'est un geste que la main apprend. Aucune n'est imposée.
+SEANCES = ["Push", "Pull", "Legs", PLYO, REPRISE]
 
 
-def next_session_type(last_focus):
-    """Séance suivante dans la rotation continue Push → Pull → Legs."""
-    if last_focus not in CYCLE:
-        return CYCLE[0]
-    return CYCLE[(CYCLE.index(last_focus) + 1) % len(CYCLE)]
+def rotation():
+    """Push, Pull et Legs, de la moins récemment faite à la plus récente.
 
-
-def plan_upcoming(last_focus, after_date, count=8):
-    """Projette les prochaines séances sur les jours d'entraînement.
-
-    Renvoie [(date, focus), ...] strictement après after_date, en continuant
-    la rotation depuis last_focus.
+    Depuis que la séance se choisit en arrivant à la salle, « la suivante
+    dans le cycle » ne veut plus rien dire : après Legs puis Push, le cycle
+    reproposait Legs. La séance la plus utile est celle qui attend depuis le
+    plus longtemps. Une séance fermée sans aucune série ne compte pas :
+    c'était le passage obligé de l'ancien écran, pas un entraînement.
     """
+    from ..models import ExerciseSet, Workout
+    rows = (db.session.query(Workout.focus, func.max(Workout.date))
+            .join(ExerciseSet, ExerciseSet.workout_id == Workout.id)
+            .filter(Workout.focus.in_(CYCLE))
+            .group_by(Workout.focus).all())
+    last = dict(rows)
+    return sorted(CYCLE, key=lambda f: (f in last, last.get(f) or datetime.min,
+                                        CYCLE.index(f)))
+
+
+def upcoming(after_date, count=8, order=None):
+    """Les prochaines séances suggérées, sur les jours d'entraînement.
+
+    Renvoie [(date, focus), ...] strictement après after_date, en commençant
+    par la séance qui attend depuis le plus longtemps. C'est une suggestion :
+    l'écran de la salle laisse choisir.
+    """
+    order = order or rotation()
     sessions = []
-    focus = last_focus
     day = after_date
     while len(sessions) < count:
         day += timedelta(days=1)
         if day.weekday() in TRAINING_WEEKDAYS:
-            focus = next_session_type(focus)
-            sessions.append((day, focus))
+            sessions.append((day, order[len(sessions) % len(order)]))
     return sessions
 
 
@@ -66,6 +81,7 @@ def apply_progression(workout):
     toutes au rep_max → +increment ; toutes à rep_max+3 → double palier ;
     toutes sous rep_min → deload. Si ces séries ont été faites à des charges
     différentes, il n'y a pas de comparaison possible et rien ne bouge.
+    La nouvelle charge tombe toujours sur un cran de la machine.
     Renvoie la liste des changements pour affichage.
     """
     by_exercise = {}
@@ -80,7 +96,7 @@ def apply_progression(workout):
         recent = working_sets(sets, pe.sets)
         weights = {round(s.weight_kg or 0, 2) for s in recent}
         if len(weights) > 1:
-            # Charges hétérogènes : comparer des reps à 18 kg et à 32,5 kg
+            # Charges hétérogènes : comparer des reps à 70 et à 90 livres
             # n'a aucun sens, on préfère ne rien changer et le dire.
             changes.append(
                 "{} : charges variables sur les séries de travail, "
@@ -92,15 +108,16 @@ def apply_progression(workout):
         old = pe.weight_kg
         suffix = ""
         if all(r >= pe.rep_max + OVERPERF_MARGIN for r in reps):
-            pe.weight_kg = max(0, round(base + 2 * pe.increment_kg, 2))
+            pe.weight_kg = snap(base + 2 * pe.increment_kg, pe)
             suffix = " (surperformance, double palier)"
         elif all(r >= pe.rep_max for r in reps):
-            pe.weight_kg = max(0, round(base + pe.increment_kg, 2))
+            pe.weight_kg = snap(base + pe.increment_kg, pe)
         elif all(r < pe.rep_min for r in reps):
-            pe.weight_kg = max(0, round(base - pe.increment_kg, 2))
+            pe.weight_kg = snap(base - pe.increment_kg, pe)
             suffix = " (deload, on corrige)"
         if pe.weight_kg != old:
-            changes.append(f"{pe.name} : {old:g} → {pe.weight_kg:g} kg{suffix}")
+            changes.append("{} : {} → {}{}".format(
+                pe.name, label(old, pe), label(pe.weight_kg, pe), suffix))
     db.session.commit()
     return changes
 
@@ -112,7 +129,8 @@ def recompute_from_history():
     machine changée, ou charge modifiée à la main en salle sans que la
     progression ait suivi. On repart de la dernière séance terminée où
     l'exercice apparaît, et on retient la charge médiane de ses séries de
-    travail — insensible à une série d'essai ou d'échauffement isolée.
+    travail, ramenée sur un cran de la machine — insensible à une série
+    d'essai ou d'échauffement isolée.
 
     La plyométrie et les exercices au poids du corps sont ignorés : ils n'ont
     pas de charge à recaler.
@@ -143,9 +161,10 @@ def recompute_from_history():
         if not weights:
             continue
 
-        actual = weights[len(weights) // 2]
+        actual = snap(weights[len(weights) // 2], pe)
         if actual and actual != pe.weight_kg:
-            changes.append("{} : {:g} → {:g} kg".format(pe.name, pe.weight_kg, actual))
+            changes.append("{} : {} → {}".format(
+                pe.name, label(pe.weight_kg, pe), label(actual, pe)))
             pe.weight_kg = actual
 
     db.session.commit()

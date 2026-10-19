@@ -113,9 +113,9 @@
         {% else %}
         <td>{{ kg(r.volume) }}</td>
         <td>{% if r.first_weight is not none %}
-            {{ '%g'|format(r.first_weight) }} → <strong>{{ '%g'|format(r.pe.weight_kg) }}</strong> kg
+            {{ r.first_weight|charge(r.pe) }} → <strong>{{ r.pe.weight_kg|charge(r.pe) }}</strong>
             {% else %}—{% endif %}</td>
-        <td>{% if r.best_weight %}{{ '%g'|format(r.best_weight) }} kg × {{ r.best_reps }}{% else %}—{% endif %}</td>
+        <td>{% if r.best_weight %}{{ r.best_weight|charge(r.pe) }} × {{ r.best_reps }}{% else %}—{% endif %}</td>
         <td>{{ r.best_e1rm ~ ' kg' if r.best_e1rm else '—' }}</td>
         {% endif %}
         <td>{% if r.in_range is not none %}

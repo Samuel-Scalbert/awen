@@ -17,6 +17,7 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 - [Démarrage rapide](#démarrage-rapide)
 - [Configuration](#configuration)
 - [Lettres de motivation](#lettres-de-motivation)
+- [Rappel de séance dans Google Agenda](#rappel-de-séance-dans-google-agenda)
 - [Endpoint ESP32](#endpoint-esp32)
 - [Dépannage](#dépannage)
 - [Roadmap](#roadmap)
@@ -96,6 +97,7 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 | `ANTHROPIC_API_KEY`          | Clé de l'API Claude, pour écrire les lettres de motivation |
 | `LETTRE_MODEL`               | Modèle des lettres (`claude-opus-5-5` par défaut) |
 | `LETTRE_EFFORT`              | Effort de réflexion des lettres (`high` par défaut) |
+| `RAPPEL_SEANCE_HEURE`        | Heure du rappel quand une séance commencée n'est pas terminée (`20:00`) |
 
 ## Lettres de motivation
 
@@ -126,6 +128,42 @@ Une lettre coûte de l'ordre de 10 à 20 centimes, surtout pour la réflexion
 de Claude ; l'analyse d'une correction, quelques centimes de plus. Le
 contexte du projet (environ 11 000 jetons) reste en cache cinq minutes : une
 nouvelle version demandée dans la foulée le relit presque gratuitement.
+
+## Rappel de séance dans Google Agenda
+
+Quand une séance commence, Awen pose dans un agenda Google « Awen » un
+évènement pour le soir (20 h, `RAPPEL_SEANCE_HEURE`, ou une heure et demie
+après le début si la séance est tardive) ; il le retire dès que la séance est
+terminée ou annulée. S'il est encore là le soir, la séance n'est pas finie et
+la notification sonne. Le téléphone le reçoit comme ses autres agendas Google,
+sans Tailscale ni application en plus.
+
+Le serveur écrit grâce à un compte de service Google, un robot avec lequel
+l'agenda est partagé : rien à reconnecter, et il ne voit que cet agenda.
+
+Mise en place, une fois :
+
+1. **Google Agenda**, sur ordinateur : créer un agenda « Awen » (Autres
+   agendas, +, Créer un agenda). Dans ses paramètres, « Notifications des
+   évènements » : ajouter une notification à 0 minute. Copier son
+   identifiant (« Intégrer l'agenda », il finit par
+   `@group.calendar.google.com`).
+2. **Google Cloud** ([console.cloud.google.com](https://console.cloud.google.com)) :
+   créer un projet « Awen », activer « Google Calendar API », puis créer un
+   compte de service (IAM et administration, Comptes de service) et lui
+   ajouter une clé JSON (onglet Clés). Le fichier se télécharge. Gratuit,
+   sans carte bancaire.
+3. **Partage** : dans les paramètres de l'agenda « Awen », le partager avec
+   l'adresse du compte de service (`…@….iam.gserviceaccount.com`), droit
+   « Apporter des modifications aux évènements ».
+4. **Serveur** : copier la clé (`scp cle.json awen:~/awen/data/google-agenda.json`),
+   ajouter `GOOGLE_CALENDAR_ID=…` dans `~/awen/.env`, puis
+   `docker compose up -d`.
+5. **Téléphone** : dans Samsung Agenda, cocher l'agenda « Awen ».
+
+La clé reste dans `data/`, que git ignore. Tant qu'elle manque, le même
+rappel reste disponible en agenda à s'abonner, `/calendar/rappels.ics`, qui
+demande Tailscale sur le téléphone.
 
 ## Endpoint ESP32
 
@@ -280,6 +318,8 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 
 - [x] Scaffold Flask + structure repo
 - [x] Séances de muscu guidées (suivi par série, progression auto, photos)
+- [x] Écran de la salle : cinq séances au choix (Push, Pull, Legs, Plyo, Reprise), charges en kilos sur les crans des machines (piles graduées en livres), dernière séance en regard de chaque série
+- [x] Rappel dans l'agenda Google quand une séance commencée dans la journée n'est pas terminée (voir ci-dessous)
 - [x] Recettes / meal prep + liste de courses en portions
 - [x] Calendrier (séances + planning + événements Samsung ICS)
 - [x] Module recherche d'emploi (veille quotidienne du pipeline Claude cowork)

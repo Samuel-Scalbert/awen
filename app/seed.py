@@ -3,7 +3,8 @@ import re
 
 from sqlalchemy import text as sqltext
 
-from .models import db, ExerciseSet, ProgramExercise, Recipe
+from .models import DataMigration, db, ExerciseSet, ProgramExercise, Recipe
+from .services.charges import set_machine
 
 DEFAULT_RECIPES = [
     dict(
@@ -206,7 +207,8 @@ def ensure_set_rir():
 
 
 def ensure_program_block():
-    """Migration douce : ajoute les colonnes `block`, `unit` et `active`."""
+    """Migration douce : ajoute les colonnes `block`, `unit`, `active` et
+    celles de la machine (`load_unit`, `load_step`)."""
     cols = [row[1] for row in
             db.session.execute(sqltext("PRAGMA table_info(program_exercises)"))]
     if "block" not in cols:
@@ -218,6 +220,12 @@ def ensure_program_block():
     if "active" not in cols:
         db.session.execute(sqltext(
             "ALTER TABLE program_exercises ADD COLUMN active BOOLEAN"))
+    if "load_unit" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE program_exercises ADD COLUMN load_unit VARCHAR(2)"))
+    if "load_step" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE program_exercises ADD COLUMN load_step FLOAT"))
     db.session.commit()
     ProgramExercise.query.filter(ProgramExercise.block.is_(None)).update(
         {"block": "force"}, synchronize_session=False)
@@ -309,11 +317,96 @@ def apply_pull_feedback():
     # actuellement affiché.
     for stype in ("push", "pull", "legs"):
         for block in ("force", "plyo"):
-            rows = (ProgramExercise.query
-                    .filter_by(session_type=stype, block=block)
-                    .filter(ProgramExercise.active.is_(True))
-                    .order_by(ProgramExercise.position, ProgramExercise.id).all())
-            for i, pe in enumerate(rows, 1):
-                pe.position = i
+            _renumber(stype, block)
 
+    db.session.commit()
+
+
+def _renumber(stype, block):
+    """Positions 1, 2, 3… dans l'ordre affiché, pour que ↑↓ restent nets."""
+    rows = (ProgramExercise.query
+            .filter_by(session_type=stype, block=block)
+            .filter(ProgramExercise.active.is_(True))
+            .order_by(ProgramExercise.position, ProgramExercise.id).all())
+    for i, pe in enumerate(rows, 1):
+        pe.position = i
+
+
+def _once(name):
+    """Vrai la première fois seulement, et la correction est alors notée.
+
+    Pour ce qui ne doit jamais être rejoué : une séance remise à 3 séries à
+    la main ne doit pas revenir à 4 au déploiement suivant.
+    """
+    if db.session.get(DataMigration, name) is not None:
+        return False
+    db.session.add(DataMigration(name=name))
+    return True
+
+
+SESSION_ORDER = ("push", "pull", "legs", "plyo")
+
+
+def plyo_as_session():
+    """La plyométrie devient une séance à part entière (19/10/2026).
+
+    « Plutôt que de m'imposer les séances, fais-moi un écran avec le choix
+    entre les 5 séances : push, pull, legs, plyo, reprise. » Ses exercices
+    étaient répartis en trois variantes rattachées à Push, Pull et Legs ; ils
+    forment désormais une seule séance. Les rebonds de chevilles, présents
+    dans les trois variantes, n'y figurent qu'une fois : les doublons sont
+    désactivés, pas supprimés, pour garder leurs séries passées.
+    """
+    if not _once("2026-10-19-plyo-seance"):
+        return
+    rows = ProgramExercise.query.filter_by(block="plyo").all()
+    rows.sort(key=lambda pe: (not pe.active,
+                              SESSION_ORDER.index(pe.session_type)
+                              if pe.session_type in SESSION_ORDER else 9,
+                              pe.position or 0, pe.id))
+    vus = set()
+    for i, pe in enumerate(rows, 1):
+        pe.session_type = "plyo"
+        pe.position = i
+        if pe.active and pe.slug in vus:
+            pe.active = False
+        vus.add(pe.slug)
+    db.session.flush()
+    _renumber("plyo", "plyo")
+    db.session.commit()
+
+
+def gym_in_pounds():
+    """La salle est graduée en livres, par crans de 10 (19/10/2026).
+
+    « Les poids de ma salle sont en pound, 10, 20, 30… » Toutes les machines
+    passent en livres ; la charge du programme est ramenée sur le cran le
+    plus proche et la progression avance désormais d'un cran. Une machine en
+    kilos se corrige sur la page Programme ou depuis la séance.
+    """
+    if not _once("2026-10-19-salle-en-livres"):
+        return
+    for pe in ProgramExercise.query.filter_by(block="force"):
+        set_machine(pe, "lb", 10)
+    db.session.commit()
+
+
+def apply_october_feedback():
+    """Retours du 16 et du 19/10/2026, appliqués une seule fois.
+
+    - « Enlève les pompes de la séance legs » : désactivées, leurs séries
+      passées restent dans les statistiques.
+    - « On monte à 4 sets », noté sur l'extension triceps à la poulie le 16/10.
+    """
+    if not _once("2026-10-19-retours"):
+        return
+    pompes = ProgramExercise.query.filter_by(slug="pompes",
+                                             session_type="legs").first()
+    if pompes is not None:
+        pompes.active = False
+    poulie = ProgramExercise.query.filter_by(slug="triceps-poulie").first()
+    if poulie is not None and (poulie.sets or 0) < 4:
+        poulie.sets = 4
+    db.session.flush()
+    _renumber("legs", "force")
     db.session.commit()

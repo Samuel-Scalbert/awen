@@ -619,128 +619,351 @@ details[open] > summary::before { transform: rotate(90deg); }
   .stats > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
-/* ---------- Séance guidée ------------------------------------------------ */
+/* ---------- L'écran de la salle ------------------------------------------ */
 
-#progress {
-  position: sticky;
-  top: var(--header-h);
-  z-index: 15;
-  display: flex;
+/* La séance en cours passe avant le choix : c'est presque toujours elle
+   qu'on vient chercher en rouvrant l'app entre deux séries. */
+.gym-current {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s-3);
+  gap: .1rem var(--s-4);
   margin: 0 0 var(--s-4);
-  padding: .65rem .9rem;
-  background: rgba(26, 30, 38, .95);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: var(--s-3) var(--s-4);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-ring);
+  border-radius: var(--r-lg);
+  color: var(--text);
+}
+.gym-current:hover { text-decoration: none; border-color: var(--accent); }
+.gym-current-what { font-size: 1.15rem; font-weight: 650; }
+.gym-current-meta { grid-column: 1; color: var(--muted-strong); font-size: .9rem; }
+.gym-current-go {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  padding: .55rem 1rem;
+  border-radius: var(--r);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+}
+
+/* Les cinq séances, toujours dans le même ordre : la main apprend où
+   toucher. La bande de couleur reprend celle des graphiques (Push en bleu,
+   Pull en orange, Legs en vert), d'une page à l'autre c'est la même séance. */
+.gym-choices {
+  list-style: none;
+  margin: 0 0 var(--s-6);
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.gym-choices form { display: block; margin: 0; }
+.gym-choice {
+  --tint: var(--muted);
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name meta" "info meta";
+  align-items: center;
+  justify-items: start;
+  gap: .05rem var(--s-4);
+  min-height: 4.6rem;
+  padding: var(--s-3) var(--s-4) var(--s-3) calc(var(--s-4) + 5px);
+  background: var(--card) linear-gradient(var(--tint), var(--tint)) left / 5px 100% no-repeat;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  color: var(--text);
+  text-align: left;
+  font-weight: 400;
+}
+.gym-choice:hover { filter: none; background-color: var(--card-hover); border-color: var(--border-strong); }
+.gym-choice-name { grid-area: name; font-size: 1.3rem; font-weight: 650; letter-spacing: -.01em; line-height: 1.2; }
+.gym-choice-info { grid-area: info; color: var(--muted-strong); font-size: .88rem; line-height: 1.35; }
+.gym-choice-meta {
+  grid-area: meta;
+  justify-self: end;
+  text-align: right;
+  color: var(--muted);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.gym-choice-meta b { display: block; color: var(--text); font-size: .88rem; font-weight: 600; }
+.gym-push { --tint: #3987e5; }
+.gym-pull { --tint: #d95926; }
+.gym-legs { --tint: #199e70; }
+.gym-plyo { --tint: var(--info); }
+.gym-reprise { --tint: var(--border-strong); }
+
+/* ---------- Séance : un exercice ouvert à la fois ------------------------- */
+
+.seance-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0 var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.seance-head h2 { margin: 0; }
+.seance-head .sub { grid-column: 1 / -1; margin: .25rem 0 0; color: var(--muted); font-size: .9rem; }
+.seance-count { margin: 0; color: var(--accent); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.seance-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  margin-top: var(--s-3);
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.seance-bar span { display: block; width: 0; height: 100%; background: var(--accent); transition: width .3s var(--ease); }
+
+/* La carte de la séance : tous les exercices d'un coup d'œil, et le bon en
+   un seul geste. Les carrés sont les séries, comme les plaques d'une pile. */
+.exos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+}
+.exos-groupe { grid-column: 1 / -1; margin: var(--s-2) 0 0; color: var(--muted-strong); font-size: .9rem; }
+.exos-groupe:first-child { margin-top: 0; }
+.exo-tile {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "name name" "pips load";
+  align-content: space-between;
+  align-items: center;
+  justify-items: start;
+  gap: .45rem var(--s-2);
+  min-height: 4rem;
+  padding: .55rem .7rem;
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  box-shadow: var(--shadow-2);
-  font-size: .92rem;
+  color: var(--text);
+  font-size: .9rem;
   font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
 }
-#progress-exo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#progress-sets {
-  flex: none;
-  padding: .15rem .6rem;
-  border-radius: var(--r-pill);
-  background: var(--accent-soft);
-  color: var(--accent);
-  white-space: nowrap;
-  font-size: .85rem;
+.exo-tile:hover { filter: none; border-color: var(--border-strong); }
+.exo-tile-name {
+  grid-area: name;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.exo-tile-pips { grid-area: pips; display: flex; flex-wrap: wrap; gap: 3px; }
+.exo-tile-pips i { width: .6rem; height: .6rem; border: 1px solid var(--border-strong); border-radius: 2px; }
+.exo-tile-pips i.on { background: var(--accent); border-color: var(--accent); }
+.exo-tile-load { grid-area: load; color: var(--muted); font-size: .76rem; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.exo-tile.is-started { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.exo-tile.is-done { background: var(--bg-sunken); color: var(--muted-strong); }
+.exo-tile.is-done .exo-tile-name::before { content: "✓ "; color: var(--accent); }
+.exo-tile[aria-pressed="true"] {
+  background: var(--card-hover);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-ring);
 }
 
-.exo {
-  display: flex;
-  gap: var(--s-4);
-  align-items: flex-start;
-  margin-bottom: var(--s-4);
+.exo-empty {
+  margin: 0;
+  padding: var(--s-5) var(--s-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  color: var(--muted);
+  text-align: center;
+}
+
+.exo-panel {
   padding: var(--s-4);
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
-  transition: border-color .2s var(--ease), box-shadow .2s var(--ease),
-              opacity .2s var(--ease);
+  scroll-margin-top: var(--s-3);
 }
-.exo img {
-  width: 10rem;
+.exo-panel-head { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-start; }
+.exo-panel-head > div { flex: 1 1 12rem; min-width: 0; }
+.exo-panel-head h3 { margin: 0 0 .15rem; font-size: 1.15rem; }
+.exo-target { margin: 0; color: var(--muted-strong); font-size: .9rem; line-height: 1.45; }
+.exo-pe-notes { margin: .3rem 0 0; color: var(--muted); font-size: .84rem; line-height: 1.45; }
+.exo-demo {
   flex: none;
+  width: 4.5rem;
   aspect-ratio: 3 / 2;
   object-fit: cover;
   background: var(--bg-sunken);
   border: 1px solid var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
+  cursor: zoom-in;
 }
-.exo-body { flex: 1; min-width: 0; }
-.exo h3 { margin: 0 0 .35rem; font-size: 1.08rem; }
-.exo.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-ring), var(--shadow-2); }
-.exo.current h3 { color: var(--accent); }
-.exo.done { opacity: .5; }
-.exo.done img { filter: grayscale(.6); }
-.exo .target {
-  display: inline-block;
-  margin: 0 0 .4rem;
-  padding: .2rem .6rem;
-  border-radius: var(--r-pill);
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
+.exo-demo.big { width: 100%; cursor: zoom-out; }
+.exo-last { margin: var(--s-3) 0 0; color: var(--muted); font-size: .84rem; }
+.exo-last-note {
+  margin: .3rem 0 0;
+  padding-left: .65rem;
+  border-left: 2px solid var(--border-strong);
+  color: var(--muted-strong);
   font-size: .88rem;
-  font-weight: 600;
+  line-height: 1.45;
 }
-.exo .status { margin: 0 0 .5rem; font-size: .92rem; }
-.exo .sets { margin: .4rem 0; padding: 0; list-style: none; }
-.exo .sets li {
-  display: flex;
+
+/* Les séries : ce que tu as fait la dernière fois, en face de ce que tu
+   fais aujourd'hui, et l'écart. C'est là qu'on voit si l'on progresse. */
+.set-cue { margin: var(--s-3) 0 0; color: var(--muted-strong); font-size: .9rem; font-variant-numeric: tabular-nums; }
+.sets-table { list-style: none; margin: var(--s-4) 0 0; padding: 0; font-variant-numeric: tabular-nums; }
+.sets-table li {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr) minmax(0, 1.25fr) auto;
   align-items: center;
   gap: var(--s-2);
-  padding: .25rem 0 .25rem .6rem;
-  border-left: 2px solid var(--accent-ring);
+  min-height: 2.6rem;
+  padding: .15rem .35rem;
+  border-bottom: 1px solid var(--border);
+  font-size: .95rem;
+}
+.sets-table li.sets-head {
+  min-height: 0;
+  padding-bottom: .3rem;
+  border-bottom-color: var(--border-strong);
+  color: var(--muted);
+  font-size: .76rem;
+}
+.set-n { color: var(--muted); font-weight: 600; text-align: center; }
+.set-prev { color: var(--muted); }
+.set-now { font-weight: 650; }
+.set-end { display: flex; align-items: center; justify-content: flex-end; gap: .15rem; min-width: 2rem; }
+.set-delta { font-size: .8rem; font-weight: 650; white-space: nowrap; }
+.set-delta.up { color: var(--accent); }
+.set-delta.down { color: var(--warn); }
+.set-delta.same { color: var(--muted); }
+.sets-table .del {
+  min-height: 2.2rem;
+  min-width: 2.2rem;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: .85rem;
+}
+.sets-table .del:hover { filter: none; color: var(--danger); }
+.sets-table li.set-next { background: var(--accent-soft); border-radius: var(--r-sm); }
+.sets-table li.set-next .set-n,
+.sets-table li.set-next .set-now { color: var(--accent); }
+.sets-table li.set-todo { color: var(--muted); }
+
+/* La saisie : deux compteurs, un bouton. La charge avance d'un cran de la
+   machine, les reps d'une à la fois, sans clavier qui recouvre l'écran. */
+.set-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+  margin: var(--s-2) 0 0;
+}
+.set-form.solo > .stepper,
+.set-form > .set-submit,
+.set-form > .rir-pick,
+.set-form > .hold-timer { grid-column: 1 / -1; }
+.stepper {
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
+  grid-template-areas: "label label label" "minus value plus";
+  gap: .25rem;
+}
+.stepper-label { grid-area: label; color: var(--muted); font-size: .78rem; }
+.stepper-btn {
+  min-height: 3rem;
+  padding: 0;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  font-size: .85rem;
+  font-weight: 650;
+}
+.stepper-btn[data-delta="-1"] { grid-area: minus; }
+.stepper-btn[data-delta="1"] { grid-area: plus; }
+.stepper-btn:hover { filter: none; border-color: var(--accent-ring); }
+.stepper-value { grid-area: value; position: relative; min-width: 0; }
+.stepper input {
+  width: 100%;
+  min-height: 3rem;
+  padding: 0 .3rem;
+  font-size: 1.45rem;
+  font-weight: 700;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper[data-field="weight"] input { padding-right: 1.9rem; }
+.stepper-unit {
+  position: absolute;
+  top: 50%;
+  right: .55rem;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: .8rem;
+  pointer-events: none;
+}
+.set-submit { min-height: 3.25rem; font-size: 1.02rem; }
+
+/* Reps en réserve : quatre cibles tactiles sur une seule ligne, jamais un
+   menu déroulant. Ça se remplit entre deux séries, une main sur la machine. */
+.rir-pick { display: flex; align-items: center; gap: .35rem; }
+.rir-pick > span { margin-right: .2rem; color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.rir-pick button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2.4rem;
+  padding: .2rem .4rem;
+  background: var(--bg-sunken);
+  color: var(--muted-strong);
+  border: 1px solid var(--border-strong);
   font-size: .9rem;
 }
-.exo .sets .del {
-  min-height: 0;
-  margin-left: auto;
-  padding: .1rem .45rem;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: .95rem;
-  transition: color .18s var(--ease);
-}
-.exo .sets .del:hover { color: var(--danger); filter: none; }
-.exo .advice {
-  margin: .5rem 0;
+.rir-pick button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+
+.hold-timer { min-height: 3rem; font-variant-numeric: tabular-nums; }
+.hold-timer.running { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+
+.set-advice {
+  margin: var(--s-3) 0 0;
   padding: .55rem .75rem;
   background: var(--accent-soft);
-  border-radius: var(--r-sm);
   border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
   color: var(--accent);
-  font-weight: 600;
   font-size: .92rem;
+  font-weight: 600;
 }
-/* Titres de bloc dans la séance (plyométrie / force) */
-.block-title {
+.exo-fini {
   display: flex;
-  align-items: baseline;
   flex-wrap: wrap;
-  gap: .5rem;
-  margin: var(--s-5) 0 var(--s-3);
-  padding-bottom: .4rem;
-  border-bottom: 2px solid var(--border-strong);
-  font-size: 1.05rem;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin: var(--s-3) 0 0;
+  font-weight: 600;
 }
-.block-title small { color: var(--muted); font-weight: 400; }
-.exo.plyo { border-left: 3px solid var(--info); }
-.exo.plyo.current { border-left-color: var(--accent); }
 
-.note-box { margin-top: .6rem; }
-.note-box summary { font-size: .85rem; color: var(--muted); }
+.exo-extras {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+.machine-box summary { color: var(--muted); font-size: .85rem; }
+.machine-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-2) var(--s-3); margin: var(--s-2) 0 0; }
+.machine-form .field { flex: 0 1 8rem; }
+.machine-form select, .machine-form input { width: 100%; }
+.machine-state { align-self: center; font-size: .82rem; }
+
+.note-box summary { color: var(--muted); font-size: .85rem; }
 .note-box summary::before { width: 1rem; height: 1rem; font-size: .9rem; }
 .note-box textarea { width: 100%; margin-top: .4rem; min-height: 3.5rem; font-size: .92rem; }
 .note-flag { color: var(--accent); font-size: 1.1rem; line-height: 0; }
-.note-state { font-size: .78rem; color: var(--accent); }
+.note-state { color: var(--accent); font-size: .78rem; }
 .note-state.err { color: var(--danger); }
 .note-read {
   margin: .5rem 0 0;
@@ -753,20 +976,28 @@ details[open] > summary::before { transform: rotate(90deg); }
   color: var(--muted-strong);
 }
 
-/* Bouton de série tenue au chrono */
-.hold-timer { flex: 1 1 100%; font-variant-numeric: tabular-nums; }
-.hold-timer.running {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
-  font-weight: 700;
-}
-.unit-hint { align-self: center; font-size: .85rem; }
-
-form.log { gap: var(--s-2); margin: .6rem 0 0; align-items: stretch; }
-form.log input { flex: 1 1 5rem; min-width: 0; }
-form.log button { flex: 1 1 100%; }
 form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-5); }
+form.cancel { justify-content: flex-start; }
+
+/* L'adresse de l'agenda des rappels, à copier dans l'app d'abonnement. */
+.feed-url { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.feed-url code { min-width: 0; overflow-wrap: anywhere; }
+
+/* Sur grand écran, la carte reste à gauche et l'exercice ouvert à droite. */
+@media (min-width: 48rem) {
+  .seance-main {
+    display: grid;
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: var(--s-5);
+    align-items: start;
+  }
+  .exos {
+    grid-template-columns: minmax(0, 1fr);
+    position: sticky;
+    top: calc(var(--header-h) + var(--s-4));
+  }
+  .exo-demo { width: 7rem; }
+}
 
 #timer {
   position: fixed;
@@ -1571,10 +1802,6 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
     padding-bottom: var(--s-7);
   }
   #timer { bottom: var(--s-4); left: auto; right: var(--s-5); min-width: 22rem; }
-  form.log input[name="reps"] { flex: 0 1 8rem; }   /* le placeholder "8-12 reps" doit tenir */
-  form.log input[name="weight"] { flex: 0 1 6rem; }
-  form.log button { flex: 0 0 auto; }
-  .exo img { width: 12rem; }
 }
 
 /* Grand écran : un peu plus d'air */
@@ -1600,45 +1827,13 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
   article.letter { border: none; box-shadow: none; padding: 0; }
 }
 
-/* ---------- Exercices repliables (séance) -------------------------------- */
-
-/* La carte devient un <details> : l'exercice terminé se replie et on ne fait
-   plus défiler toute la séance entre deux séries. */
-.exo { display: block; padding: 0; }
-.exo > .exo-head {
-  display: flex;
-  align-items: center;
-  gap: .5rem;
-  padding: var(--s-3) var(--s-4);
-  font-weight: 650;
-}
-.exo > .exo-head::before { flex: none; }
-.exo-title { flex: 1; min-width: 0; }
-.exo-mini {
-  flex: none;
-  padding: .1rem .5rem;
-  border-radius: var(--r-pill);
-  background: var(--bg-sunken);
-  color: var(--muted);
-  font-size: .75rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.exo[open] > .exo-head { border-bottom: 1px solid var(--border); }
-.exo .exo-inner {
-  display: flex;
-  gap: var(--s-4);
-  align-items: flex-start;
-  padding: var(--s-4);
-}
-.exo.current > .exo-head { color: var(--accent); }
-.exo.done > .exo-head .exo-mini { background: var(--accent-soft); color: var(--accent); }
+/* ---------- Programme ---------------------------------------------------- */
 
 .order-cell { white-space: nowrap; }
 .order-cell form { display: inline; margin: 0; }
 .order-cell button { min-height: 2rem; padding: .2rem .5rem; }
 
-@media (max-width: 34rem) {
+
   .exo .exo-inner { flex-direction: column; gap: var(--s-3); }
 }
 
@@ -1649,26 +1844,6 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
 .prog td:nth-child(2) { white-space: normal; }
 
 /* ---------- Coach ------------------------------------------------------- */
-
-/* Reps en réserve : quatre cibles tactiles, jamais un menu déroulant —
-   ça se remplit entre deux séries, une main sur la machine. */
-.rir-pick { display: flex; align-items: center; gap: .35rem; flex: 1 1 100%; flex-wrap: wrap; }
-.rir-pick > span { font-size: .82rem; margin-right: .2rem; }
-.rir-pick button {
-  min-height: 2.2rem; min-width: 2.6rem; padding: .3rem .6rem;
-  background: var(--bg-sunken); color: var(--muted-strong);
-  border: 1px solid var(--border-strong); font-size: .9rem;
-}
-.rir-pick button.on {
-  background: var(--accent); color: var(--on-accent);
-  border-color: var(--accent); font-weight: 700;
-}
-/* Sur téléphone, tout bouton du formulaire prend une ligne entière. Ces
-   quatre-là doivent se la partager : empilés, ils coûtaient quatre lignes
-   de défilement à chaque série. */
-@media (max-width: 47.99rem) {
-  form.log .rir-pick button { flex: 1 1 0; }
-}
 
 .advice-list { list-style: none; padding: 0; margin: 0 0 var(--s-5); }
 .advice {

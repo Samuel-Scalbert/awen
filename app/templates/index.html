@@ -17,14 +17,15 @@
       {%- if seance.prevues %} : {{ seance.faites }} série{{ 's' if seance.faites > 1 }} sur {{ seance.prevues }}
       {%- else %} : {{ seance.faites }} série{{ 's' if seance.faites > 1 }} notée{{ 's' if seance.faites > 1 }}{% endif %}.</p>
     {% elif seance.etat == 'prevue' %}
-    <p class="today-lead">{{ seance.focus }}</p>
-    <p class="today-sub">Prévue aujourd'hui, {{ seance.prevues }} séries.</p>
+    <p class="today-lead">{{ seance.focus }} ?</p>
+    <p class="today-sub">Jour d'entraînement. Suggestion : la séance qui attend
+      depuis le plus longtemps, {{ seance.prevues }} séries.</p>
     {% elif seance.etat == 'faite' %}
     <p class="today-lead">{{ seance.focus }}, faite</p>
     <p class="today-sub">{{ seance.faites }} série{{ 's' if seance.faites > 1 }} aujourd'hui. Rien d'autre à soulever.</p>
     {% else %}
     <p class="today-lead">Repos</p>
-    <p class="today-sub">Prochaine séance : {{ seance.prochaine }}, {{ seance.focus }}.</p>
+    <p class="today-sub">Prochaine séance {{ seance.prochaine }} ; {{ seance.focus }} attend depuis le plus longtemps.</p>
     {% endif %}
 
     {% if seance.exercices %}
@@ -40,11 +41,11 @@
       {% if seance.etat == 'en_cours' %}
       <a class="cta" href="{{ url_for('workout.session') }}">Reprendre la séance</a>
       {% elif seance.etat == 'prevue' %}
-      <a class="cta" href="{{ url_for('workout.session') }}">Commencer la séance</a>
+      <a class="cta" href="{{ url_for('workout.list_workouts') }}">Choisir ma séance</a>
       {% elif seance.etat == 'faite' %}
       <a href="{{ url_for('workout.list_workouts') }}">Revoir mes séances</a>
       {% else %}
-      <a href="{{ url_for('workout.session') }}">La faire aujourd'hui quand même</a>
+      <a href="{{ url_for('workout.list_workouts') }}">Faire une séance quand même</a>
       {% endif %}
     </p>
   </div>

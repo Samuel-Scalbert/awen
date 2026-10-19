@@ -1,48 +1,75 @@
 {% extends "base.html" %}
-{% block title %}Muscu | Awen{% endblock %}
+{% block title %}Salle | Awen{% endblock %}
 {% block content %}
+{#
+  L'écran qu'on ouvre en arrivant à la salle. Les cinq séances, toujours
+  dans le même ordre, et aucune imposée : on choisit selon l'envie, le temps
+  et les machines libres. Ce qui était resté ouvert est rangé au moment du
+  choix (voir workout.start).
+#}
 <div class="page-head">
-  <h2>Séances de muscu</h2>
-  <p class="sub">Rotation continue Push / Pull / Legs : la charge s'ajuste toute seule
-    à la fin de chaque séance.</p>
+  <h2>Quelle séance aujourd'hui ?</h2>
   <div class="page-links">
-    <a href="{{ url_for('workout.programme') }}">📋 Programme PPL</a>
+    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
     <a href="{{ url_for('stats.dashboard') }}">📊 Statistiques</a>
     <a href="{{ url_for('calendar.view_calendar') }}">📅 Calendrier</a>
   </div>
 </div>
 
-{% if current and current.focus == 'Reprise' %}
-<a class="cta" href="{{ url_for('workout.reprise') }}">▶️ Reprendre la reprise
-  ({{ current.sets|length }} séries faites)</a>
-{% elif current %}
-<a class="cta" href="{{ url_for('workout.session') }}">▶️ Reprendre la séance
-  {{ current.focus }} ({{ current.sets|length }} séries faites)</a>
-{% else %}
-<a class="cta" href="{{ url_for('workout.session') }}">▶️ Démarrer la séance du jour :
-  {{ next_type }}</a>
-{# Hors cycle, et volontairement en second : la reprise sert à redémarrer,
-   pas à remplacer la séance du jour. #}
-<a class="cta secondary" href="{{ url_for('workout.reprise') }}">🔄 Séance de reprise :
-  tous les exercices, tu t'arrêtes quand tu veux</a>
+{% set en_cours = current and current.sets %}
+{% if en_cours %}
+<a class="gym-current" href="{{ url_for('workout.session') }}">
+  <span class="gym-current-what">{{ current.focus }} en cours</span>
+  <span class="gym-current-meta">{{ current.sets|length }} série{{ 's' if current.sets|length > 1 }} notée{{ 's' if current.sets|length > 1 }}
+    {%- if current.date.date() != today %}, depuis le {{ current.date.strftime('%d/%m') }}{% endif %}</span>
+  <span class="gym-current-go">Reprendre</span>
+</a>
 {% endif %}
+
+<ul class="gym-choices">
+  {% for c in choix %}
+  {% set reprendre = current and current.focus == c.focus and current.date.date() == today %}
+  {# Une autre séance commencée aujourd'hui avec des séries : on ne la
+     termine pas sans le demander, c'est peut-être celle qu'on est en train
+     de faire. #}
+  {% set conflit = en_cours and not reprendre and current.date.date() == today %}
+  <li>
+    <form method="post" action="{{ url_for('workout.start', seance=c.slug) }}"
+          {% if conflit %}data-confirmer="Terminer {{ current.focus }} ({{ current.sets|length }} séries) et commencer {{ c.focus }} ?"{% endif %}>
+      <input type="hidden" name="confirmer" value="">
+      <button type="submit" class="gym-choice gym-{{ c.slug }}">
+        <span class="gym-choice-name">{{ c.focus }}</span>
+        <span class="gym-choice-info">{{ c.info }}</span>
+        <span class="gym-choice-meta">
+          {%- if reprendre %}<b>En cours</b>{% else %}<b>{{ c.exercices }} exercice{{ 's' if c.exercices > 1 }}</b>{% endif %}
+          {{ c.depuis }}</span>
+      </button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
 
 <h3 class="section-title">Historique</h3>
 <ul class="history">
-  {% for w in workouts %}
-  <li{% if not w.sets and w.completed %} class="vide"{% endif %}>
+  {# Une séance fermée sans une seule série n'est pas un entraînement :
+     c'était le passage obligé de l'ancien écran pour changer de séance. #}
+  {% for w in workouts if w.sets or not w.completed %}
+  <li>
     <details>
       <summary><strong>{{ w.date.strftime('%d/%m/%Y') }}</strong> {{ w.focus }}
-        {% if not w.completed %}<em>(en cours)</em>{% endif %}
-        · {% if w.sets %}{{ w.sets|length }} série{{ 's' if w.sets|length > 1 }}{% else %}vide{% endif %}</summary>
+        {%- if not w.completed %} <em>(en cours)</em>{% endif %},
+        {{ w.sets|length }} série{{ 's' if w.sets|length > 1 }}</summary>
       {% set ex_notes = notes_by_workout.get(w.id, {}) %}
       {% for name, items in w.sets|groupby('exercise') %}
       {% set first = items|first %}
+      {% set pe = first.program_exercise %}
       <p><strong>{{ name }}</strong>
         <a class="stat-link" href="{{ url_for('stats.exercise_stats', pe_id=first.program_exercise_id) }}"
            title="Statistiques de cet exercice">📈</a><br>
         {% for s in items|sort(attribute='set_number') -%}
-          {{ s.reps }}×{{ '%g'|format(s.weight_kg or 0) }} kg{{ " · " if not loop.last }}
+          {%- if pe and pe.unit == 'sec' %}{{ s.reps }} s
+          {%- elif pe and pe.block == 'plyo' or not s.weight_kg %}{{ s.reps }} reps
+          {%- else %}{{ s.reps }} × {{ s.weight_kg|charge(pe) }}{% endif %}{{ ", " if not loop.last }}
         {%- endfor %}</p>
       {% if ex_notes.get(first.program_exercise_id) %}
       <p class="note-read">💬 {{ ex_notes[first.program_exercise_id] }}</p>
@@ -52,7 +79,17 @@
     </details>
   </li>
   {% else %}
-  <li>Aucune séance enregistrée : lance la première ! 💪</li>
+  <li>Aucune séance enregistrée : choisis-en une ci-dessus.</li>
   {% endfor %}
 </ul>
+
+<script>
+  /* Changer de séance en pleine séance : une confirmation, pas un piège. */
+  document.querySelectorAll("form[data-confirmer]").forEach((form) => {
+    form.addEventListener("submit", (e) => {
+      if (confirm(form.dataset.confirmer)) form.elements.confirmer.value = "1";
+      else e.preventDefault();
+    });
+  });
+</script>
 {% endblock %}

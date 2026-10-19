@@ -35,8 +35,14 @@ def set_volume(s):
 
 
 def _completed_workouts():
-    return (Workout.query.filter_by(completed=True)
-            .order_by(Workout.date, Workout.id).all())
+    """Les séances terminées qui contiennent au moins une série.
+
+    Une séance fermée vide n'est pas un entraînement : c'était le passage
+    obligé de l'ancien écran pour changer de séance, et elle gonflait le
+    nombre de séances tout en faisant baisser le volume moyen.
+    """
+    return [w for w in (Workout.query.filter_by(completed=True)
+                        .order_by(Workout.date, Workout.id)) if w.sets]
 
 
 def overview():

@@ -1,551 +1,199 @@
 {% extends "base.html" %}
-{% set plyo_mode = mode == 'plyo' %}
-{% set reprise_mode = mode == 'reprise' %}
-{% block title %}{{ 'Plyométrie' if plyo_mode else ('Reprise' if reprise_mode else 'Séance ' ~ workout.focus) }} | Awen{% endblock %}
+{% block title %}{{ 'Reprise' if mode == 'reprise' else 'Séance ' ~ workout.focus }} | Awen{% endblock %}
 {% block content %}
-<div class="page-head">
-  {% if plyo_mode %}
-  <h2>🏐 Bloc plyométrie</h2>
-  <p class="sub">Détente verticale pour le volley — en bonus, quand tu veux.
-    À faire frais : dès que la hauteur baisse, la série ne sert plus à rien.</p>
-  <div class="page-links">
-    <a href="{{ url_for('workout.session') }}">← Séance {{ workout.focus }}</a>
-  </div>
-  {% elif reprise_mode %}
-  <h2>🔄 Reprise</h2>
-  <p class="sub">{{ workout.date.strftime('%d/%m/%Y') }} — tous les exercices du
-    programme, dans le désordre qui te plaît. Ouvre ce qui te tente, ignore le
-    reste, et termine quand tu veux : rien n'est attendu et
-    <strong>les charges du programme ne bougeront pas</strong>.</p>
-  <div class="page-links">
-    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
-  </div>
+{#
+  Une séance tient sur deux étages : la carte de tous les exercices, puis un
+  seul exercice ouvert. On fait les machines dans l'ordre où elles se
+  libèrent, pas dans celui du programme : changer d'exercice doit coûter un
+  geste, sans faire défiler des blocs terminés ou ouverts pour plus tard.
+  Les séries s'affichent en face de celles de la dernière fois, pour voir
+  tout de suite si l'on progresse.
+#}
+<div class="seance" id="seance" data-mode="{{ mode }}"
+     data-workout="{{ workout.id }}"
+     data-log="{{ url_for('workout.log_set', workout_id=workout.id) }}"
+     data-note="{{ url_for('workout.save_note', workout_id=workout.id) }}"
+     data-delete="{{ url_for('workout.delete_set', set_id=0) }}"
+     data-machine="{{ url_for('workout.machine', pe_id=0) }}">
+
+  <header class="seance-head">
+    <h2>{{ 'Reprise' if mode == 'reprise' else workout.focus }}</h2>
+    <p class="seance-count" id="seance-count" aria-live="polite"></p>
+    <p class="sub">{{ info }}.
+      {%- if mode == 'reprise' %} Fais ce qui te tente : rien n'est attendu, et les charges du programme ne bougeront pas.
+      {%- elif mode == 'plyo' %} Trois ou quatre exercices suffisent ; dès que la hauteur baisse, la série ne sert plus à rien.
+      {%- endif %}</p>
+    {# Une barre de progression n'a de sens que pour une séance qu'on fait
+       en entier : en reprise et en plyo, on choisit ce qu'on fait. #}
+    {% if mode == 'force' %}<div class="seance-bar" aria-hidden="true"><span id="seance-bar"></span></div>{% endif %}
+  </header>
+
+  {% if not cards %}
+  <p class="exo-empty">Cette séance ne contient aucun exercice actif. Ajoute-en
+    depuis le <a href="{{ url_for('workout.programme') }}">programme</a>.</p>
   {% else %}
-  <h2>Séance {{ workout.focus }}</h2>
-  <p class="sub">{{ workout.date.strftime('%d/%m/%Y') }} — le chrono de repos démarre à
-    chaque série validée, et le coach ajuste la charge pour la suivante.</p>
-  <div class="page-links">
-    <a href="{{ url_for('workout.plyo') }}">🏐 Bloc plyométrie</a>
-    <a href="{{ url_for('workout.programme') }}">📋 Programme</a>
+  <div class="seance-main">
+    <nav class="exos" aria-label="Exercices de la séance">
+      {% for c in cards %}
+      {% if mode == 'reprise' and (loop.first or c.pe.session_type != loop.previtem.pe.session_type) %}
+      <h3 class="exos-groupe">{{ c.pe.session_type|capitalize }}</h3>
+      {% endif %}
+      <button type="button" class="exo-tile" data-exo="{{ c.pe.id }}"
+              aria-controls="exo-{{ c.pe.id }}" aria-pressed="false">
+        <span class="exo-tile-name">{{ c.pe.name }}</span>
+        <span class="exo-tile-pips" aria-hidden="true"></span>
+        <span class="exo-tile-load">
+          {%- if c.target %}{{ c.pe.weight_kg|charge(c.pe) }}
+          {%- elif c.pe.unit == 'sec' %}{{ c.pe.sets }} × {{ c.pe.rep_max }} s
+          {%- else %}{{ c.pe.sets }} × {{ c.pe.rep_min if c.pe.rep_min == c.pe.rep_max else c.pe.rep_min ~ '-' ~ c.pe.rep_max }}{% endif -%}
+        </span>
+      </button>
+      {% endfor %}
+    </nav>
+
+    <div class="exo-stage">
+      <p class="exo-empty" id="exo-empty" hidden>Touche un exercice pour l'ouvrir.</p>
+
+      {% for c in cards %}
+      {% set pe = c.pe %}
+      <section class="exo-panel" id="exo-{{ pe.id }}" aria-label="{{ pe.name }}"
+               data-card="{{ c.data|tojson|forceescape }}" hidden>
+        <header class="exo-panel-head">
+          <img class="exo-demo" alt="Démonstration : {{ pe.name }}" loading="lazy"
+               src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
+               data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
+               onerror="this.remove()">
+          <div>
+            <h3>{{ pe.name }}</h3>
+            <p class="exo-target">{{ pe.sets }} séries de
+              {% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }} à {{ pe.rep_max }}{% endif %}
+              {{ 's' if pe.unit == 'sec' else 'reps' }}
+              {%- if c.target %}, {{ 'assistance ' if pe.increment_kg < 0 }}{{ pe.weight_kg|charge(pe) }}{% endif %},
+              repos {{ pe.rest_sec }} s</p>
+            {% if pe.notes %}<p class="exo-pe-notes">{{ pe.notes }}</p>{% endif %}
+          </div>
+        </header>
+
+        {% if c.prev_date %}
+        <p class="exo-last">Dernière fois le {{ c.prev_date.strftime('%d/%m') }}
+          {%- if c.prev_focus == 'Reprise' %}, en reprise{% endif %}.</p>
+        {% if c.prev_note %}<p class="exo-last-note">Ta note ce jour-là : « {{ c.prev_note }} »</p>{% endif %}
+        {% else %}
+        <p class="exo-last">Première fois : pas encore de repère.</p>
+        {% endif %}
+
+        <p class="set-cue" aria-live="polite"></p>
+        <form class="set-form{% if not c.loaded %} solo{% endif %}" method="post"
+              action="{{ url_for('workout.log_set', workout_id=workout.id) }}">
+          <input type="hidden" name="exercise_id" value="{{ pe.id }}">
+          <input type="hidden" name="rir" value="">
+          {% if pe.unit == 'sec' %}
+          {# Tenu au chrono : on ne compte pas ses sauts à la corde, et on ne
+             lâche pas la corde pour toucher l'écran. #}
+          <button type="button" class="hold-timer btn-ghost" data-sec="{{ pe.rep_max }}">▶ Chrono {{ pe.rep_max }} s</button>
+          {% endif %}
+          {% if c.loaded %}
+          <div class="stepper" data-field="weight">
+            <span class="stepper-label">{{ 'Assistance' if pe.increment_kg < 0 else 'Charge' }}</span>
+            <button type="button" class="stepper-btn" data-delta="-1"
+                    aria-label="Un cran de moins">−{{ c.data.stepkg|round(1)|nombre }}</button>
+            <span class="stepper-value">
+              <input name="weight" type="number" inputmode="decimal" step="any" min="0"
+                     aria-label="Charge en kilos">
+              <span class="stepper-unit">kg</span>
+            </span>
+            <button type="button" class="stepper-btn" data-delta="1"
+                    aria-label="Un cran de plus">+{{ c.data.stepkg|round(1)|nombre }}</button>
+          </div>
+          {% endif %}
+          <div class="stepper" data-field="{{ 'sec' if pe.unit == 'sec' else 'reps' }}">
+            <span class="stepper-label">{{ 'Secondes tenues' if pe.unit == 'sec' else 'Répétitions' }}</span>
+            <button type="button" class="stepper-btn" data-delta="-1"
+                    aria-label="{{ 'Cinq secondes de moins' if pe.unit == 'sec' else 'Une répétition de moins' }}">−</button>
+            <span class="stepper-value">
+              <input name="reps" type="number" inputmode="numeric" min="0" max="999" required
+                     aria-label="{{ 'Secondes tenues' if pe.unit == 'sec' else 'Répétitions' }}">
+            </span>
+            <button type="button" class="stepper-btn" data-delta="1"
+                    aria-label="{{ 'Cinq secondes de plus' if pe.unit == 'sec' else 'Une répétition de plus' }}">+</button>
+          </div>
+          <button type="submit" class="set-submit">Valider la série</button>
+          {# Reps en réserve : facultatif, un seul tap. C'est la seule mesure de
+             l'effort réel ; sans elle, 12 reps faciles et 12 reps à l'échec
+             sont indiscernables pour le coach. #}
+          {% if c.loaded %}
+          <div class="rir-pick" role="group" aria-label="Répétitions en réserve, facultatif">
+            <span>En réserve</span>
+            <button type="button" data-rir="0">0</button>
+            <button type="button" data-rir="1">1</button>
+            <button type="button" data-rir="2">2</button>
+            <button type="button" data-rir="3">3+</button>
+          </div>
+          {% endif %}
+        </form>
+
+        <p class="set-advice" aria-live="polite" hidden></p>
+        <div class="exo-fini" hidden>
+          <span>Exercice terminé.</span>
+          <button type="button" class="btn-ghost small exo-next" hidden></button>
+        </div>
+
+        <ol class="sets-table" aria-label="Séries, face à la dernière fois"></ol>
+
+        <div class="exo-extras">
+          <details class="note-box"{% if c.note %} open{% endif %}>
+            <summary>Note sur l'exercice<span class="note-flag">{{ '•' if c.note }}</span></summary>
+            <textarea class="exo-note" data-exercise="{{ pe.id }}" rows="2"
+                      placeholder="Ressenti, réglage de la machine, douleur…">{{ c.note }}</textarea>
+            <span class="note-state" aria-live="polite"></span>
+          </details>
+          {% if c.loaded %}
+          <details class="machine-box">
+            <summary>Machine : {{ pe|machine }}</summary>
+            <form class="machine-form">
+              <label class="field"><span>Pile graduée en</span>
+                <select name="load_unit">
+                  <option value="lb"{{ ' selected' if c.data.grid == 'lb' }}>livres</option>
+                  <option value="kg"{{ ' selected' if c.data.grid == 'kg' }}>kilos</option>
+                </select></label>
+              <label class="field"><span>Écart entre deux crans</span>
+                <input name="load_step" type="number" inputmode="decimal" step="any" min="0.5"
+                       value="{{ pe|cran }}"></label>
+              <button type="submit" class="btn-ghost">Enregistrer</button>
+              <span class="machine-state muted" aria-live="polite"></span>
+            </form>
+          </details>
+          {% endif %}
+        </div>
+      </section>
+      {% endfor %}
+    </div>
   </div>
   {% endif %}
+
+  <form method="post" class="finish"
+        action="{{ url_for('workout.finish_session', workout_id=workout.id) }}">
+    <label class="field field-wide"><span>Note sur la séance</span>
+      <textarea name="notes" id="session-note" rows="2"
+        placeholder="Forme générale, sommeil, énergie, douleurs…">{{ workout.notes or '' }}</textarea></label>
+    <span class="note-state" id="session-note-state" aria-live="polite"></span>
+    <button type="submit">{% if mode == 'force' %}Terminer la séance (applique la progression)
+      {%- elif mode == 'reprise' %}Terminer la reprise (les charges ne bougent pas)
+      {%- else %}Terminer la séance{% endif %}</button>
+  </form>
+  <form method="post" class="cancel"
+        action="{{ url_for('workout.delete_session', workout_id=workout.id) }}"
+        onsubmit="return confirm('Annuler cette séance et effacer ses séries ?')">
+    <button type="submit" class="danger">Annuler la séance</button>
+  </form>
 </div>
-
-<div id="progress">
-  <span id="progress-exo"></span>
-  <span id="progress-sets"></span>
-</div>
-
-{% for pe in exercises %}
-{% set done = logged[pe.id] %}
-{# En reprise les exercices viennent des trois séances : sans ce repère on ne
-   sait plus où on est dans une liste de dix-huit blocs qui se ressemblent. #}
-{% if reprise_mode and (loop.first or pe.session_type != loop.previtem.session_type) %}
-<h3 class="section-title reprise-groupe">{{ pe.session_type|upper }}</h3>
-{% endif %}
-{# Chaque exercice est un menu déroulant : replié une fois terminé, pour
-   ne pas avoir à faire défiler toute la séance entre deux séries. L'état
-   n'est fixé qu'ici, au rendu — le JS n'ouvre ni ne ferme rien tout seul,
-   sinon la page bougerait sous les doigts. #}
-{# Tout est replié en reprise : dix-huit blocs ouverts feraient un mur, et
-   surtout OUVRIR EST LE CHOIX — c'est le geste qui dit « celui-là me tente ».
-   Un exercice déjà commencé reste ouvert, lui. #}
-<details class="exo{% if pe.block == 'plyo' %} plyo{% endif %}{% if reprise_mode %} reprise{% endif %}" id="exo-{{ pe.id }}"
-         {% if (reprise_mode and done) or (not reprise_mode and done|length < pe.sets) %}open{% endif %}
-         data-sets="{{ pe.sets }}" data-repmin="{{ pe.rep_min }}"
-         data-repmax="{{ pe.rep_max }}" data-inc="{{ pe.increment_kg }}"
-         data-rest="{{ pe.rest_sec }}" data-name="{{ pe.name }}"
-         data-block="{{ pe.block }}" data-unit="{{ pe.unit or 'reps' }}"
-         data-num="{{ loop.index }}">
-  <summary class="exo-head">
-    <span class="exo-chip"></span>
-    <span class="exo-title">{{ loop.index }}/{{ exercises|length }} · {{ pe.name }}</span>
-    <span class="exo-mini"></span>
-  </summary>
-  <div class="exo-inner">
-  <img class="demo" alt="{{ pe.name }}" loading="lazy"
-       src="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-0.jpg') }}"
-       data-alt="{{ url_for('static', filename='img/exercises/' ~ pe.slug ~ '-1.jpg') }}"
-       onerror="this.style.display='none'">
-  <div class="exo-body">
-    <p class="target">🎯 {{ pe.sets }} séries ×
-      <strong>{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %}{{ ' s' if pe.unit == 'sec' else ' reps' }}</strong>
-      {% if pe.weight_kg %}@ {{ '%g'|format(pe.weight_kg) }} kg{% endif %}
-      <span class="muted">· repos {{ pe.rest_sec }} s</span></p>
-    <p class="status"></p>
-    {% if pe.notes %}<p class="muted">{{ pe.notes }}</p>{% endif %}
-    <ul class="sets">
-      {% for s in done %}
-      <li data-set-id="{{ s.id }}"><span>{% if pe.unit == 'sec' %}{{ s.reps }} s
-        {%- elif pe.block == 'plyo' %}{{ s.reps }} reps
-        {%- else %}{{ s.reps }} reps × {{ '%g'|format(s.weight_kg or 0) }} kg{% endif %}</span>
-        <button type="button" class="del" title="Supprimer cette série">✕</button></li>
-      {% endfor %}
-    </ul>
-    <p class="advice" hidden></p>
-    <form class="log" method="post"
-          action="{{ url_for('workout.log_set', workout_id=workout.id) }}">
-      <input type="hidden" name="exercise_id" value="{{ pe.id }}">
-      {# Exercice tenu au chrono : le champ est pré-rempli avec la durée
-         cible et un bouton décompte à voix d'écran, plutôt que de compter
-         des sauts à la corde en pleine série. #}
-      {% if pe.unit == 'sec' %}
-      <button type="button" class="hold-timer btn-ghost" data-sec="{{ pe.rep_max }}"
-        >▶ Chrono {{ pe.rep_max }} s</button>
-      <input name="reps" type="number" inputmode="numeric" min="0" max="999"
-             value="{{ pe.rep_max }}" aria-label="Durée tenue (secondes)" required>
-      <span class="unit-hint muted">secondes</span>
-      {% else %}
-      <input name="reps" type="number" inputmode="numeric" min="0" max="99"
-             placeholder="{% if pe.rep_min == pe.rep_max %}{{ pe.rep_min }}{% else %}{{ pe.rep_min }}-{{ pe.rep_max }}{% endif %} reps" required>
-      {% endif %}
-      {# La plyométrie ne se charge pas : pas de champ kilos qui n'aurait
-         aucun sens à remplir entre deux sauts. #}
-      {% if pe.block != 'plyo' %}
-      <input name="weight" type="number" inputmode="decimal" step="0.5" min="0"
-             value="{{ '%g'|format(pe.weight_kg) }}" placeholder="kg">
-      {% endif %}
-      <button type="submit">Valider la série</button>
-      {# Reps en réserve : facultatif, un seul tap. C'est la seule mesure de
-         l'effort réel — sans elle, 12 reps faciles et 12 reps à l'échec sont
-         indiscernables pour le coach. #}
-      {% if pe.block != 'plyo' %}
-      <div class="rir-pick" role="group" aria-label="Reps en réserve">
-        <span class="muted">Réserve :</span>
-        <button type="button" data-rir="0">0</button>
-        <button type="button" data-rir="1">1</button>
-        <button type="button" data-rir="2">2</button>
-        <button type="button" data-rir="3">3+</button>
-        <input type="hidden" name="rir" value="">
-      </div>
-      {% endif %}
-    </form>
-
-    <details class="note-box"{% if notes.get(pe.id) %} open{% endif %}>
-      <summary>💬 Commentaire<span class="note-flag">{{ '•' if notes.get(pe.id) }}</span></summary>
-      <textarea class="exo-note" data-exercise="{{ pe.id }}" rows="2"
-                placeholder="Ressenti, réglage machine, douleur…">{{ notes.get(pe.id, '') }}</textarea>
-      <span class="note-state" aria-live="polite"></span>
-    </details>
-  </div>
-  </div>
-</details>
-{% endfor %}
-
-{% if not plyo_mode %}
-<form method="post" class="finish"
-      action="{{ url_for('workout.finish_session', workout_id=workout.id) }}">
-  <label class="field field-wide"><span>💬 Commentaire de séance</span>
-    <textarea name="notes" id="session-note" rows="3"
-      placeholder="Forme générale, sommeil, énergie, douleurs…">{{ workout.notes or '' }}</textarea></label>
-  <span class="note-state" id="session-note-state" aria-live="polite"></span>
-  <button type="submit">{% if reprise_mode %}✅ Terminer la reprise (les charges ne bougent pas)
-    {%- else %}✅ Terminer la séance (applique la progression){% endif %}</button>
-</form>
-<form method="post" action="{{ url_for('workout.delete_session', workout_id=workout.id) }}"
-      onsubmit="return confirm('Supprimer cette séance et ses séries ?')">
-  <button type="submit" class="danger">Annuler la {{ 'reprise' if reprise_mode else 'séance' }}</button>
-</form>
-{% endif %}
 
 <div id="timer" hidden>
-  <span>⏱️ Repos</span>
+  <span>Repos</span>
   <span id="timer-count">60 s</span>
   <button type="button" id="timer-plus">+30 s</button>
   <button type="button" id="timer-skip">Passer</button>
 </div>
 
-<script>
-const WORKOUT_ID = {{ workout.id }};
-const STORE_KEY = 'awen-session-' + WORKOUT_ID;
-const DELETE_URL = "{{ url_for('workout.delete_set', set_id=0) }}".replace('/0/', '/{id}/');
-
-/* ---------- état persistant (survit à la sortie de l'appli) ---------- */
-function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; }
-  catch (e) { return {}; }
-}
-function saveState(patch) {
-  const st = Object.assign(loadState(), patch);
-  localStorage.setItem(STORE_KEY, JSON.stringify(st));
-  return st;
-}
-
-/* ---------- messages du coach (variés, ton adapté à la perf) ---------- */
-const MSG = {
-  fix: [   // très en dessous : on corrige, pas de politesse
-    "🔧 On corrige tout de suite : passe à {w} kg, la technique avant l'ego.",
-    "🔧 Trop lourd pour aujourd'hui. {w} kg sur la prochaine, exécution propre.",
-    "🔧 Stop, on ajuste : {w} kg. Mieux vaut 10 reps propres que 4 arrachées.",
-  ],
-  low: [   // sous la fourchette
-    "⬇️ Sous la fourchette ({min}-{max}) : redescends à {w} kg pour la suivante.",
-    "⬇️ Pas grave, on adapte : {w} kg sur la prochaine série.",
-    "⬇️ {w} kg pour la suivante, et tu restes dans la fourchette.",
-  ],
-  ok: [    // dans la fourchette
-    "✅ Dans la cible. Garde {w} kg et vise {max} reps.",
-    "✅ Solide. Même charge, essaie d'aller chercher {max}.",
-    "✅ C'est le bon poids. Prochaine série : {max} reps si tu peux.",
-  ],
-  top: [   // haut de fourchette atteint
-    "🔥 Haut de fourchette ! Tiens {w} kg — toutes les séries au max = charge montée à la prochaine séance.",
-    "🔥 {max} reps, propre. Encore les autres séries comme ça et on monte.",
-    "🔥 Plafond touché. Garde {w} kg, la progression tombera toute seule.",
-  ],
-  boost: [ // surperformance : on augmente MAINTENANT
-    "🚀 Beaucoup trop facile. On monte à {w} kg dès la prochaine série.",
-    "🚀 {r} reps ?! Charge la prochaine à {w} kg, on ne s'endort pas.",
-    "🚀 Surperformance — {w} kg tout de suite, c'est ça la difficulté qu'il te faut.",
-  ],
-  done: [
-    " Exercice bouclé 💪",
-    " Terminé, passe au suivant 👉",
-    " C'est plié pour celui-là ✔️",
-  ],
-  // La plyométrie ne se pilote pas en kilos : le critère est la qualité du
-  // saut. Dès que la hauteur baisse, la série ne sert plus à rien.
-  plyoOk: [
-    "🏐 Explosif. Contact au sol le plus court possible sur la prochaine.",
-    "🏐 Bien. Repos complet avant la suivante — la plyo se travaille frais.",
-    "🏐 Nickel. Cherche la hauteur, pas le nombre.",
-  ],
-  plyoDrop: [
-    "⚠️ Tu perds en hauteur : récupère plus longtemps, ou arrête là.",
-    "⚠️ Moins de reps que prévu — la fatigue nerveuse est arrivée, ne force pas.",
-    "⚠️ Qualité en baisse : mieux vaut couper la série que sauter fatigué.",
-  ],
-};
-function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
-function msg(cat, vars) {
-  let t = pick(MSG[cat]);
-  for (const k in vars) t = t.replaceAll('{' + k + '}', vars[k]);
-  return t;
-}
-
-/* ---------- compteurs, exo courant, barre de progression ---------- */
-function refresh() {
-  const cards = [...document.querySelectorAll('.exo')];
-  let current = null, totalDone = 0, totalPlanned = 0;
-  cards.forEach(card => {
-    const total = +card.dataset.sets;
-    const done = card.querySelectorAll('.sets li').length;
-    totalDone += Math.min(done, total); totalPlanned += total;
-    const status = card.querySelector('.status');
-    const chip = card.querySelector('.exo-chip');
-    const mini = card.querySelector('.exo-mini');
-    card.classList.toggle('done', done >= total);
-    card.classList.remove('current');
-    chip.textContent = '';
-    // Résumé visible quand l'exercice est replié
-    if (mini) {
-      const unit = card.dataset.unit === 'sec' ? 's' : 'reps';
-      const w = card.dataset.block === 'plyo' ? ''
-              : ' · ' + (card.querySelector('[name=weight]')?.value || '') + ' kg';
-      mini.textContent = `${done}/${total} séries${w}`;
-    }
-    if (done >= total) {
-      status.textContent = `✔️ ${done}/${total} séries faites`;
-    } else {
-      const left = total - done;
-      const rmin = card.dataset.repmin, rmax = card.dataset.repmax;
-      const suffix = card.dataset.unit === 'sec' ? 's' : 'reps';
-      const target = rmin === rmax ? `${rmin} ${suffix}` : `${rmin}-${rmax} ${suffix}`;
-      status.innerHTML = `<strong>Série ${done + 1}/${total}</strong> — vise `
-        + `<strong>${target}</strong>`
-        + ` · encore ${left} série${left > 1 ? 's' : ''}`;
-      if (!current) current = card;
-    }
-    // renumérote l'affichage des séries
-    card.querySelectorAll('.sets li').forEach((li, i) => {
-      li.querySelector('span').textContent =
-        li.querySelector('span').textContent.replace(/^Série \d+ : /, '');
-      li.querySelector('span').textContent =
-        `Série ${i + 1} : ` + li.querySelector('span').textContent;
-    });
-  });
-  if (current) {
-    current.classList.add('current');
-    current.querySelector('.exo-chip').textContent = '▶ ';
-    document.getElementById('progress-exo').textContent =
-      `▶ Exo ${current.dataset.num}/${cards.length} : ${current.dataset.name}`;
-  } else {
-    document.getElementById('progress-exo').textContent =
-      '🏁 Tous les exercices sont faits — termine la séance !';
-  }
-  document.getElementById('progress-sets').textContent =
-    `${totalDone}/${totalPlanned} séries`;
-}
-
-/* ---------- chrono de repos ---------- */
-const timer = document.getElementById('timer');
-const countEl = document.getElementById('timer-count');
-let deadline = 0, iv = null;
-
-function beep() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.connect(g); g.connect(ctx.destination);
-    o.frequency.value = 880; g.gain.value = 0.25;
-    o.start(); o.stop(ctx.currentTime + 0.5);
-  } catch (e) {}
-  if (navigator.vibrate) navigator.vibrate([250, 100, 250]);
-}
-function tick() {
-  const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
-  countEl.textContent = left + ' s';
-  if (left <= 0) { clearInterval(iv); timer.hidden = true; beep(); saveState({deadline: 0}); }
-}
-function startTimer(sec) {
-  deadline = Date.now() + sec * 1000;
-  saveState({deadline});
-  timer.hidden = false;
-  clearInterval(iv); iv = setInterval(tick, 250); tick();
-}
-document.getElementById('timer-plus').onclick = () => { deadline += 30000; saveState({deadline}); tick(); };
-document.getElementById('timer-skip').onclick = () => { deadline = Date.now(); tick(); };
-
-/* ---------- log d'une série + conseil adaptatif ---------- */
-document.querySelectorAll('form.log').forEach(form => {
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const card = form.closest('.exo'), d = card.dataset;
-    const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
-
-    // Étape 1 — l'enregistrement. Seul ce bloc peut parler de connexion.
-    let j;
-    try {
-      const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      j = await res.json();
-    } catch (err) {
-      alert("Impossible d'enregistrer la série — vérifie la connexion.");
-      btn.disabled = false;
-      return;
-    }
-    btn.disabled = false;
-
-    // Étape 2 — l'affichage. La série est déjà en base : si quelque chose
-    // casse ici, on le signale en console, mais on n'accuse jamais le réseau
-    // (c'est exactement le bug vécu sur la plyo : un plantage d'affichage
-    // affichait « pas de connexion » alors que la série était bien saisie,
-    // et empêchait le chrono de repos de démarrer).
-    try {
-      addSetLine(card, j.id, j.reps, j.weight);
-      const advice = card.querySelector('.advice');
-      advice.hidden = false;
-      const inc = Math.abs(parseFloat(d.inc)) || 0;
-      const wInput = form.querySelector('[name=weight]');   // absent en plyo
-      const rmin = +d.repmin, rmax = +d.repmax;
-      const setW = v => { if (wInput) wInput.value = v; };
-      let text;
-      if (d.block === 'plyo') {
-        text = msg(j.reps >= rmax ? 'plyoOk' : 'plyoDrop', {});
-      } else if (inc && j.reps <= rmin - 3) {
-        const nw = Math.max(0, j.weight - inc);
-        text = msg('fix', {w: nw, min: rmin, max: rmax});
-        setW(nw);
-      } else if (inc && j.reps < rmin) {
-        const nw = Math.max(0, j.weight - inc);
-        text = msg('low', {w: nw, min: rmin, max: rmax});
-        setW(nw);
-      } else if (inc && j.reps >= rmax + 3) {
-        const nw = j.weight + inc;
-        text = msg('boost', {w: nw, r: j.reps});
-        setW(nw);
-      } else if (j.reps >= rmax) {
-        text = msg('top', {w: j.weight, max: rmax});
-      } else {
-        text = msg('ok', {w: j.weight, max: rmax});
-      }
-      const repsInput = form.querySelector('[name=reps]');
-      if (repsInput) repsInput.value = d.unit === 'sec' ? d.repmax : '';
-      const rirGroup = form.querySelector('.rir-pick');
-      if (rirGroup) {   // la réserve se juge série par série
-        rirGroup.querySelectorAll('button').forEach(b => b.classList.remove('on'));
-        rirGroup.querySelector('input[name=rir]').value = '';
-      }
-
-      const doneCount = card.querySelectorAll('.sets li').length;
-      if (doneCount >= j.total_sets) {
-        text += pick(MSG.done);
-        // Volontairement aucun défilement automatique : la page qui saute
-        // au moment où on repose son téléphone est plus gênante qu'utile.
-      }
-      advice.textContent = text;
-      const st = loadState();
-      st.advice = st.advice || {}; st.weights = st.weights || {};
-      st.advice[card.id] = text;
-      if (wInput) st.weights[card.id] = wInput.value;
-      saveState(st);
-      refresh();
-    } catch (err) {
-      console.error('[séance] affichage après enregistrement :', err);
-    }
-
-    // Le chrono démarre dans tous les cas : c'est le repos qui compte, pas
-    // l'affichage. Hors du try pour qu'aucun souci de rendu ne l'empêche.
-    startTimer(+j.rest_sec || 60);
-  });
-});
-
-/* ---------- reps en réserve (RIR) ---------- */
-document.querySelectorAll('.rir-pick').forEach(group => {
-  const hidden = group.querySelector('input[name=rir]');
-  group.querySelectorAll('button[data-rir]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const already = btn.classList.contains('on');
-      group.querySelectorAll('button').forEach(b => b.classList.remove('on'));
-      // Deuxième tap sur le même bouton : on désélectionne, la valeur
-      // redevient vide plutôt que de rester bloquée sur un choix regretté.
-      btn.classList.toggle('on', !already);
-      hidden.value = already ? '' : btn.dataset.rir;
-    });
-  });
-});
-
-/* ---------- séries tenues au chrono (rebonds de chevilles…) ---------- */
-// Décompte de la durée cible puis validation automatique : on ne compte pas
-// ses sauts à la corde, et on ne veut pas lâcher la corde pour toucher
-// l'écran. Un appui pendant le décompte l'arrête et enregistre le temps
-// réellement tenu.
-document.querySelectorAll('.hold-timer').forEach(btn => {
-  const form = btn.closest('form.log');
-  const input = form.querySelector('[name=reps]');
-  const target = +btn.dataset.sec;
-  let iv = null, endAt = 0;
-
-  const stop = (elapsed) => {
-    clearInterval(iv); iv = null;
-    btn.textContent = `▶ Chrono ${target} s`;
-    btn.classList.remove('running');
-    input.value = Math.max(0, Math.round(elapsed));
-  };
-
-  btn.addEventListener('click', () => {
-    if (iv) {                       // arrêt anticipé : on garde le temps tenu
-      stop(target - (endAt - Date.now()) / 1000);
-      return;
-    }
-    endAt = Date.now() + target * 1000;
-    btn.classList.add('running');
-    iv = setInterval(() => {
-      const left = Math.max(0, (endAt - Date.now()) / 1000);
-      btn.textContent = `⏹ ${Math.ceil(left)} s`;
-      if (left <= 0) {
-        stop(target);
-        beep();
-        form.requestSubmit();       // série validée sans toucher l'écran
-      }
-    }, 100);
-  });
-});
-
-/* ---------- suppression d'une série mal saisie ---------- */
-function addSetLine(card, id, reps, weight) {
-  // Même format que le rendu serveur : secondes au chrono, reps seules en
-  // plyométrie (sans charge), reps × kg partout ailleurs.
-  const d = card.dataset;
-  const label = d.unit === 'sec' ? `${reps} s`
-              : d.block === 'plyo' ? `${reps} reps`
-              : `${reps} reps × ${weight} kg`;
-  const li = document.createElement('li');
-  li.dataset.setId = id;
-  li.innerHTML = `<span>${label}</span>`
-    + `<button type="button" class="del" title="Supprimer cette série">✕</button>`;
-  card.querySelector('.sets').appendChild(li);
-}
-document.addEventListener('click', async e => {
-  if (!e.target.classList.contains('del')) return;
-  const li = e.target.closest('li');
-  if (!confirm('Supprimer cette série ?')) return;
-  const res = await fetch(DELETE_URL.replace('{id}', li.dataset.setId), { method: 'POST' });
-  if (res.ok) { li.remove(); refresh(); }
-  else alert('Suppression impossible.');
-});
-
-/* ---------- commentaires : sauvegarde automatique ---------- */
-const NOTE_URL = "{{ url_for('workout.save_note', workout_id=workout.id) }}";
-
-async function saveNote(textarea, exerciseId, stateEl) {
-  const body = new FormData();
-  body.append('text', textarea.value);
-  if (exerciseId) body.append('exercise_id', exerciseId);
-  stateEl.textContent = '…';
-  try {
-    const res = await fetch(NOTE_URL, { method: 'POST', body });
-    if (!res.ok) throw new Error();
-    stateEl.textContent = 'enregistré ✓';
-    stateEl.classList.remove('err');
-    const flag = textarea.closest('.note-box')?.querySelector('.note-flag');
-    if (flag) flag.textContent = textarea.value.trim() ? '•' : '';
-    setTimeout(() => { stateEl.textContent = ''; }, 2000);
-  } catch (e) {
-    stateEl.textContent = 'non enregistré — réessaie';
-    stateEl.classList.add('err');
-  }
-}
-
-function autosave(textarea, exerciseId, stateEl) {
-  let timer = null;
-  const run = () => saveNote(textarea, exerciseId, stateEl);
-  // Sauvegarde 1,2 s après la dernière frappe, et sur toute sortie de champ
-  // ou passage en arrière-plan — à la salle on verrouille souvent l'écran
-  // juste après avoir tapé, `blur` seul laisserait filer la note.
-  textarea.addEventListener('input', () => {
-    clearTimeout(timer);
-    timer = setTimeout(run, 1200);
-  });
-  textarea.addEventListener('blur', () => { clearTimeout(timer); run(); });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && textarea.value !== textarea.defaultValue) {
-      clearTimeout(timer); run();
-    }
-  });
-}
-
-document.querySelectorAll('.exo-note').forEach(t =>
-  autosave(t, t.dataset.exercise, t.parentElement.querySelector('.note-state')));
-const sessionNote = document.getElementById('session-note');
-if (sessionNote) autosave(sessionNote, null, document.getElementById('session-note-state'));
-
-/* ---------- démo animée + restauration au retour dans l'appli ---------- */
-setInterval(() => {
-  if (document.hidden) return;
-  document.querySelectorAll('img.demo').forEach(img => {
-    if (img.style.display === 'none') return;
-    const tmp = img.src;
-    img.src = img.dataset.alt;
-    img.dataset.alt = tmp;
-  });
-}, 1300);
-
-function restore() {
-  const st = loadState();
-  for (const [cardId, text] of Object.entries(st.advice || {})) {
-    const card = document.getElementById(cardId);
-    if (card && text) {
-      const a = card.querySelector('.advice');
-      a.textContent = text; a.hidden = false;
-    }
-  }
-  for (const [cardId, w] of Object.entries(st.weights || {})) {
-    const card = document.getElementById(cardId);
-    const input = card && card.querySelector('[name=weight]');  // absent en plyo
-    if (input && w) input.value = w;
-  }
-  if (st.deadline && st.deadline > Date.now()) {
-    deadline = st.deadline;
-    timer.hidden = false;
-    clearInterval(iv); iv = setInterval(tick, 250); tick();
-  }
-  refresh();
-  // Pas de recentrage automatique au retour dans l'appli non plus.
-}
-window.addEventListener('pageshow', restore);
-document.querySelector('form.finish').addEventListener('submit',
-  () => localStorage.removeItem(STORE_KEY));
-restore();
-</script>
+<script src="{{ url_for('static', filename='js/seance.js') }}"></script>
 {% endblock %}

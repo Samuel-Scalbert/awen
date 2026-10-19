@@ -47,8 +47,8 @@
         <input type="hidden" name="exercise_id" value="{{ a.exercise.id }}">
         <input type="hidden" name="new_weight" value="{{ a.new_weight }}">
         <input type="hidden" name="reason" value="{{ a.title }} — {{ a.detail }}">
-        <button type="submit">Appliquer : {{ '%g'|format(a.exercise.weight_kg) }}
-          → {{ '%g'|format(a.new_weight) }} kg</button>
+        <button type="submit">Appliquer : {{ a.exercise.weight_kg|charge(a.exercise) }}
+          → {{ a.new_weight|charge(a.exercise) }}</button>
       </form>
       {% elif a.action == 'weight' %}
       <p class="muted"><small>Formulaire de pesée juste en dessous.</small></p>

@@ -1,11 +1,13 @@
 import calendar as pycal
 from datetime import date, datetime, timedelta, timezone
 
-from flask import Blueprint, render_template, request
+from flask import Blueprint, Response, render_template, request, url_for
 
 from ..models import Workout
+from ..services import agenda_google, rappels
 from ..services.calendar_sync import fetch_events
-from ..services.progression import CYCLE, plan_upcoming
+# Renommé : la fonction a déjà une variable « upcoming » (les évènements).
+from ..services.progression import upcoming as suggestions
 
 bp = Blueprint("calendar", __name__, url_prefix="/calendar")
 
@@ -25,16 +27,18 @@ def view_calendar():
     workouts = Workout.query.order_by(Workout.date, Workout.id).all()
     done_by_day = {}
     for w in workouts:
+        # Une séance fermée sans une seule série n'est pas un entraînement :
+        # c'était le passage obligé de l'ancien écran pour changer de séance.
+        if w.completed and not w.sets:
+            continue
         done_by_day.setdefault(w.date.date(), []).append(w)
 
-    # Planning : rotation continue projetée sur les jours d'entraînement.
-    last_focus, last_date = None, None
-    for w in reversed(workouts):
-        if w.focus in CYCLE:
-            last_focus, last_date = w.focus, w.date.date()
-            break
-    after = max(filter(None, [last_date, today - timedelta(days=1)]))
-    planned = {d: focus for d, focus in plan_upcoming(last_focus, after, count=16)
+    # Suggestions sur les jours d'entraînement à venir : d'abord la séance
+    # qui attend depuis le plus longtemps. Rien n'est imposé, le choix se
+    # fait à la salle.
+    fait_aujourdhui = any(w.sets for w in done_by_day.get(today, []))
+    after = today if fait_aujourdhui else today - timedelta(days=1)
+    planned = {d: focus for d, focus in suggestions(after, count=16)
                if d not in done_by_day}
 
     # Un seul téléchargement du flux : la grille a besoin du passé du mois
@@ -75,4 +79,15 @@ def view_calendar():
         month_label=f"{MONTHS_FR[month]} {year}",
         prev_y=prev_y, prev_m=prev_m, next_y=next_y, next_m=next_m,
         events=upcoming, cal_status=cal_status,
+        flux_rappels=url_for("calendar.reminders_feed", _external=True),
+        agenda_google=agenda_google.actif(),
     )
+
+
+@bp.route("/rappels.ics")
+def reminders_feed():
+    """Les rappels du soir, en agenda auquel le téléphone s'abonne."""
+    lien = url_for("workout.list_workouts", _external=True)
+    return Response(rappels.flux(lien), mimetype="text/calendar",
+                    headers={"Cache-Control": "no-store",
+                             "Content-Disposition": "inline; filename=awen-rappels.ics"})

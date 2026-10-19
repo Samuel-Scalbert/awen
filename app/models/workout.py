@@ -61,7 +61,7 @@ class ProgramExercise(db.Model):
     """
     __tablename__ = "program_exercises"
     id = db.Column(db.Integer, primary_key=True)
-    session_type = db.Column(db.String(10), nullable=False)  # push/pull/legs
+    session_type = db.Column(db.String(10), nullable=False)  # push/pull/legs/plyo
     # "force" = travail avec charges, "plyo" = bloc pliométrique (saut). Les
     # deux ne se pilotent pas pareil : la plyo progresse en hauteur et en
     # qualité d'appui, jamais en kilos ajoutés.
@@ -77,6 +77,14 @@ class ProgramExercise(db.Model):
     rep_max = db.Column(db.Integer)
     weight_kg = db.Column(db.Float, default=0)
     increment_kg = db.Column(db.Float, default=2.5)
+    # Ce qu'affiche la machine : « lb » pour une pile graduée en livres, et
+    # l'écart entre deux crans, dans cette unité. Les charges restent
+    # stockées en kilos pour que les statistiques comparent ce qui est
+    # comparable ; seuls la saisie et l'affichage parlent la langue de la
+    # machine. Sans ça l'app demandait 32,5 kg sur une pile qui va de 70 à
+    # 80 livres (31,8 ou 36,3 kg). Voir services/charges.py.
+    load_unit = db.Column(db.String(2), default="kg")
+    load_step = db.Column(db.Float)
     rest_sec = db.Column(db.Integer, default=60)
     # Un exercice retiré du programme n'est pas supprimé : ses séries passées
     # restent rattachées et continuent d'alimenter les statistiques. Il
@@ -135,6 +143,18 @@ class JumpTest(db.Model):
     date = db.Column(db.Date, nullable=False)
     height_cm = db.Column(db.Float, nullable=False)
     note = db.Column(db.String(200))
+
+
+class DataMigration(db.Model):
+    """Les corrections de données déjà passées sur cette base.
+
+    Certaines corrections ne doivent tourner qu'une fois : rejouées à chaque
+    démarrage, elles écraseraient ce que l'utilisateur a changé depuis (une
+    séance remise à 3 séries reviendrait à 4 au prochain déploiement).
+    """
+    __tablename__ = "data_migrations"
+    name = db.Column(db.String(80), primary_key=True)
+    applied_at = db.Column(db.DateTime, default=datetime.now)
 
 
 class CoachDecision(db.Model):

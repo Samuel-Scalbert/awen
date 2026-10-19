@@ -3,6 +3,7 @@ from datetime import date
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
+from ..services import charges
 from ..models import BodyWeight, CoachDecision, JumpTest, db
 from ..services import attendance, charts, coach
 
@@ -40,7 +41,7 @@ def apply():
         float(request.form["new_weight"]),
         request.form.get("reason", ""))
     if pe:
-        flash(f"{pe.name} : charge réglée à {pe.weight_kg:g} kg.")
+        flash(f"{pe.name} : charge réglée à {charges.label(pe.weight_kg, pe)}.")
     return redirect(url_for("coach.dashboard"))
 
 

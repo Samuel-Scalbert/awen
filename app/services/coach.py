@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from ..models import (BodyWeight, CoachDecision, ExerciseNote, ExerciseSet,
                       JumpTest, ProgramExercise, Workout, db)
 from . import attendance
+from .charges import label, snap
 from .progression import REPRISE, TRAINING_WEEKDAYS, working_sets
 
 # Seuils regroupés ici pour être discutables d'un coup d'œil, plutôt que
@@ -235,19 +236,23 @@ def _harder(pe):
 
     On garde le SIGNE de increment_kg : sur les tractions assistées il est
     négatif, car durcir l'exercice veut dire retirer de l'assistance. Prendre
-    la valeur absolue inverserait la consigne sur ces exercices-là.
+    la valeur absolue inverserait la consigne sur ces exercices-là. Chaque
+    charge proposée tombe sur un cran de la machine.
     """
-    return round(max(0, pe.weight_kg + pe.increment_kg), 1)
+    return snap(pe.weight_kg + pe.increment_kg, pe)
 
 
 def _easier(pe):
-    return round(max(0, pe.weight_kg - pe.increment_kg), 1)
+    return snap(pe.weight_kg - pe.increment_kg, pe)
 
 
 def _deload(pe):
-    """-10 % de difficulté (donc +10 % d'assistance si l'exercice est assisté)."""
+    """-10 % de difficulté (donc +10 % d'assistance si l'exercice est assisté),
+    sur le cran le plus proche. Sur une pile en crans de 10 livres, -10 %
+    d'une charge légère peut ne rien changer : on descend alors d'un cran."""
     ratio = DELOAD_RATIO if pe.increment_kg > 0 else (2 - DELOAD_RATIO)
-    return round(pe.weight_kg * ratio, 1)
+    new = snap(pe.weight_kg * ratio, pe)
+    return new if new != pe.weight_kg else _easier(pe)
 
 
 def _exercise_advice(pe, hist, advice):
@@ -288,7 +293,7 @@ def _exercise_advice(pe, hist, advice):
             "level": "warn", "icon": "🚀",
             "title": f"{pe.name} — trop facile",
             "detail": f"Il te restait {last_rir} reps en réserve à la dernière "
-                      f"séance : la charge ne stimule plus. Passe à {new:g} kg.",
+                      f"séance : la charge ne stimule plus. Passe à {label(new, pe)}.",
             "exercise": pe, "action": "set_weight", "new_weight": new,
         })
         return
@@ -300,9 +305,9 @@ def _exercise_advice(pe, hist, advice):
             advice.append({
                 "level": "warn", "icon": "🔁",
                 "title": f"{pe.name} — stagne depuis {STALL_SESSIONS} séances",
-                "detail": f"Même charge ({pe.weight_kg:g} kg) sans progresser. Un "
-                          f"deload à {new:g} kg (-10 %) casse le plateau : tu "
-                          f"remonteras plus vite qu'en t'acharnant.",
+                "detail": f"Même charge ({label(pe.weight_kg, pe)}) sans progresser. "
+                          f"Un deload à {label(new, pe)} (-10 %) casse le plateau : "
+                          f"tu remonteras plus vite qu'en t'acharnant.",
                 "exercise": pe, "action": "set_weight", "new_weight": new,
             })
             return
@@ -375,7 +380,7 @@ def weekly_recap():
     today = date.today()
     monday = today - timedelta(days=today.weekday())
     sessions = [w for w in Workout.query.filter_by(completed=True)
-                if w.date.date() >= monday]
+                if w.date.date() >= monday and w.sets]
     planned = sum(1 for i in range(today.weekday() + 1)
                   if (monday + timedelta(days=i)).weekday() in TRAINING_WEEKDAYS)
     volume = sum((s.reps or 0) * (s.weight_kg or 0)

@@ -9,6 +9,8 @@ env/
 # Env / secrets
 .env
 *.local
+# Clé du compte de service Google (rappel de séance dans l'agenda)
+data/*.json
 
 # Base de données locale
 data/*.db
