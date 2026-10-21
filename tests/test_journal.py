@@ -75,7 +75,7 @@ class JournalTest(unittest.TestCase):
     def test_sans_relevé_d_avant(self):
         """Le serveur a redémarré lui aussi : on le dit, sans inventer."""
         self.client.post("/api/esp32/journal?key=cle",
-                         json={"evt": "demarrage", "cause": "PLANTAGE"})
+                         json={"evt": "demarrage", "cause": "LOGICIEL"})
         self.assertIsNone(self._lignes()["journal"][-1]["avant"])
 
     def test_erreur_de_la_boucle(self):

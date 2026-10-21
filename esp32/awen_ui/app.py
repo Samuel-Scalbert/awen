@@ -101,10 +101,12 @@ MEM_WARN = 20000         # octets libres sous lesquels on s'inquiète
 # avait annoncé (voir /api/esp32/journal). Les trois pannes ne se cherchent
 # pas au même endroit :
 #
-#   ALIM     coupure ou chute de tension (câble, port USB, pic du wifi),
-#            mais aussi la broche EN : le bouton, ou un PC qui ouvre le port
-#            série. MicroPython range tout cela sous la même cause.
-#   PLANTAGE erreur dans le C de MicroPython ou de l'ESP-IDF
+#   ALIM     mise sous tension, ou chute de tension (câble, port USB, pic
+#            du wifi)
+#   EN       la broche de reset : le bouton, ou le PC. Le redémarrage qui
+#            suit un upload.ps1 s'inscrit ainsi (constaté le 21/10/2026).
+#   LOGICIEL erreur dans le C de MicroPython ou de l'ESP-IDF, ou
+#            machine.reset()
 #   GARDE    un chien de garde de l'ESP-IDF : quelque chose a bloqué
 #
 # Une erreur de la boucle part aussi, au plus une par minute : une panne qui
@@ -114,7 +116,7 @@ CAUSES = {
     getattr(machine, "HARD_RESET", -2): "EN",
     getattr(machine, "WDT_RESET", -3): "GARDE",
     getattr(machine, "DEEPSLEEP_RESET", -4): "VEILLE",
-    getattr(machine, "SOFT_RESET", -5): "PLANTAGE",
+    getattr(machine, "SOFT_RESET", -5): "LOGICIEL",
 }
 JOURNAL_MS = 60000
 

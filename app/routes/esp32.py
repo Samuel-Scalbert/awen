@@ -582,7 +582,7 @@ def pages():
 # son état à chaque relevé de /pages (depuis combien de temps elle tourne,
 # sa mémoire, sa page), et au démarrage elle envoie ici la cause que lui
 # donne la puce. Le serveur range les deux côte à côte : « ALIM après six
-# heures sans un signe » et « PLANTAGE avec 3 Ko libres » ne se cherchent
+# heures sans un signe » et « LOGICIEL avec 3 Ko libres » ne se cherchent
 # pas au même endroit.
 #
 # L'état courant ne vit qu'en mémoire : il change toutes les cinq secondes,

@@ -562,8 +562,9 @@ curl "http://192.168.1.32:5000/api/esp32/journal?key=<ESP32_API_KEY>&n=20"
 
 | Cause | Ce que ça veut dire | Où chercher |
 | --- | --- | --- |
-| `ALIM` | coupure ou chute de tension, ou la broche EN (bouton, PC qui ouvre le port série) | câble USB, chargeur, port du PC qui se met en veille |
-| `PLANTAGE` | erreur dans le C de MicroPython ou de l'ESP-IDF | `bas` proche de zéro : le wifi manquait de mémoire ; sinon la console série |
+| `ALIM` | mise sous tension, ou chute de tension | câble USB, chargeur, port du PC qui se met en veille |
+| `EN` | la broche de reset : le bouton, ou le PC | juste après un `upload.ps1` : rien d'anormal (c'est ainsi qu'il s'inscrit) ; sinon un PC qui ouvre le port série |
+| `LOGICIEL` | erreur dans le C de MicroPython ou de l'ESP-IDF, ou `machine.reset()` | `bas` proche de zéro : le wifi manquait de mémoire ; sinon la console série |
 | `GARDE` | un chien de garde de l'ESP-IDF : quelque chose a bloqué | un appel qui ne rend pas la main |
 
 Un `ALIM` dont l'état d'avant est sain (mémoire stable, aucune erreur) ne
