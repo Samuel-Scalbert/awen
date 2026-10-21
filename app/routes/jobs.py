@@ -92,12 +92,21 @@ def letters():
     ecrites = CoverLetter.query.order_by(CoverLetter.id.desc()).limit(30).all()
     for lettre in ecrites:
         lettres_svc.abandonnee(lettre)
+    choisie = request.args.get("offre", "")
+    # Les lettres pas encore exportées passent avant le formulaire : on
+    # revient sur cette page pour reprendre une lettre bien plus souvent que
+    # pour en commencer une, et sur un téléphone la liste tombait sous un
+    # formulaire de trois écrans.
     return render_template(
-        "lettres.html", letters=get_cover_letters(), ecrites=ecrites,
+        "lettres.html", letters=get_cover_letters(),
+        en_cours=[l for l in ecrites if not l.exportee_le],
+        envoyees=[l for l in ecrites if l.exportee_le],
+        deja=next((l for l in ecrites
+                   if choisie and l.offre_ref == choisie), None),
         offres=lettres_svc.offres_recentes(),
         lecons=LetterLesson.query.order_by(LetterLesson.id.desc()).all(),
         moteur=lettres_svc.moteur(),
-        choisie=request.args.get("offre", ""))
+        choisie=choisie)
 
 
 # --------------------------------------------------------------------------
@@ -164,11 +173,20 @@ def letter_state(lettre_id):
     return jsonify(_champs(lettre))
 
 
+_UNE_LIGNE = ("date_ligne", "objet", "salutation", "entreprise")
+
+
 def _maj(lettre, data):
     for cle in ("expediteur", "date_ligne", "destinataire", "objet",
                 "salutation", "corps", "entreprise"):
         if cle in data:
-            setattr(lettre, cle, (data.get(cle) or "").replace("\r\n", "\n"))
+            v = (data.get(cle) or "").replace("\r\n", "\n")
+            # L'objet s'écrit dans une zone qui passe à la ligne, pour se
+            # lire en entier sur un téléphone ; il reste une seule ligne
+            # dans le PDF.
+            if cle in _UNE_LIGNE:
+                v = " ".join(x.strip() for x in v.split("\n") if x.strip())
+            setattr(lettre, cle, v)
 
 
 @bp.route("/lettres/<int:lettre_id>/enregistrer", methods=["POST"])
@@ -273,5 +291,14 @@ def daily_jobs():
         _prepare(sel)
         banner = freshness(reports)
         families = family_totals(reports)
+    # Une offre qui a déjà sa lettre mène à cette lettre : « Écrire la
+    # lettre » rouvrait sinon un formulaire vide, et la lettre commencée
+    # depuis le PC semblait perdue quand on revenait depuis le téléphone.
+    lettres = {}
+    if sel:
+        for l in (CoverLetter.query
+                  .filter(CoverLetter.offre_ref.like(sel["dirname"] + "#%"))
+                  .order_by(CoverLetter.id)):
+            lettres[l.offre_ref] = l
     return render_template("jobs.html", reports=reports, sel=sel,
-                           banner=banner, families=families)
+                           banner=banner, families=families, lettres=lettres)

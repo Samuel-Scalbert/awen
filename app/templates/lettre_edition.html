@@ -33,7 +33,7 @@
       <label class="lt-field"><span>Destinataire</span>
         <textarea name="destinataire" rows="3">{{ lettre.destinataire }}</textarea></label>
       <label class="lt-field lt-objet"><span>Objet</span>
-        <input name="objet" value="{{ lettre.objet }}"></label>
+        <textarea name="objet" rows="2" enterkeyhint="next">{{ lettre.objet }}</textarea></label>
       <label class="lt-field"><span>Salutation</span>
         <input name="salutation" value="{{ lettre.salutation }}"></label>
       <label class="lt-field lt-body"><span>Lettre <em>(un paragraphe par bloc, séparés par une ligne vide)</em></span>

@@ -10,8 +10,41 @@
   </div>
 </div>
 
+{% macro liste(lettres) %}
+  <ul class="lt-list">
+    {% for l in lettres %}
+    <li>
+      <a href="{{ url_for('jobs.letter_edit', lettre_id=l.id) }}">
+        <span class="lt-who">{{ l.entreprise or "Entreprise à préciser" }}</span>
+        <span class="lt-what">{{ l.poste }}</span>
+      </a>
+      <span class="lt-meta">
+        {{ l.created_at.strftime('%d/%m') }}
+        {% if l.etat == 'generation' %}<span class="lt-badge run">en cours</span>
+        {% elif l.etat == 'erreur' %}<span class="lt-badge err">erreur</span>
+        {% elif l.exportee_le %}<span class="lt-badge ok">PDF {{ l.exportee_le.strftime('%d/%m') }}</span>
+        {% else %}<span class="lt-badge">à relire</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+{% endmacro %}
+
+{% if en_cours %}
+<section class="lt-section" aria-labelledby="lt-encours-title">
+  <h3 id="lt-encours-title">En préparation</h3>
+  {{ liste(en_cours) }}
+</section>
+{% endif %}
+
 <section class="lt-new" aria-labelledby="lt-new-title">
   <h3 id="lt-new-title">Nouvelle lettre</h3>
+  {% if deja %}
+  <p class="lt-deja">Tu as déjà une lettre pour cette offre, commencée le
+    {{ deja.created_at.strftime('%d/%m') }} :
+    <a href="{{ url_for('jobs.letter_edit', lettre_id=deja.id) }}">la reprendre</a>.
+    Le formulaire ci-dessous en écrirait une autre.</p>
+  {% endif %}
   {% if not moteur %}
   <p class="lt-warn">Claude n'est pas relié. Avec ton abonnement, sans frais en
     plus : crée un jeton par <code>claude setup-token</code> sur ton PC et
@@ -49,26 +82,10 @@
   </form>
 </section>
 
-{% if ecrites %}
-<section class="lt-section" aria-labelledby="lt-ecrites-title">
-  <h3 id="lt-ecrites-title">Écrites avec Claude</h3>
-  <ul class="lt-list">
-    {% for l in ecrites %}
-    <li>
-      <a href="{{ url_for('jobs.letter_edit', lettre_id=l.id) }}">
-        <span class="lt-who">{{ l.entreprise or "Entreprise à préciser" }}</span>
-        <span class="lt-what">{{ l.poste }}</span>
-      </a>
-      <span class="lt-meta">
-        {{ l.created_at.strftime('%d/%m') }}
-        {% if l.etat == 'generation' %}<span class="lt-badge run">en cours</span>
-        {% elif l.etat == 'erreur' %}<span class="lt-badge err">erreur</span>
-        {% elif l.exportee_le %}<span class="lt-badge ok">PDF {{ l.exportee_le.strftime('%d/%m') }}</span>
-        {% else %}<span class="lt-badge">à relire</span>{% endif %}
-      </span>
-    </li>
-    {% endfor %}
-  </ul>
+{% if envoyees %}
+<section class="lt-section" aria-labelledby="lt-envoyees-title">
+  <h3 id="lt-envoyees-title">PDF déjà téléchargés</h3>
+  {{ liste(envoyees) }}
 </section>
 {% endif %}
 

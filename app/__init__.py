@@ -49,7 +49,9 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
-        from .seed import (apply_october_feedback, apply_pull_feedback,
+        from .seed import (apply_feedback_20oct, apply_feedback_21oct,
+                           apply_october_feedback,
+                           apply_pull_feedback,
                            ensure_program_block, ensure_recipe_servings,
                            ensure_set_rir, gym_in_pounds, plyo_as_session,
                            seed_default_recipes, seed_plyo_block, seed_program)
@@ -67,6 +69,8 @@ def create_app(config_class=Config):
         plyo_as_session()
         gym_in_pounds()
         apply_october_feedback()
+        apply_feedback_20oct()
+        apply_feedback_21oct()
         # Rattrapage unique : la base est antérieure à la distinction entre
         # « raté » et « absent », et tous ses trous venaient d'absences. Ne
         # fait rien dès qu'une qualification existe — voir attendance.py.

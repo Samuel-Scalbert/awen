@@ -396,6 +396,36 @@ class LettresTest(unittest.TestCase):
         self.assertEqual(db.session.get(CoverLetter, l.id).objet,
                          "Candidature : Product Owner Core")
 
+    def test_l_objet_reste_sur_une_ligne(self):
+        """Il s'écrit dans une zone qui passe à la ligne sur téléphone ; un
+        retour à la ligne collé n'entre pas dans le PDF."""
+        l = self._ecrire()
+        self.client.post("/jobs/lettres/{}/enregistrer".format(l.id),
+                         json={"objet": "Candidature :\r\n Product Owner Core\n",
+                               "corps": "Un.\n\nDeux."})
+        l = db.session.get(CoverLetter, l.id)
+        self.assertEqual(l.objet, "Candidature : Product Owner Core")
+        self.assertEqual(l.corps, "Un.\n\nDeux.")
+
+    def test_la_lettre_en_preparation_se_retrouve(self):
+        """Commencée sur le PC, reprise depuis le téléphone : elle passe
+        avant le formulaire, et l'offre d'où elle vient y mène."""
+        l = self._ecrire()
+        l.offre_ref = "2026-10-20#2"
+        db.session.commit()
+        page = self.client.get("/jobs/lettres").get_data(as_text=True)
+        self.assertLess(page.index("En préparation"), page.index("Nouvelle lettre"))
+        self.assertIn("/jobs/lettres/{}".format(l.id), page)
+        # On revient par l'offre : la page propose de reprendre la lettre.
+        page = self.client.get("/jobs/lettres?offre=2026-10-20%232").get_data(as_text=True)
+        self.assertIn("Tu as déjà une lettre pour cette offre", page)
+        # Une fois le PDF téléchargé, elle quitte « En préparation ».
+        l.exportee_le = datetime(2026, 10, 20, 18, 0)
+        db.session.commit()
+        page = self.client.get("/jobs/lettres").get_data(as_text=True)
+        self.assertNotIn("En préparation", page)
+        self.assertIn("PDF déjà téléchargés", page)
+
     def _champs(self, l, **changes):
         d = {k: getattr(l, k) for k in ("expediteur", "date_ligne", "destinataire",
                                         "objet", "salutation", "corps", "entreprise")}

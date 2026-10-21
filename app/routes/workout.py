@@ -245,8 +245,8 @@ def _card(pe, done, prev, note):
             "id": pe.id, "name": pe.name, "sets": pe.sets or 0,
             "repmin": pe.rep_min or 0, "repmax": pe.rep_max or 0,
             "kind": pe.unit or "reps", "block": pe.block, "rest": pe.rest_sec or 60,
-            "loaded": loaded, "grid": charges.unit_of(pe),
-            "stepkg": charges.step_kg(pe), "inc": charges.increment_steps(pe),
+            "loaded": loaded, **charges.stepper(pe),
+            "inc": charges.increment_steps(pe),
             "start": start,
             "assist": (pe.increment_kg or 0) < 0,
             "done": done_rows,
@@ -369,7 +369,9 @@ def machine(pe_id):
     unit = request.form.get("load_unit")
     if unit not in charges.UNITS:
         return jsonify(ok=False, erreur="Unité inconnue."), 400
-    charges.set_machine(pe, unit, _nombre(request.form.get("load_step")))
+    extra = request.form.get("load_extra")
+    charges.set_machine(pe, unit, _nombre(request.form.get("load_step")),
+                        _nombre(extra) if extra is not None else None)
     db.session.commit()
     return jsonify(ok=True, machine=charges.machine_label(pe),
                    charge=charges.label(pe.weight_kg, pe))

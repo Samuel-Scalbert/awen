@@ -60,7 +60,8 @@
     return d;
   };
   let minuterie = null;
-  const enregistrer = async () => {
+  const enregistrer = async (keepalive = false) => {
+    clearTimeout(minuterie);
     minuterie = null;
     enregistre.textContent = "Enregistrement…";
     try {
@@ -68,6 +69,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(donnees()),
+        keepalive,
       });
       if (!r.ok) throw new Error(r.status);
       const h = new Date();
@@ -85,8 +87,23 @@
   });
   window.addEventListener("beforeunload", (ev) => {
     if (minuterie) {
-      enregistrer();
+      enregistrer(true);
       ev.preventDefault();
+    }
+  });
+  // Sur téléphone, on quitte en changeant d'appli ou en fermant l'onglet, et
+  // beforeunload ne part pas toujours : la dernière seconde de frappe se
+  // perdait. On enregistre dès que la page passe en arrière-plan.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && minuterie) enregistrer(true);
+  });
+
+  // L'objet passe à la ligne pour se lire en entier, mais reste une seule
+  // ligne : Entrée passe au champ suivant.
+  form.elements.objet.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      form.elements.salutation.focus();
     }
   });
 

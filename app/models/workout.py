@@ -85,6 +85,9 @@ class ProgramExercise(db.Model):
     # 80 livres (31,8 ou 36,3 kg). Voir services/charges.py.
     load_unit = db.Column(db.String(2), default="kg")
     load_step = db.Column(db.Float)
+    # Le poids d'appoint qui s'ajoute à n'importe quel cran (7,5 lb sur la
+    # presse triceps), dans la même unité ; 0 si la machine n'en a pas.
+    load_extra = db.Column(db.Float, default=0)
     rest_sec = db.Column(db.Integer, default=60)
     # Un exercice retiré du programme n'est pas supprimé : ses séries passées
     # restent rattachées et continuent d'alimenter les statistiques. Il

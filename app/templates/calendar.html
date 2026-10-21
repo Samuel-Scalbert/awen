@@ -21,7 +21,7 @@
   {% for week in weeks %}
   <tr>
     {% for cell in week %}
-    <td class="{% if not cell.in_month %}out{% endif %}{% if cell.is_today %} today{% endif %}">
+    <td class="{% if not cell.in_month %}out{% endif %}{% if cell.is_today %} cal-today{% endif %}">
       <span class="daynum">{{ cell.day }}</span>
       {% for w in cell.done %}
         <span class="badge done{% if not w.completed %} pending{% endif %}"

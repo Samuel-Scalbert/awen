@@ -94,16 +94,22 @@
           {% endif %}
           {% if c.loaded %}
           <div class="stepper" data-field="weight">
-            <span class="stepper-label">{{ 'Assistance' if pe.increment_kg < 0 else 'Charge' }}</span>
+            <span class="stepper-label">{{ 'Assistance' if pe.increment_kg < 0 else 'Charge' }}, crans de {{ c.data.step|nombre }} {{ c.data.grid }}</span>
             <button type="button" class="stepper-btn" data-delta="-1"
-                    aria-label="Un cran de moins">−{{ c.data.stepkg|round(1)|nombre }}</button>
+                    aria-label="Un cran de moins">−</button>
             <span class="stepper-value">
               <input name="weight" type="number" inputmode="decimal" step="any" min="0"
                      aria-label="Charge en kilos">
               <span class="stepper-unit">kg</span>
             </span>
             <button type="button" class="stepper-btn" data-delta="1"
-                    aria-label="Un cran de plus">+{{ c.data.stepkg|round(1)|nombre }}</button>
+                    aria-label="Un cran de plus">+</button>
+            {% if c.data.extra %}
+            {# Le poids qui s'ajoute à n'importe quel cran : les flèches
+               bougent la pile, ce bouton l'appoint, comme sur la machine. #}
+            <button type="button" class="stepper-extra" aria-pressed="false">
+              Appoint +{{ c.data.extra|nombre }}</button>
+            {% endif %}
           </div>
           {% endif %}
           <div class="stepper" data-field="{{ 'sec' if pe.unit == 'sec' else 'reps' }}">
@@ -159,6 +165,9 @@
               <label class="field"><span>Écart entre deux crans</span>
                 <input name="load_step" type="number" inputmode="decimal" step="any" min="0.5"
                        value="{{ pe|cran }}"></label>
+              <label class="field"><span>Poids d'appoint <em>(0 : aucun)</em></span>
+                <input name="load_extra" type="number" inputmode="decimal" step="any" min="0"
+                       value="{{ '%g' % (pe.load_extra or 0) }}"></label>
               <button type="submit" class="btn-ghost">Enregistrer</button>
               <span class="machine-state muted" aria-live="polite"></span>
             </form>

@@ -4,7 +4,7 @@ import re
 from sqlalchemy import text as sqltext
 
 from .models import DataMigration, db, ExerciseSet, ProgramExercise, Recipe
-from .services.charges import set_machine
+from .services.charges import set_machine, to_kg
 
 DEFAULT_RECIPES = [
     dict(
@@ -226,6 +226,9 @@ def ensure_program_block():
     if "load_step" not in cols:
         db.session.execute(sqltext(
             "ALTER TABLE program_exercises ADD COLUMN load_step FLOAT"))
+    if "load_extra" not in cols:
+        db.session.execute(sqltext(
+            "ALTER TABLE program_exercises ADD COLUMN load_extra FLOAT DEFAULT 0"))
     db.session.commit()
     ProgramExercise.query.filter(ProgramExercise.block.is_(None)).update(
         {"block": "force"}, synchronize_session=False)
@@ -409,4 +412,67 @@ def apply_october_feedback():
         poulie.sets = 4
     db.session.flush()
     _renumber("legs", "force")
+    db.session.commit()
+
+
+POULIES = ("curl-marteau", "curl-inverse", "triceps-poulie")
+
+
+def apply_feedback_20oct():
+    """Retours de la séance Pull du 20/10/2026, appliqués une seule fois.
+
+    - « C'est la poulie donc 5 lb par 5 lb » (curl marteau), et « tous les
+      exos à la poulie sont sur une base de 5 lb » : crans de 5 lb pour les
+      trois exercices à la poulie.
+    - Curl marteau : la charge du jour, 35 lb (15,8 sur la poulie), devient
+      la cible.
+    - Curl inversé : « monte à 4 sets ; une charge trop lourde me fait mal au
+      poignet, donc on va descendre à 18 mais augmenter les répétitions ».
+      Quatre séries de 15 à 20, à 18 kg (40 lb), et plus de montée de charge
+      automatique : il progresse en répétitions.
+    """
+    if not _once("2026-10-20-retours"):
+        return
+    for slug in POULIES:
+        pe = ProgramExercise.query.filter_by(slug=slug).first()
+        if pe is not None:
+            set_machine(pe, "lb", 5)
+    marteau = ProgramExercise.query.filter_by(slug="curl-marteau").first()
+    if marteau is not None:
+        marteau.weight_kg = to_kg(35, "lb")
+        marteau.notes = "À la poulie, crans de 5 lb."
+    inverse = ProgramExercise.query.filter_by(slug="curl-inverse").first()
+    if inverse is not None:
+        inverse.sets = 4
+        inverse.rep_min, inverse.rep_max = 15, 20
+        inverse.weight_kg = to_kg(40, "lb")
+        inverse.increment_kg = 0
+        inverse.notes = ("À la poulie. Au-delà de 18 kg le poignet fait mal : "
+                         "on progresse en répétitions, pas en charge.")
+    db.session.commit()
+
+
+def apply_feedback_21oct():
+    """Retour de la séance Push du 21/10/2026, appliqué une seule fois.
+
+    - Presse triceps : « il y avait du poids en plus du cran sur la machine,
+      3,4 kg ». C'est un appoint de 7,5 lb (étiqueté 3,4) qui s'ajoute au
+      cran. Trois séries sur quatre ont été faites avec, à 57,4 (54 + 3,4) :
+      c'est la nouvelle cible.
+    - Extension triceps à la poulie : la séance s'est terminée sur l'ancien
+      réglage, qui montait de 10 lb ; après 4 × 18 à 13,5 (30 lb), la
+      progression a sauté à 40 lb. La poulie avance de 5 lb : 35 lb, soit
+      15,8. On ne corrige que si la charge est bien celle de ce saut.
+    """
+    if not _once("2026-10-21-retours"):
+        return
+    presse = ProgramExercise.query.filter_by(slug="triceps-press").first()
+    if presse is not None:
+        set_machine(presse, "lb", 10, 7.5)
+        presse.weight_kg = to_kg(120 + 7.5, "lb")
+        presse.notes = ("Appoint de 3,4 (7,5 lb) en plus du cran : "
+                        "54 + 3,4 = 57,4.")
+    poulie = ProgramExercise.query.filter_by(slug="triceps-poulie").first()
+    if poulie is not None and abs((poulie.weight_kg or 0) - to_kg(40, "lb")) < 0.01:
+        poulie.weight_kg = to_kg(35, "lb")
     db.session.commit()

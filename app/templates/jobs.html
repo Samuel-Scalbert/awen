@@ -168,8 +168,13 @@ la tâche tourne chaque matin à 9h.</p>
         {{- '✉️ Postuler' if a.kind == 'apply' else "🔗 Voir l'offre" }}
         <span class="host">{{ a.host }}</span></a>
       {% endfor %}
+      {% set ref = sel.dirname ~ '#' ~ (o.rank or loop.index) %}
+      {% if lettres[ref] %}
+      <a class="btn small btn-ghost" href="{{ url_for('jobs.letter_edit', lettre_id=lettres[ref].id) }}">✍️ Reprendre la lettre</a>
+      {% else %}
       <a class="btn small btn-ghost"
-         href="{{ url_for('jobs.letters', offre=sel.dirname ~ '#' ~ (o.rank or loop.index)) }}">✍️ Écrire la lettre</a>
+         href="{{ url_for('jobs.letters', offre=ref) }}">✍️ Écrire la lettre</a>
+      {% endif %}
     </footer>
   </article>
   {% else %}

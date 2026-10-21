@@ -369,6 +369,9 @@ input, textarea, select {
   /* 16px minimum : en dessous, iOS zoome à chaque focus */
   font-size: 1rem;
   transition: border-color .18s var(--ease), box-shadow .18s var(--ease);
+  /* Une liste d'offres aux intitulés longs élargissait la page des lettres
+     à 800 px sur téléphone : un champ ne dépasse jamais son conteneur. */
+  max-width: 100%;
 }
 input:hover, textarea:hover { border-color: var(--muted); }
 input:focus, textarea:focus, select:focus {
@@ -387,7 +390,7 @@ input[type="checkbox"] {
 }
 input[type="number"] { text-align: center; font-variant-numeric: tabular-nums; }
 
-.field { display: flex; flex-direction: column; gap: .3rem; flex: 1 1 9rem; }
+.field { display: flex; flex-direction: column; gap: .3rem; flex: 1 1 9rem; min-width: 0; }
 .field > span {
   font-size: .78rem;
   font-weight: 600;
@@ -575,7 +578,15 @@ details[open] > summary::before { transform: rotate(90deg); }
   padding: .32rem 0;
   border-top: 1px solid var(--border);
 }
-.today-list .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Deux lignes plutôt qu'une coupée : sur un téléphone au texte agrandi,
+   « Développé incliné machine » devenait « Développé incl… ». */
+.today-list .t {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .today-list .d { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
 .today-list .d.go { color: var(--accent); font-weight: 600; }
 .today-list .d.late { color: var(--danger); font-weight: 600; }
@@ -860,11 +871,21 @@ details[open] > summary::before { transform: rotate(90deg); }
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-3);
   margin: var(--s-2) 0 0;
+  container: saisie / inline-size;
 }
 .set-form.solo > .stepper,
 .set-form > .set-submit,
 .set-form > .rir-pick,
 .set-form > .hold-timer { grid-column: 1 / -1; }
+/* Côte à côte, chaque compteur garde à peine 60 px pour son nombre : sur un
+   téléphone, « 18,3 kg » s'y lisait « 18 », et même « 36 » était rogné.
+   Sous 27rem, la charge et les reps prennent chacune toute la largeur.
+   La mesure est celle du formulaire, pas de l'écran : elle reste juste
+   quel que soit le panneau qui l'entoure, et la taille du texte du
+   téléphone. */
+@container saisie (max-width: 27rem) {
+  .set-form > .stepper { grid-column: 1 / -1; }
+}
 .stepper {
   display: grid;
   grid-template-columns: 2.75rem minmax(0, 1fr) 2.75rem;
@@ -906,6 +927,23 @@ details[open] > summary::before { transform: rotate(90deg); }
   font-size: .8rem;
   pointer-events: none;
 }
+/* L'appoint de la machine : un interrupteur sous la charge, allumé quand
+   la charge saisie le comprend. */
+.stepper-extra {
+  grid-column: 1 / -1;
+  min-height: 2.5rem;
+  background: var(--bg-sunken);
+  color: var(--muted-strong);
+  border: 1px dashed var(--border-strong);
+  font-size: .85rem;
+  font-weight: 650;
+}
+.stepper-extra[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.stepper-extra:hover { filter: none; border-color: var(--accent-ring); }
 .set-submit { min-height: 3.25rem; font-size: 1.02rem; }
 
 /* Reps en réserve : quatre cibles tactiles sur une seule ligne, jamais un
@@ -1055,7 +1093,7 @@ form.cancel { justify-content: flex-start; }
 .chart-grid {
   display: grid;
   gap: var(--s-3);
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
   margin-bottom: var(--s-5);
 }
 .chart {
@@ -1095,6 +1133,22 @@ form.cancel { justify-content: flex-start; }
   overflow: hidden;
 }
 .chart-axis span { white-space: nowrap; }
+/* Une étiquette sous chaque barre. Sur un téléphone, dix dates côte à côte
+   ne tenaient pas : les dernières, les plus récentes, sortaient du cadre.
+   Quand le graphique est étroit, on n'en écrit qu'une sur deux, en
+   partant de la dernière pour qu'elle reste toujours lisible. */
+.chart { container: graphique / inline-size; }
+.chart-axis.bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 0;
+  overflow: visible;
+}
+@container graphique (max-width: 24rem) {
+  .chart-axis.bars span:nth-last-child(even) { visibility: hidden; }
+}
 .chart-last { color: var(--text); }
 .chart-scale { margin: .3rem 0 0; font-size: .7rem; }
 
@@ -1169,9 +1223,11 @@ form.cancel { justify-content: flex-start; }
 .cal td:last-child { border-right: none; }
 .cal tbody tr:hover td { background: none; }
 .cal td.out { opacity: .3; }
-.cal td.today { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-ring); }
+/* « cal-today » et pas « today » : .today est le bloc de l'accueil, une
+   grille à hauteur fixe qui coupait le contenu de la case du jour. */
+.cal td.cal-today { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-ring); }
 .daynum { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); }
-.cal td.today .daynum { color: var(--accent); }
+.cal td.cal-today .daynum { color: var(--accent); }
 
 .badge {
   display: block;
@@ -1487,7 +1543,7 @@ form.cancel { justify-content: flex-start; }
 /* Les faits de l'annonce, en colonnes qui se replient seules */
 .jw-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr));
   gap: var(--s-2) var(--s-4);
   margin: 0 0 var(--s-3);
 }
@@ -1590,7 +1646,7 @@ form.cancel { justify-content: flex-start; }
 .jw-vol-head p { margin: 0; color: var(--muted); font-size: .88rem; }
 .jw-vol-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
   gap: var(--s-3);
 }
 /* En colonne, pour que le bouton reste au pied de la carte quelle que soit
@@ -1705,7 +1761,7 @@ ul.letters li {
   transition: border-color .18s var(--ease);
 }
 ul.letters li:hover { border-color: var(--accent-ring); }
-.letter-name { min-width: 0; font-weight: 550; }
+.letter-name { min-width: 0; font-weight: 550; overflow-wrap: anywhere; }
 .letter-name small { display: block; color: var(--muted); font-weight: 400; }
 .letter-actions { display: flex; gap: var(--s-2); flex: none; }
 article.letter {
@@ -2015,6 +2071,17 @@ button.ghost {
   color: var(--text);
   font-size: .92rem;
 }
+/* Une lettre existe déjà pour l'offre choisie : on le dit avant le
+   formulaire, qui en écrirait une deuxième. */
+.lt-deja {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: .92rem;
+}
+.lt-deja a { color: var(--accent); font-weight: 650; }
 .lt-section { margin-bottom: var(--s-6); }
 
 .lt-list, .lt-lessons { list-style: none; margin: 0; padding: 0; }
@@ -2091,7 +2158,9 @@ button.ghost {
 .lt-field > span { font-size: .8rem; color: var(--muted); font-weight: 600; }
 .lt-date { flex: 0 1 12rem; }
 .lt-date input { text-align: right; }
-.lt-objet input { font-weight: 650; }
+/* L'objet passe à la ligne au lieu de défiler : sur téléphone, un champ
+   d'une ligne n'en montrait que le début. */
+.lt-objet textarea { min-height: 2.75rem; font-weight: 650; }
 /* Le corps se lit comme la lettre : interligne large, mesure d'une page. */
 .lt-body textarea {
   min-height: 28rem;

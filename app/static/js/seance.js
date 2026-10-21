@@ -1,9 +1,10 @@
 /* Séance : la carte des exercices, un exercice ouvert à la fois, la saisie.
  *
  * Tout ce qu'il faut savoir d'un exercice arrive dans data-card. Les charges
- * sont en kilos, et la charge avance d'un cran de la machine à la fois
- * (stepkg : 4,5359 kg pour une pile graduée en livres par crans de 10) : le
- * script ne propose jamais une charge qui n'existe pas sur la pile.
+ * sont en kilos, telles qu'écrites sur la machine (90 lb : 41), et avancent
+ * d'un cran de la pile à la fois (step, dans l'unité de la pile ; factor,
+ * kilos par unité selon les étiquettes ; dec, leurs décimales) : le script
+ * ne propose jamais une charge qui n'existe pas sur la pile.
  *
  * Rien ne bouge sans un geste. La page ne défile pas et ne change pas
  * d'exercice toute seule : un téléphone reposé entre deux séries doit
@@ -41,16 +42,45 @@
   const plural = (n, word) => n + " " + word + (Math.abs(n) > 1 ? "s" : "");
 
   /* ---------- les crans de la machine ---------- */
-  // Au dixième de kilo sur une pile en livres (31,8), au centième sinon.
-  const tidy = (d, v) => {
-    const k = d.grid === "lb" ? 10 : 100;
-    return Math.max(0, Math.round(v * k) / k);
+  // Arrondi « à l'école », comme les étiquettes : entier sur les crans de
+  // 10 lb (40,5 donne 41), dixième sur les poulies, centième en kilos.
+  const round = (v, dec) => {
+    const k = Math.pow(10, dec);
+    return Math.max(0, Math.floor(v * k + 0.5 + 1e-9) / k);
   };
-  // n crans au-dessus (ou au-dessous) de la charge v, sur la grille exacte :
-  // partir d'un arrondi à chaque appui finirait par décaler les charges.
-  const notch = (d, v, n) => tidy(d, (Math.round(v / d.stepkg) + n) * d.stepkg);
-  // Même cran : 32 kg saisis de tête avant et 31,8 kg (70 lb) aujourd'hui.
-  const sameLoad = (d, a, b) => Math.abs(a - b) < d.stepkg / 2;
+  const perNotch = (d) => d.step * d.factor;          // ~4,5 kg pour 10 lb
+  const label = (d, v) => round(Math.max(0, Math.floor(v / perNotch(d) + 0.5)) * perNotch(d), d.dec);
+  // Le poids d'appoint (3,4 sur la presse triceps) s'ajoute à un cran :
+  // 57,4 se lit 54 + 3,4. On le reconnaît à ce qu'il reste une étiquette de
+  // cran une fois l'appoint retiré, et que la valeur n'en est pas une.
+  const split = (d, v) => {
+    const e = d.extra || 0;
+    if (e && v >= e && Math.abs(label(d, v) - v) > 0.05 &&
+        Math.abs(label(d, v - e) - (v - e)) < 0.05) {
+      return { base: v - e, on: true };
+    }
+    return { base: v, on: false };
+  };
+  const join = (d, base, on) => on ? round(base + d.extra, 2) : base;
+  const tidy = (d, v) => {
+    const s = split(d, v);
+    return join(d, round(s.base, d.dec), s.on);
+  };
+  // n crans au-dessus (ou au-dessous) de la charge v : on retrouve le cran
+  // de l'étiquette, on bouge d'un cran, on rend l'étiquette du nouveau.
+  // L'appoint reste comme il était : seule la pile bouge.
+  const notch = (d, v, n) => {
+    const s = split(d, v);
+    const base = round(Math.max(0, Math.floor(s.base / perNotch(d) + 0.5) + n) * perNotch(d), d.dec);
+    return join(d, base, s.on);
+  };
+  // Mettre ou retirer l'appoint, sans toucher au cran.
+  const toggleExtra = (d, v) => {
+    const s = split(d, v);
+    return s.on ? round(s.base, d.dec) : join(d, label(d, s.base), true);
+  };
+  // Même cran : 43 kg tapés de tête autrefois et 45 aujourd'hui sur la même pile.
+  const sameLoad = (d, a, b) => Math.abs(a - b) < perNotch(d) / 2;
 
   /* ---------- les exercices ---------- */
   const cards = [];
@@ -238,6 +268,7 @@
     if (!w) return;
     w.value = tidy(c.data, v);
     remember("weights", c.id, w.value);
+    if (c.showExtra) c.showExtra();
     updateLabel(c);
   }
 
@@ -254,10 +285,20 @@
                                          : Math.max(0, read(input) + step * n);
         input.dispatchEvent(new Event("input", { bubbles: true }));
       }));
+      const extra = s.querySelector(".stepper-extra");
+      const showExtra = () => {
+        if (extra) extra.setAttribute("aria-pressed", String(split(d, read(input)).on));
+      };
+      if (extra) extra.addEventListener("click", () => {
+        input.value = toggleExtra(d, read(input));
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
       input.addEventListener("input", () => {
         if (field === "weight") remember("weights", c.id, input.value);
+        showExtra();
         updateLabel(c);
       });
+      if (field === "weight") c.showExtra = showExtra;
     });
 
     /* Reps en réserve : un deuxième tap sur le même bouton le désélectionne. */
@@ -546,6 +587,7 @@
         const saved = st.weights && st.weights[c.id];
         w.value = saved != null && saved !== "" ? saved
           : (d.done.length ? d.done[d.done.length - 1].v : d.start);
+        if (c.showExtra) c.showExtra();
       }
       render(c);
       prefillReps(c);

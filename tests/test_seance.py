@@ -18,7 +18,7 @@ from app import create_app
 from app.config import Config
 from app.models import (DataMigration, ExerciseNote, ExerciseSet,
                         ProgramExercise, Workout, db)
-from app.seed import gym_in_pounds
+from app.seed import POULIES, apply_feedback_21oct, gym_in_pounds
 from app.services import agenda_google, charges, rappels
 from app.services.progression import SEANCES, apply_progression, rotation
 
@@ -39,6 +39,20 @@ class SalleTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = create_app(ConfigTest)
+        # La presse triceps a été ajoutée à la main sur le serveur, pas par
+        # le programme de départ : on la recrée telle qu'elle était le
+        # 21/10 au matin, puis on rejoue la correction de ce jour-là.
+        with cls.app.app_context():
+            if ProgramExercise.query.filter_by(slug="triceps-press").first() is None:
+                db.session.add(ProgramExercise(
+                    session_type="push", block="force", position=99,
+                    name="Triceps press", slug="triceps-press", sets=4,
+                    unit="reps", rep_min=8, rep_max=12, weight_kg=lb(120),
+                    increment_kg=lb(10), load_unit="lb", load_step=10,
+                    active=True))
+                DataMigration.query.filter_by(name="2026-10-21-retours").delete()
+                db.session.commit()
+                apply_feedback_21oct()
 
     def setUp(self):
         self.ctx = self.app.app_context()
@@ -93,37 +107,59 @@ class SalleTest(unittest.TestCase):
 
     def test_salle_en_livres(self):
         for pe in ProgramExercise.query.filter_by(block="force"):
-            self.assertEqual((pe.load_unit, charges.step_of(pe)), ("lb", 10), pe.name)
-            v = charges.from_kg(pe.weight_kg, "lb")
-            self.assertAlmostEqual(v, round(v / 10) * 10, places=2, msg=pe.name)
+            cran = 5 if pe.slug in POULIES else 10           # poulies : 5 lb
+            self.assertEqual((pe.load_unit, charges.step_of(pe)), ("lb", cran), pe.name)
+            # Un cran de la pile, plus l'appoint s'il y en a un.
+            v = charges.from_kg(pe.weight_kg, "lb") - (pe.load_extra or 0)
+            self.assertAlmostEqual(v, round(v / cran) * cran, places=2, msg=pe.name)
         tractions = self.pe("tractions")
         self.assertAlmostEqual(tractions.increment_kg, -lb(10), places=3)
         self.assertEqual(self.pe("mollets").increment_kg, 0)
 
+    def test_retours_du_20_octobre(self):
+        marteau, inverse = self.pe("curl-marteau"), self.pe("curl-inverse")
+        self.assertEqual(charges.label(marteau.weight_kg, marteau), "15,8 kg")
+        self.assertIn("poulie", marteau.notes)
+        self.assertEqual((inverse.sets, inverse.rep_min, inverse.rep_max), (4, 15, 20))
+        self.assertEqual(charges.label(inverse.weight_kg, inverse), "18 kg")
+        self.assertEqual(inverse.increment_kg, 0)        # le poignet : pas de montée
+        self.assertEqual(charges.step_of(self.pe("triceps-poulie")), 5)
+
     def test_corrections_jouees_une_fois(self):
         poulie = self.pe("triceps-poulie")
+        avant = (poulie.load_unit, poulie.load_step, poulie.weight_kg, poulie.increment_kg)
         poulie.load_unit, poulie.load_step = "kg", 2.5
         db.session.commit()
         gym_in_pounds()
         self.assertEqual(self.pe("triceps-poulie").load_unit, "kg")
         self.assertIsNotNone(db.session.get(DataMigration, "2026-10-19-salle-en-livres"))
-        charges.set_machine(poulie, "lb", 10)
+        (poulie.load_unit, poulie.load_step, poulie.weight_kg, poulie.increment_kg) = avant
         db.session.commit()
 
     # --- les charges ---------------------------------------------------------
 
     def test_charges(self):
         pe = self.pe("chest-press")
-        # En kilos à l'écran, sur les crans d'une pile graduée en livres.
-        self.assertEqual(charges.label(lb(70), pe), "31,8 kg")
-        self.assertEqual(charges.label(lb(80), pe), "36,3 kg")
-        self.assertEqual(charges.label(32, pe), "32 kg")             # saisie d'avant
+        # L'étiquette de la machine : livres × 0,45, entier sur les crans de
+        # 10 lb (relevé du 20/10 : 40 lb = 18, 80 lb = 36, 90 lb = 41).
+        self.assertEqual(charges.label(lb(40), pe), "18 kg")
+        self.assertEqual(charges.label(lb(70), pe), "32 kg")
+        self.assertEqual(charges.label(lb(80), pe), "36 kg")
+        self.assertEqual(charges.label(lb(90), pe), "41 kg")
+        self.assertEqual(charges.label(43, pe), "43 kg")             # tapé hors cran
         self.assertEqual(charges.snap(34.5, pe), lb(80))              # 76 lb → 80
         self.assertEqual(charges.snap(lb(75), pe), lb(70))            # demi-cran : en bas
-        # Ce qu'on lit à l'écran retombe sur le cran exact ; le reste est voulu.
-        self.assertEqual(charges.from_display(31.8, pe), lb(70))
-        self.assertEqual(charges.from_display(33, pe), 33)
-        self.assertEqual(charges.machine_label(pe), "pile en livres, crans de 10 lb (4,5 kg)")
+        # Ce qu'on lit sur la machine retombe sur le cran exact ; le reste est voulu.
+        self.assertEqual(charges.from_display(41, pe), lb(90))
+        self.assertEqual(charges.from_display(18, pe), lb(40))
+        self.assertEqual(charges.from_display(43, pe), 43)
+        self.assertEqual(charges.machine_label(pe), "pile en livres, crans de 10 lb")
+        # Poulie, crans de 5 lb : au dixième (35 lb = 15,8 ; 50 lb = 22,5).
+        poulie = self.pe("curl-marteau")
+        self.assertEqual(charges.label(lb(35), poulie), "15,8 kg")
+        self.assertEqual(charges.label(lb(50), poulie), "22,5 kg")
+        self.assertEqual(charges.from_display(15.8, poulie), lb(35))
+        self.assertEqual(charges.from_display(22.5, poulie), lb(50))
         self.assertEqual(charges.increment_steps(self.pe("tractions")), -1)
         self.assertEqual(charges.number(32.5), "32,5")
 
@@ -201,10 +237,10 @@ class SalleTest(unittest.TestCase):
         pe = self.pe("chest-press")
         j = self.client.post("/workouts/session/{}/log".format(w.id),
                              data={"exercise_id": pe.id, "reps": 10,
-                                   "weight": "36.3"}).get_json()
-        self.assertEqual(j["weight"], 36.3)
+                                   "weight": "36"}).get_json()
+        self.assertEqual(j["weight"], 36)               # l'étiquette de 80 lb
         s = ExerciseSet.query.one()
-        self.assertEqual(s.weight_kg, lb(80))           # le cran exact, pas 36,3
+        self.assertEqual(s.weight_kg, lb(80))           # le cran exact, pas 36
 
     def test_progression_d_un_cran(self):
         pe = self.pe("chest-press")
@@ -212,7 +248,66 @@ class SalleTest(unittest.TestCase):
                         sets=[("chest-press", pe.rep_max, lb(80))] * pe.sets)
         changes = apply_progression(w)
         self.assertEqual(self.pe("chest-press").weight_kg, lb(90))
-        self.assertTrue(any(c.endswith("→ 40,8 kg") for c in changes), changes)
+        self.assertTrue(any(c.endswith("→ 41 kg") for c in changes), changes)
+
+    # --- le poids d'appoint --------------------------------------------------
+
+    def test_retours_du_21_octobre(self):
+        """« Il y avait du poids en plus du cran sur la machine, 3,4 kg. »"""
+        presse = self.pe("triceps-press")
+        self.assertEqual(presse.load_extra, 7.5)
+        self.assertEqual(presse.weight_kg, lb(127.5))
+        self.assertEqual(charges.label(presse.weight_kg, presse), "57,4 kg")
+        self.assertEqual(charges.machine_label(presse),
+                         "pile en livres, crans de 10 lb, appoint de 7,5 lb (3,4)")
+        self.assertEqual(charges.stepper(presse)["extra"], 3.4)
+        self.assertEqual(charges.stepper(self.pe("chest-press"))["extra"], 0)
+
+    def test_appoint(self):
+        pe = self.pe("triceps-press")
+        # 57,4 se lit 54 + 3,4 : 120 lb et l'appoint de 7,5 lb.
+        self.assertEqual(charges.from_display(57.4, pe), lb(127.5))
+        self.assertEqual(charges.from_display(54, pe), lb(120))
+        self.assertEqual(charges.from_display(62.4, pe), lb(137.5))  # 59 + 3,4
+        self.assertEqual(charges.label(lb(137.5), pe), "62,4 kg")
+        self.assertEqual(charges.label(lb(130), pe), "59 kg")
+        # Ce qui n'est ni un cran ni un cran plus l'appoint reste tel quel.
+        self.assertEqual(charges.from_display(56, pe), 56)
+        self.assertEqual(charges.label(57.4, pe), "57,4 kg")        # noté le 21/10
+        # Le cran le plus proche, appoint compris.
+        self.assertEqual(charges.snap(lb(126), pe), lb(127.5))
+        self.assertEqual(charges.snap(lb(121), pe), lb(120))
+
+    def test_progression_avec_l_appoint(self):
+        """Un cran de plus, l'appoint toujours en place : 57,4 → 62,4."""
+        pe = self.pe("triceps-press")
+        avant = pe.weight_kg
+        w = self.seance("Push", datetime.now(), completed=False,
+                        sets=[("triceps-press", pe.rep_max, 57.4)] * pe.sets)
+        changes = apply_progression(w)
+        self.assertEqual(self.pe("triceps-press").weight_kg, lb(137.5))
+        self.assertTrue(any(c.endswith("57,4 kg → 62,4 kg") for c in changes), changes)
+        pe.weight_kg = avant
+        db.session.commit()
+
+    def test_regler_l_appoint_depuis_la_seance(self):
+        pe = self.pe("chest-press")
+        avant = (pe.load_unit, pe.load_step, pe.load_extra, pe.weight_kg, pe.increment_kg)
+        r = self.client.post("/workouts/programme/{}/machine".format(pe.id),
+                             data={"load_unit": "lb", "load_step": "10",
+                                   "load_extra": "5"}).get_json()
+        self.assertTrue(r["ok"])
+        self.assertIn("appoint de 5 lb", r["machine"])
+        self.assertEqual(self.pe("chest-press").load_extra, 5)
+        # Sans le champ, l'appoint ne bouge pas ; à 0, il disparaît.
+        self.client.post("/workouts/programme/{}/machine".format(pe.id),
+                         data={"load_unit": "lb", "load_step": "10"})
+        self.assertEqual(self.pe("chest-press").load_extra, 5)
+        self.client.post("/workouts/programme/{}/machine".format(pe.id),
+                         data={"load_unit": "lb", "load_step": "10", "load_extra": "0"})
+        self.assertEqual(self.pe("chest-press").load_extra, 0)
+        (pe.load_unit, pe.load_step, pe.load_extra, pe.weight_kg, pe.increment_kg) = avant
+        db.session.commit()
 
     def test_la_derniere_fois(self):
         il_y_a_3_jours = datetime.now() - timedelta(days=3)
@@ -225,8 +320,8 @@ class SalleTest(unittest.TestCase):
         html = self.client.get("/workouts/session").get_data(as_text=True)
         carte = self.cartes(html)["Leg curl"]
         self.assertEqual([(p["v"], p["reps"]) for p in carte["prev"]], [(43, 16), (43, 15)])
-        self.assertEqual(carte["grid"], "lb")
-        self.assertAlmostEqual(carte["stepkg"], 4.5359, places=4)
+        self.assertEqual((carte["grid"], carte["step"], carte["factor"], carte["dec"]),
+                         ("lb", 10, 0.45, 0))
         self.assertIn("Siège au cran 4", html)
         self.assertIn("Dernière fois le {}".format(il_y_a_3_jours.strftime("%d/%m")), html)
 
