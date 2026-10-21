@@ -28,8 +28,8 @@ class Config:
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
     SPOTIFY_REFRESH_TOKEN = os.getenv("SPOTIFY_REFRESH_TOKEN", "")
     # Météo : Open-Meteo, sans clé d'API. Paris par défaut.
-    WEATHER_LAT = float(os.getenv("WEATHER_LAT", "48.8566"))
-    WEATHER_LON = float(os.getenv("WEATHER_LON", "2.3522"))
+    WEATHER_LAT = float(os.getenv("WEATHER_LAT") or "48.8566")
+    WEATHER_LON = float(os.getenv("WEATHER_LON") or "2.3522")
     # Jarvis. Ollama tourne sur l'hote, pas dans le conteneur : lui
     # passer le GPU demanderait nvidia-container-toolkit pour un gain
     # nul, puisqu'il expose deja une API HTTP.

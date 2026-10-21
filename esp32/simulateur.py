@@ -521,6 +521,41 @@ def scenarios(carte):
         carte.images(3)
     etape("le serveur revient", retablit)
 
+    # --- le repeint des dix minutes -----------------------------------------
+    # Il oublie tout pour repasser chaque élément sur lui-même. S'il tombe
+    # sur un relevé qui change l'agenda, l'ancien titre doit disparaître :
+    # le 21/10, « Kine » s'écrivait sur « Abonnement volley » sans en
+    # effacer la fin.
+    a = carte.app
+    journee = variante(agenda={"jour": [["", "Abonnement volley youtube", 1]]})
+    kine = variante(agenda={"jour": [["13:00", "Kine", 2]]})
+
+    def repeint_et_releve():
+        Monde.reponse = copy.deepcopy(kine)
+        a.t_poll = 0
+        a.t_repaint = Horloge.ms - 600000
+        carte.images(3)
+    etape("journee entiere", lambda: carte.recoit(journee))
+    etape("repeint et nouvel agenda dans la meme image", repeint_et_releve)
+
+    # Le cas courant : l'agenda change pendant une veille de plus de dix
+    # minutes, et le repeint tombe au réveil.
+    def veille_longue():
+        presence = a._update_presence
+        a._update_presence = lambda now: None
+        a.awake = False
+        Monde.reponse = copy.deepcopy(kine)
+        a.t_poll = 0
+        carte.images(3)
+        Horloge.avance(700000)
+        a.awake = True
+        a.dirty = True
+        carte.images(3)
+        a._update_presence = presence
+    etape("retour a la journee entiere", lambda: carte.recoit(journee))
+    etape("veille longue, l'agenda change, reveil", veille_longue)
+    etape("agenda d'origine", lambda: carte.recoit(ETAT))
+
     # --- spotify ------------------------------------------------------------
     etape("page Spotify", lambda: carte.appuie(e.BTN_C))
     assert carte.app.current().NAME == "spotify"

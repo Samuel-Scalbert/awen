@@ -784,18 +784,6 @@ class App:
 
         self.current().tick(now, self)
 
-        # TOUTES LES DIX MINUTES, LA PAGE EST REPEINTE EN PLACE.
-        #
-        # Le canevas ne repeint que ce qui change : un pixel abime en route,
-        # par un parasite sur le bus, resterait la jusqu'au prochain
-        # changement de l'element, parfois des heures. On lui fait tout
-        # oublier SANS effacer l'ecran : chaque element se repeint sur
-        # lui-meme, il n'y a aucun eclair noir.
-        if self.awake and time.ticks_diff(now, self.t_repaint) >= REPAINT_MS:
-            self.t_repaint = now
-            self.g.forget_all()
-            self.dirty = True
-
         if self.t_poll == 0 or                 time.ticks_diff(now, self.t_poll) >= self._poll_interval():
             self.t_poll = now
             self._ensure_wifi()
@@ -808,6 +796,27 @@ class App:
 
         if self.dirty and self.awake:
             self.dirty = False
+            self.current().draw(self.g, self.state, self)
+
+        # TOUTES LES DIX MINUTES, LA PAGE EST REPEINTE EN PLACE.
+        #
+        # Le canevas ne repeint que ce qui change : un pixel abime en route,
+        # par un parasite sur le bus, resterait la jusqu'au prochain
+        # changement de l'element, parfois des heures. On lui fait tout
+        # oublier SANS effacer l'ecran : chaque element se repeint sur
+        # lui-meme, il n'y a aucun eclair noir.
+        #
+        # APRES le dessin normal, jamais avant. Oublier d'abord, puis
+        # dessiner des donnees qui ont change, c'est perdre la place de
+        # l'ancien texte : « Kine » s'ecrivait par-dessus « Abonnement
+        # volley » sans en effacer la fin (« Kinenement volley », 21/10).
+        # Le cas n'avait rien de rare : au reveil d'une veille de plus de
+        # dix minutes, le repeint tombait pile sur l'agenda de la nuit.
+        # Ici, l'ecran vient d'etre mis a jour : il ne reste qu'a repasser
+        # chaque element sur lui-meme.
+        if self.awake and time.ticks_diff(now, self.t_repaint) >= REPAINT_MS:
+            self.t_repaint = now
+            self.g.forget_all()
             self.current().draw(self.g, self.state, self)
 
         time.sleep_ms(FRAME_MS)

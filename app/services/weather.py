@@ -7,6 +7,14 @@ dépendance qui ne peut pas fuiter.
 Les coordonnées viennent du .env (WEATHER_LAT / WEATHER_LON), Paris par
 défaut. La réponse est gardée une demi-heure : la météo ne change pas plus
 vite, et l'ESP32 interroge le serveur toutes les 30 secondes.
+
+LA PLUIE, C'EST CELLE QUI VIENT
+
+Le risque de pluie est le plus haut des douze prochaines heures, pas celui
+de la journée entière. Le maximum du jour gardait jusqu'au soir l'averse
+de 8 h : à 16 h, l'écran annonçait 35 % quand il n'en restait que 10
+(21/10/2026). Douze heures couvrent ce qu'on décide en regardant l'écran :
+sortir maintenant, rentrer ce soir, partir demain matin.
 """
 import time
 
@@ -16,6 +24,7 @@ from flask import current_app
 URL = "https://api.open-meteo.com/v1/forecast"
 TIMEOUT = 6
 CACHE_S = 1800
+HEURES_PLUIE = 12
 
 _cache = {"at": 0, "data": None}
 
@@ -61,8 +70,9 @@ def today():
             "latitude": c.get("WEATHER_LAT", 48.8566),
             "longitude": c.get("WEATHER_LON", 2.3522),
             "current": "temperature_2m,weather_code",
-            "daily": "temperature_2m_max,temperature_2m_min,"
-                     "precipitation_probability_max",
+            "daily": "temperature_2m_max,temperature_2m_min",
+            "hourly": "precipitation_probability",
+            "forecast_hours": HEURES_PLUIE,
             "timezone": "Europe/Paris",
             "forecast_days": 1,
         })
@@ -74,6 +84,8 @@ def today():
 
     cur = d.get("current") or {}
     day = d.get("daily") or {}
+    pluie = [p for p in (d.get("hourly") or {}).get("precipitation_probability") or []
+             if p is not None]
 
     def first(key, default=None):
         vals = day.get(key) or []
@@ -84,7 +96,7 @@ def today():
         "now_c": round(cur.get("temperature_2m") or 0),
         "min_c": round(first("temperature_2m_min") or 0),
         "max_c": round(first("temperature_2m_max") or 0),
-        "rain_pct": first("precipitation_probability_max") or 0,
+        "rain_pct": max(pluie) if pluie else 0,
         "label": label,
         "icon": icon,
     }
