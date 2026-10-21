@@ -551,7 +551,7 @@ class Canvas:
             self.d.fill_rect(x, y, size, size, self.p.BG)
             return
         try:
-            self.d.draw_image_file(path, x, y, size, size)
+            self._defile(path, x, y, size)
         except Exception as e:
             # Le pilote abaisse CS avant d'ouvrir le fichier : une exception
             # au milieu laisse l'écran sélectionné et bloque le bus. On le
@@ -563,3 +563,32 @@ class Canvas:
                 pass
             self._m.pop(key, None)
             self.d.fill_rect(x, y, size, size, self.p.BG)
+
+    def _defile(self, path, x, y, size):
+        """Envoie le fichier à l'écran à travers le tampon du canevas.
+
+        Le draw_image_file() du pilote lit par f.read(2048) : un objet neuf
+        de deux kilos à chaque tranche, vingt et un par pochette de 144 px,
+        redessinée à chaque piste et à chaque repeint. Ici, readinto() remplit
+        toujours le même tampon et rien n'est alloué : le tas ne se morcelle
+        pas au rythme des pochettes.
+
+        Le pilote reste le chemin de secours quand il n'expose pas son bus.
+        """
+        d = self.d
+        spi = getattr(d, "spi", None)
+        if spi is None or not hasattr(d, "set_window"):
+            d.draw_image_file(path, x, y, size, size)
+            return
+        buf = self._buf
+        vue = memoryview(buf)
+        d.set_window(x, y, x + size - 1, y + size - 1)
+        d.cs.value(0)
+        d.dc.value(1)
+        with open(path, "rb") as f:
+            while True:
+                n = f.readinto(buf)
+                if not n:
+                    break
+                spi.write(buf if n == len(buf) else vue[:n])
+        d.cs.value(1)

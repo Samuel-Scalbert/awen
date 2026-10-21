@@ -10,9 +10,12 @@ bureau, pas dans la salle — le téléphone est en main là-bas. La séance y e
 donc en lecture seule, un aperçu de ce qui attend. Seul le coach a des
 boutons, parce que trancher un conseil depuis son bureau, ça, c'est naturel.
 """
+import json
+import time
 import unicodedata
 from datetime import date, datetime, timedelta
 from hashlib import sha1
+from pathlib import Path
 
 from flask import (Blueprint, Response, abort, current_app, jsonify, request)
 
@@ -172,6 +175,11 @@ def _spotify_block(clean=_ascii):
     # identifiant identique pour toutes les pochettes — et une image qui ne
     # se rafraîchissait jamais.
     art = sp.get("art_url") or ""
+    tag = sha1(art.encode()).hexdigest()[:12] if art else ""
+    if tag:
+        if len(_pochettes) >= POCHETTES_MAX:
+            _pochettes.clear()
+        _pochettes[tag] = art
     return {
         "title": clean(sp["title"])[:56],
         "artist": clean(sp["artist"])[:28],
@@ -181,8 +189,17 @@ def _spotify_block(clean=_ascii):
         "volume": sp["volume"],
         "playing": sp["playing"],
         "device": clean(sp["device"])[:12],
-        "cover": sha1(art.encode()).hexdigest()[:12] if art else "",
+        "cover": tag,
     }
+
+
+# Les pochettes annoncées, par empreinte. La carte renvoie l'empreinte en
+# demandant l'image : on sert celle qu'on lui a annoncée, sans redemander à
+# Spotify ce qu'on vient d'apprendre, et sans risquer la pochette d'une piste
+# qui aurait changé entre les deux appels. Le dictionnaire reste petit : il
+# repart de zéro au-delà de cinquante pistes.
+_pochettes = {}
+POCHETTES_MAX = 50
 
 
 @bp.route("/cover")
@@ -202,8 +219,10 @@ def spotify_cover():
     else:
         size = max(spotify_svc.COVER_MIN, min(spotify_svc.COVER_MAX, size))
         block = 1
-    sp = spotify_svc.now_playing()
-    data = spotify_svc.cover_rgb565((sp or {}).get("art_url", ""), size, block)
+    url = _pochettes.get(request.args.get("tag", ""))
+    if url is None:
+        url = (spotify_svc.now_playing() or {}).get("art_url", "")
+    data = spotify_svc.cover_rgb565(url, size, block)
     if data is None:
         abort(404)
     return Response(data, mimetype="application/octet-stream",
@@ -532,6 +551,7 @@ def _weather_pages():
 def pages():
     """Tout ce que montrent les trois pages, en un seul appel."""
     _check_key()
+    _retient_etat(request.args)
     now = datetime.now()
     today = now.date()
     return jsonify({
@@ -550,4 +570,103 @@ def pages():
         "meteo": _weather_pages(),
         "agenda": _agenda_block(now),
         "spotify": _spotify_block(_latin),
+    })
+
+
+# ---------------------------------------------------------------- journal
+#
+# POURQUOI LA CARTE REDÉMARRE-T-ELLE ?
+#
+# Elle seule le sait, et elle l'oublie : sa console série s'efface au
+# redémarrage, et personne n'y est branché quand il arrive. Elle joint donc
+# son état à chaque relevé de /pages (depuis combien de temps elle tourne,
+# sa mémoire, sa page), et au démarrage elle envoie ici la cause que lui
+# donne la puce. Le serveur range les deux côte à côte : « ALIM après six
+# heures sans un signe » et « PLANTAGE avec 3 Ko libres » ne se cherchent
+# pas au même endroit.
+#
+# L'état courant ne vit qu'en mémoire : il change toutes les cinq secondes,
+# l'écrire chaque fois sur le disque n'apprendrait rien de plus. Seuls les
+# événements vont dans data/esp32-journal.log.
+
+_carte = {}
+JOURNAL_MAX = 256 * 1024        # octets ; au-delà, on garde la moitié récente
+_ETAT_INT = ("up", "mem", "idf", "bas", "e", "n")
+
+
+def _journal_path():
+    return Path(current_app.config.get("ESP32_JOURNAL") or
+                Path(current_app.config["BASE_DIR"]) / "data"
+                / "esp32-journal.log")
+
+
+def _retient_etat(args):
+    """Garde l'état joint au relevé, et le précédent quand la carte a
+    redémarré entre les deux : c'est lui qui dit comment elle allait."""
+    if "up" not in args:
+        return                  # un firmware qui ne l'envoie pas encore
+    etat = {k: args.get(k, type=int) for k in _ETAT_INT}
+    etat["p"] = (args.get("p") or "")[:12]
+    etat["t"] = time.time()
+    precedent = _carte.get("etat")
+    if precedent and (etat["up"] or 0) < (precedent["up"] or 0):
+        _carte["avant"] = precedent
+    _carte["etat"] = etat
+
+
+def _lisible_etat(etat, now):
+    if not etat:
+        return None
+    out = {k: v for k, v in etat.items() if k != "t"}
+    out["il_y_a_s"] = int(now - etat["t"])
+    return out
+
+
+def _ecrit_journal(ligne):
+    path = _journal_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.stat().st_size > JOURNAL_MAX:
+            garde = path.read_bytes()[-JOURNAL_MAX // 2:]
+            path.write_bytes(garde[garde.find(b"\n") + 1:])
+    except FileNotFoundError:
+        pass
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(ligne, ensure_ascii=False) + "\n")
+
+
+@bp.route("/journal", methods=["GET", "POST"])
+def journal():
+    """POST : un événement de la carte. GET : les derniers, pour enquêter.
+
+        curl "http://192.168.1.32:5000/api/esp32/journal?key=…&n=20"
+    """
+    _check_key()
+    now = time.time()
+    if request.method == "POST":
+        d = request.get_json(silent=True) or {}
+        ligne = {"at": datetime.now().isoformat(timespec="seconds"),
+                 "evt": str(d.get("evt", "?"))[:20]}
+        for k in ("cause", "msg"):
+            if d.get(k):
+                ligne[k] = str(d[k])[:160]
+        for k in ("up", "mem"):
+            if isinstance(d.get(k), int):
+                ligne[k] = d[k]
+        if ligne["evt"] == "demarrage":
+            # Le relevé d'avant le redémarrage, s'il a été vu depuis que le
+            # serveur tourne. Absent : le serveur a redémarré lui aussi.
+            ligne["avant"] = _lisible_etat(_carte.pop("avant", None), now)
+        _ecrit_journal(ligne)
+        current_app.logger.info("esp32: %s", ligne)
+        return jsonify({"ok": True})
+
+    n = max(1, min(200, request.args.get("n", 30, type=int)))
+    try:
+        lignes = _journal_path().read_text(encoding="utf-8").splitlines()[-n:]
+    except FileNotFoundError:
+        lignes = []
+    return jsonify({
+        "etat": _lisible_etat(_carte.get("etat"), now),
+        "journal": [json.loads(x) for x in lignes if x.strip()],
     })

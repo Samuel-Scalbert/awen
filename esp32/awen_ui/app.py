@@ -41,8 +41,14 @@ aucun mécanisme de rattrapage ici. Le pourquoi est dans input.py.
 import gc
 import time
 
+import machine
 import network
 import urequests
+
+try:
+    import esp32            # le tas de l'ESP-IDF, celui du wifi
+except ImportError:
+    esp32 = None            # le simulateur
 
 import backlight as backlight_mod
 from canvas import Canvas
@@ -86,6 +92,31 @@ SWEEP_MS = 14            # une ligne du balayage de transition
 VOLUME_SETTLE_MS = 250
 
 MEM_WARN = 20000         # octets libres sous lesquels on s'inquiète
+
+# LA CARTE DIT AU SERVEUR POURQUOI ELLE A REDÉMARRÉ
+#
+# Un redémarrage efface la console série, et personne n'y est branché quand
+# il arrive. La puce, elle, garde la cause : on l'envoie au premier relevé
+# réussi, et le serveur la range à côté du dernier état que la carte lui
+# avait annoncé (voir /api/esp32/journal). Les trois pannes ne se cherchent
+# pas au même endroit :
+#
+#   ALIM     coupure ou chute de tension (câble, port USB, pic du wifi),
+#            mais aussi la broche EN : le bouton, ou un PC qui ouvre le port
+#            série. MicroPython range tout cela sous la même cause.
+#   PLANTAGE erreur dans le C de MicroPython ou de l'ESP-IDF
+#   GARDE    un chien de garde de l'ESP-IDF : quelque chose a bloqué
+#
+# Une erreur de la boucle part aussi, au plus une par minute : une panne qui
+# se répète à chaque image ne doit ni inonder le serveur ni ralentir l'écran.
+CAUSES = {
+    getattr(machine, "PWRON_RESET", -1): "ALIM",
+    getattr(machine, "HARD_RESET", -2): "EN",
+    getattr(machine, "WDT_RESET", -3): "GARDE",
+    getattr(machine, "DEEPSLEEP_RESET", -4): "VEILLE",
+    getattr(machine, "SOFT_RESET", -5): "PLANTAGE",
+}
+JOURNAL_MS = 60000
 
 # PAS DE machine.WDT ICI, ET C'EST DELIBERE
 #
@@ -141,6 +172,22 @@ class App:
         # _mesure_debit().
         self.net_kbs = None
         self.net_octets = 0
+
+        # Le journal : ce qui reste à dire au serveur, et de quoi décrire
+        # l'état de la carte à chaque relevé. Voir CAUSES.
+        try:
+            cause = CAUSES.get(machine.reset_cause(), "?")
+        except Exception:
+            cause = "?"
+        self._a_dire = [{"evt": "demarrage", "cause": cause}]
+        self._dit_at = None
+        self.erreurs = 0            # exceptions rattrapées par la boucle
+        self.echecs = 0             # relevés qui n'ont pas abouti
+        self._up_ms = 0
+        self._up_at = time.ticks_ms()
+        # Le tampon de la pochette, alloué une fois pour toutes. Voir
+        # fetch_cover().
+        self._tampon = bytearray(1024)
 
     # ------------------------------------------------------------ réseau
 
@@ -228,7 +275,7 @@ class App:
         r = None
         debut = time.ticks_ms()
         try:
-            r = urequests.get(self._url("/api/esp32/pages"),
+            r = urequests.get(self._url("/api/esp32/pages") + self._etat(),
                               timeout=NET_TIMEOUT)
             if r.status_code != 200:
                 raise OSError(r.status_code)
@@ -247,6 +294,7 @@ class App:
             # invite.
             print("fetch:", e, "| ip:", self.state.get("ip", "?"),
                   "| memoire libre:", gc.mem_free())
+            self.echecs += 1
             self.state["online"] = False
             self.dirty = True
             self.t_poll = time.ticks_add(time.ticks_ms(),
@@ -277,7 +325,72 @@ class App:
         self._pos_at = time.ticks_ms()
         self.dirty = True
         gc.collect()
+        self._raconte()
         return True
+
+    # ------------------------------------------------------------ journal
+
+    def _uptime(self):
+        """Secondes depuis le démarrage.
+
+        Cumulées relevé après relevé : ticks_ms() reboucle au bout de
+        douze jours, et un ticks_diff() depuis le démarrage deviendrait faux
+        au-delà de six. Entre deux relevés, il ne passe jamais plus de
+        trente secondes.
+        """
+        now = time.ticks_ms()
+        self._up_ms += time.ticks_diff(now, self._up_at)
+        self._up_at = now
+        return self._up_ms // 1000
+
+    def _idf(self):
+        """Le tas de l'ESP-IDF, où vivent le wifi et lwip : (libre, le plus
+        bas atteint). Celui de MicroPython peut aller bien pendant que
+        celui-ci s'épuise, et c'est alors la pile réseau qui fait tomber la
+        carte, sans aucune exception Python."""
+        if esp32 is None:
+            return 0, 0
+        try:
+            h = esp32.idf_heap_info(esp32.HEAP_DATA)
+            return sum(x[1] for x in h), sum(x[3] for x in h)
+        except Exception:
+            return 0, 0
+
+    def _etat(self):
+        """L'état de la carte, joint à chaque relevé.
+
+        Quelques octets de plus dans l'adresse, et le serveur sait toujours
+        comment allait la carte juste avant qu'elle ne redémarre : depuis
+        combien de temps elle tournait, sur quelle page, avec quelle mémoire.
+        Une fuite se lit dans la pente de `mem`, une alimentation faible
+        dans un redémarrage sans aucun signe avant-coureur.
+        """
+        libre, bas = self._idf()
+        return "&up={}&mem={}&idf={}&bas={}&p={}&e={}&n={}".format(
+            self._uptime(), gc.mem_free(), libre, bas, self.current().NAME,
+            self.erreurs, self.echecs)
+
+    def note(self, evt, msg):
+        """Garde une ligne pour le serveur, au plus une par minute."""
+        now = time.ticks_ms()
+        if self._dit_at is not None and \
+                time.ticks_diff(now, self._dit_at) < JOURNAL_MS:
+            return
+        if len(self._a_dire) >= 4:
+            return
+        self._dit_at = now
+        self._a_dire.append({"evt": evt, "msg": msg[:120]})
+
+    def _raconte(self):
+        """Envoie ce qui attend. Appelé juste après un relevé réussi : le
+        serveur répond, ce n'est pas le moment de bloquer sur un délai."""
+        while self._a_dire:
+            ligne = self._a_dire[0]
+            ligne["up"] = self._up_ms // 1000
+            ligne["mem"] = gc.mem_free()
+            if not self._post("/api/esp32/journal", ligne):
+                return
+            self._a_dire.pop(0)
 
     def minutes(self):
         """L'heure qu'il est, en minutes depuis minuit. None avant le
@@ -328,10 +441,19 @@ class App:
         """Écrit la pochette sur la flash, seulement quand elle a changé.
 
         Le serveur la renvoie déjà en RGB565 inversé : l'ESP32 n'a aucun
-        décodage à faire. Mais 160x160 pèse 51 Ko, bien au-delà de ce qu'on
+        décodage à faire. Mais 144x144 pèse 41 Ko, bien au-delà de ce qu'on
         peut allouer d'un bloc en MicroPython — on écrit donc la réponse au
-        fil de l'eau dans un fichier, que le pilote enverra ensuite à l'écran
+        fil de l'eau dans un fichier, que le canevas enverra ensuite à l'écran
         par tranches. La RAM n'en voit jamais plus d'un kilo-octet.
+
+        Et ce kilo-octet est toujours le même : readinto() remplit un tampon
+        alloué au démarrage. Avec read(1024), chaque tranche était un objet
+        neuf, quarante et un par pochette, à chaque piste : de quoi morceler
+        le tas au moment précis où la pile réseau a besoin de place.
+
+        L'empreinte part avec la demande : le serveur sert la pochette qu'il
+        a annoncée, pas celle d'une piste qui aurait changé entre-temps, et
+        n'a pas à redemander à Spotify ce qu'il sait déjà.
 
         Le fichier est réécrit à chaque changement de piste. La flash tient
         cent mille cycles d'effacement : quelques écritures par heure ne
@@ -353,24 +475,24 @@ class App:
             # La taille voyage avec la demande : c'est la carte qui sait
             # quelle place la page lui réserve, le serveur s'y plie.
             r = urequests.get(self._url("/api/esp32/cover")
-                              + "&size={}".format(self.COVER),
+                              + "&size={}&tag={}".format(self.COVER, tag),
                               timeout=NET_TIMEOUT)
             if r.status_code != 200:
                 raise OSError(r.status_code)
+            buf = self._tampon
+            vue = memoryview(buf)
             with open(COVER_FILE, "wb") as f:
                 while got < total:
-                    chunk = r.raw.read(min(1024, total - got))
-                    if not chunk:
+                    reste = total - got
+                    n = r.raw.readinto(buf if reste >= len(buf)
+                                       else vue[:reste])
+                    if not n:
                         break
-                    f.write(chunk)
-                    got += len(chunk)
-                    # Sans ça, les vingt-cinq tampons d'un kilo s'accumulent
-                    # et la pile réseau se retrouve sans mémoire au pire
-                    # moment : au milieu de son propre téléchargement.
-                    if got % 8192 == 0:
-                        gc.collect()
+                    f.write(buf if n == len(buf) else vue[:n])
+                    got += n
         except Exception as e:
             print("cover:", e)
+            self.echecs += 1
             self._cover_tag = None      # on retentera au prochain passage
             return
         finally:
@@ -593,6 +715,12 @@ class App:
                 # pas coûter l'afficheur jusqu'au prochain débranchement.
                 print("boucle:", e)
                 gc.collect()
+                self.erreurs += 1
+                try:
+                    self.note("erreur", "{} {} ({})".format(
+                        type(e).__name__, e, self.current().NAME))
+                except Exception:
+                    pass
                 time.sleep_ms(500)
 
     def _tick(self):

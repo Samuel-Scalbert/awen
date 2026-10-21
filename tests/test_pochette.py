@@ -70,6 +70,17 @@ class PochetteTest(unittest.TestCase):
         self.assertEqual(self._taille("&size=999"), spotify_svc.COVER_MAX)
         self.assertEqual(self._taille("&size=8"), spotify_svc.COVER_MIN)
 
+    def test_empreinte_annoncee(self):
+        """La carte renvoie l'empreinte reçue de /pages : on sert cette
+        pochette-là, sans redemander à Spotify ce qui joue."""
+        from app.routes import esp32 as esp32_routes
+        esp32_routes._pochettes["abc123"] = "https://x/b.jpg"
+        self.addCleanup(esp32_routes._pochettes.pop, "abc123", None)
+        spotify_svc.now_playing.reset_mock()
+        self._taille("&size=144&tag=abc123")
+        spotify_svc.now_playing.assert_not_called()
+        self.assertEqual(self.get.call_args[0][0], "https://x/b.jpg")
+
     def test_une_taille_ne_sert_pas_l_autre(self):
         """Le cache retient la taille : 144 puis 112 ne doivent pas se mêler."""
         self._taille("&size=144")

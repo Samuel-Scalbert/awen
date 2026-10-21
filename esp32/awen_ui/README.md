@@ -539,6 +539,36 @@ d'écart arrête tout, et dit où.
 Ce qu'il ne dit pas : la vitesse réelle du bus, la mémoire libre, le câblage.
 Pour ceux-là il reste la carte, et `upload.ps1 -Console`.
 
+## Quand la carte redémarre toute seule
+
+L'écran d'amorçage qui revient sans qu'on ait touché à rien, c'est un vrai
+redémarrage : une exception Python est rattrapée par la boucle et ne coûte
+qu'une image. La console série s'efface à ce moment-là, donc la carte le dit
+au serveur :
+
+- chaque relevé de `/pages` porte son état : `up` (secondes depuis le
+  démarrage), `mem` (tas MicroPython libre), `idf` et `bas` (tas de l'ESP-IDF,
+  celui du wifi : libre, et le plus bas atteint), `p` (la page), `e` (erreurs
+  rattrapées), `n` (relevés ratés) ;
+- au démarrage, la cause donnée par la puce part vers `/api/esp32/journal`,
+  et le serveur la range avec le dernier état d'avant ;
+- une erreur de la boucle y part aussi, au plus une par minute.
+
+Pour lire, depuis le PC ou le serveur :
+
+```
+curl "http://192.168.1.32:5000/api/esp32/journal?key=<ESP32_API_KEY>&n=20"
+```
+
+| Cause | Ce que ça veut dire | Où chercher |
+| --- | --- | --- |
+| `ALIM` | coupure ou chute de tension, ou la broche EN (bouton, PC qui ouvre le port série) | câble USB, chargeur, port du PC qui se met en veille |
+| `PLANTAGE` | erreur dans le C de MicroPython ou de l'ESP-IDF | `bas` proche de zéro : le wifi manquait de mémoire ; sinon la console série |
+| `GARDE` | un chien de garde de l'ESP-IDF : quelque chose a bloqué | un appel qui ne rend pas la main |
+
+Un `ALIM` dont l'état d'avant est sain (mémoire stable, aucune erreur) ne
+vient pas du code.
+
 ## Pourquoi le redessin partiel
 
 Repeindre 240×320 coûte une trentaine de millisecondes en MicroPython. À

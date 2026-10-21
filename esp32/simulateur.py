@@ -74,6 +74,8 @@ class Monde:
     reponse = {}
     en_ligne = True
     posts = []
+    urls = []
+    cause = 1                   # machine.PWRON_RESET : la carte vient d'être branchée
 
 
 class Pin:
@@ -138,6 +140,7 @@ class Reponse:
 def _get(url, timeout=None):
     if not Monde.en_ligne:
         raise OSError("ECONNABORTED")
+    Monde.urls.append(url)
     if "/api/esp32/cover" in url:
         taille = re.search(r"size=(\d+)", url)
         return Reponse(pochette(int(taille.group(1)) if taille else 112))
@@ -171,6 +174,9 @@ def installe_micropython():
     machine.time_pulse_us = lambda pin, level, timeout: Monde.distance_cm * 58
     machine.disable_irq = lambda: 0
     machine.enable_irq = lambda state: None
+    (machine.PWRON_RESET, machine.HARD_RESET, machine.WDT_RESET,
+     machine.DEEPSLEEP_RESET, machine.SOFT_RESET) = range(1, 6)
+    machine.reset_cause = lambda: Monde.cause
     network = types.ModuleType("network")
     network.WLAN, network.STA_IF = WLAN, 0
     urequests = types.ModuleType("urequests")
@@ -188,21 +194,53 @@ def installe_micropython():
 
 
 class Ecran:
-    """Le ST7789, réduit aux quatre méthodes que le canevas appelle.
+    """Le ST7789, réduit à ce que le canevas appelle.
 
     Comme le vrai, fill_rect reçoit une couleur normale et blit_buffer des
     octets déjà inversés : si le canevas se trompe d'un côté ou de l'autre,
     l'image sort en négatif ici aussi.
+
+    Le bus aussi est là (set_window, cs, dc, spi), pour que la pochette passe
+    par le même chemin que sur la carte : les octets s'accumulent pendant
+    que CS est bas, et l'image est posée quand il remonte. Un envoi qui ne
+    remplit pas exactement la fenêtre échoue, comme il laisserait une bande
+    de bruit sur le panneau.
     """
 
-    class _CS:
+    class _Broche:
+        def __init__(self, en_montant=None):
+            self.en_montant = en_montant
+
         def value(self, v=None):
-            pass
+            if v == 1 and self.en_montant:
+                self.en_montant()
+
+    class _Bus:
+        def __init__(self, ecran):
+            self.ecran = ecran
+
+        def write(self, octets):
+            self.ecran._flux.extend(octets)
 
     def __init__(self):
         self.im = Image.new("RGB", (W, H), (255, 0, 255))   # jamais peint
-        self.cs = self._CS()
+        self.cs = self._Broche(self._fin_envoi)
+        self.dc = self._Broche()
+        self.spi = self._Bus(self)
+        self._fenetre = None
+        self._flux = bytearray()
         self.envois = 0
+
+    def set_window(self, x0, y0, x1, y1):
+        self._fenetre = (x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+        self._flux = bytearray()
+
+    def _fin_envoi(self):
+        if self._fenetre is None:
+            return
+        x, y, w, h = self._fenetre
+        self._fenetre = None
+        self.blit_buffer(self._flux, x, y, w, h)
 
     @staticmethod
     def _rgb(c):
@@ -545,6 +583,35 @@ def scenarios(carte):
     carte.appuie(e.BTN_B, e.LONG)
     assert carte.app.current().NAME == "home", "B maintenu ne ramene pas"
     etape("accueil, apres le tour complet")
+
+    # --- le journal ---------------------------------------------------------
+    journal = [j for nom, j in Monde.posts if nom == "journal"]
+    assert [j["evt"] for j in journal] == ["demarrage"], journal
+    assert journal[0]["cause"] == "ALIM", journal
+    releves = [u for u in Monde.urls if "/api/esp32/pages" in u]
+    assert releves and all("&up=" in u and "&mem=" in u and "&p=" in u
+                           for u in releves), releves[-1]
+    pochettes = [u for u in Monde.urls if "/api/esp32/cover" in u]
+    assert pochettes and all("&tag=" in u for u in pochettes), pochettes
+    # Une panne qui se répète ne part qu'une fois par minute, au relevé
+    # suivant.
+    a = carte.app
+    n = len(Monde.posts)
+    a.note("erreur", "MemoryError (spotify)")
+    a.note("erreur", "MemoryError (spotify)")
+    a.t_poll = 0
+    carte.images(2)
+    erreurs = [j for nom, j in Monde.posts[n:] if nom == "journal"]
+    assert [j["msg"] for j in erreurs] == ["MemoryError (spotify)"], erreurs
+    Horloge.avance(61000)
+    a.note("erreur", "OSError 12 (home)")
+    a.t_poll = 0
+    carte.images(2)
+    assert Monde.posts[-1] == ("journal", {
+        "evt": "erreur", "msg": "OSError 12 (home)",
+        "up": a._up_ms // 1000, "mem": Monde.posts[-1][1]["mem"]}), \
+        Monde.posts[-1]
+    faits.append("journal : demarrage, etat joint aux releves, erreurs")
     return faits
 
 
