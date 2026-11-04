@@ -1015,6 +1015,14 @@ details[open] > summary::before { transform: rotate(90deg); }
 }
 
 form.finish { flex-direction: column; align-items: stretch; margin-top: var(--s-5); }
+/* Armé par un premier toucher : il change de couleur et dit ce qu'il va
+   faire, pour qu'on ne confirme pas sans l'avoir lu. */
+.finish-btn.armed {
+  background: var(--warn);
+  border-color: var(--warn);
+  color: var(--on-accent);
+}
+.finish-check { display: flex; align-items: center; gap: var(--s-2); font-size: .92rem; }
 form.cancel { justify-content: flex-start; }
 
 /* L'adresse de l'agenda des rappels, à copier dans l'app d'abonnement. */

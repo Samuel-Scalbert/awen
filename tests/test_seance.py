@@ -250,6 +250,40 @@ class SalleTest(unittest.TestCase):
         self.assertEqual(self.pe("chest-press").weight_kg, lb(90))
         self.assertTrue(any(c.endswith("→ 41 kg") for c in changes), changes)
 
+    def test_la_cible_suit_la_charge_soulevee(self):
+        """« Pourquoi les sets annoncés sont parfois plus petits que ce que
+        j'ai fait la séance d'avant ? » (04/11/2026)"""
+        pe = self.pe("chest-press")
+        avant = pe.weight_kg
+        pe.weight_kg = lb(80)
+        db.session.commit()
+        # Plus lourd que la cible, dans la fourchette : la cible suit.
+        w = self.seance("Push", datetime.now(), completed=False,
+                        sets=[("chest-press", pe.rep_min + 1, lb(90))] * pe.sets)
+        changes = apply_progression(w)
+        self.assertEqual(self.pe("chest-press").weight_kg, lb(90))
+        self.assertTrue(any("la charge que tu as prise" in c for c in changes), changes)
+        # Une série seule ne dit rien.
+        w = self.seance("Push", datetime.now(), completed=False,
+                        sets=[("chest-press", pe.rep_min + 1, lb(110))])
+        apply_progression(w)
+        self.assertEqual(self.pe("chest-press").weight_kg, lb(90))
+        pe.weight_kg = avant
+        db.session.commit()
+
+    def test_charge_trouvee_en_cours_d_exercice(self):
+        """Aux tractions le 04/11 : deux séries à 130 lb d'assistance, puis
+        deux à 120. C'est la charge des deux dernières qui compte."""
+        pe = self.pe("tractions")
+        avant = pe.weight_kg
+        w = self.seance("Pull", datetime.now(), completed=False,
+                        sets=[("tractions", 8, lb(130)), ("tractions", 8, lb(130)),
+                              ("tractions", 8, lb(120)), ("tractions", 8, lb(120))])
+        apply_progression(w)
+        self.assertEqual(self.pe("tractions").weight_kg, lb(120))
+        pe.weight_kg = avant
+        db.session.commit()
+
     # --- le poids d'appoint --------------------------------------------------
 
     def test_retours_du_21_octobre(self):
@@ -334,9 +368,27 @@ class SalleTest(unittest.TestCase):
         self.assertTrue(all(not c["loaded"] for c in cartes.values()))
         w = Workout.query.one()
         r = self.client.post("/workouts/session/{}/finish".format(w.id),
+                             data={"confirme": "1"},
                              follow_redirects=True).get_data(as_text=True)
         self.assertIn("Séance Plyo terminée", r)
         self.assertNotIn("Progression :", r)
+
+    def test_terminer_se_confirme(self):
+        """Le 29/10, la séance s'est fermée deux fois sous le pouce : sans
+        confirmation, rien ne se termine, et la note est quand même gardée."""
+        self.client.post("/workouts/commencer/push")
+        w = Workout.query.one()
+        r = self.client.post("/workouts/session/{}/finish".format(w.id),
+                             data={"confirme": "0", "notes": "Épaule raide"},
+                             follow_redirects=True).get_data(as_text=True)
+        self.assertIn("Séance toujours en cours", r)
+        w = db.session.get(Workout, w.id)
+        self.assertFalse(w.completed)
+        self.assertEqual(w.notes, "Épaule raide")
+        # La case de secours, sans script, envoie les deux valeurs.
+        self.client.post("/workouts/session/{}/finish".format(w.id),
+                         data={"confirme": ["0", "1"]})
+        self.assertTrue(db.session.get(Workout, w.id).completed)
 
     def test_suggestion_la_plus_ancienne(self):
         now = datetime.now()
@@ -448,7 +500,8 @@ class SalleTest(unittest.TestCase):
             "timeZone": "Europe/Paris"})
         self.assertEqual(corps["reminders"], {"useDefault": True})
 
-        self.client.post("/workouts/session/{}/finish".format(w.id))
+        self.client.post("/workouts/session/{}/finish".format(w.id),
+                         data={"confirme": "1"})
         self.assertEqual(appels[-1][0], "DELETE")
         self.assertTrue(appels[-1][1].endswith("/events/" + corps["id"]))
 

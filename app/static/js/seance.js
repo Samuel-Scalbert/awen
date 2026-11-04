@@ -189,13 +189,22 @@
   }
 
   /* ---------- la carte et l'en-tête ---------- */
-  function refresh() {
+  // Séries faites (sans compter le surplus), prévues, et notées en tout.
+  function tally() {
     let done = 0, planned = 0, logged = 0;
     cards.forEach((c) => {
-      const d = c.data, n = d.done.length;
-      done += Math.min(n, d.sets);
-      planned += d.sets;
+      const n = c.data.done.length;
+      done += Math.min(n, c.data.sets);
+      planned += c.data.sets;
       logged += n;
+    });
+    return { done, planned, logged };
+  }
+
+  function refresh() {
+    const { done, planned, logged } = tally();
+    cards.forEach((c) => {
+      const d = c.data, n = d.done.length;
       const pips = [];
       for (let i = 0; i < Math.max(d.sets, n); i++) pips.push(i < n ? '<i class="on"></i>' : "<i></i>");
       c.tile.querySelector(".exo-tile-pips").innerHTML = pips.join("");
@@ -617,7 +626,44 @@
   window.addEventListener("pageshow", (e) => { if (e.persisted && deadline > Date.now()) tick(); });
 
   const forget = () => { try { localStorage.removeItem(KEY); } catch (e) { /* rien */ } };
-  document.querySelector("form.finish").addEventListener("submit", forget);
+  /* ---------- terminer : deux gestes, jamais un seul ----------
+     Le bouton est là où le pouce passe en faisant défiler. Le premier
+     toucher l'arme et dit où en est la séance ; il faut toucher une
+     seconde fois pour terminer. Un double toucher trop rapide ne compte
+     pas, et le bouton se désarme seul au bout de huit secondes. */
+  const finish = document.querySelector("form.finish");
+  const finishBtn = finish.querySelector(".finish-btn");
+  const finishUndo = finish.querySelector(".finish-undo");
+  const finishLabel = finishBtn.textContent;
+  let armedAt = 0, disarm = null;
+  const unarm = () => {
+    armedAt = 0;
+    clearTimeout(disarm);
+    finishBtn.textContent = finishLabel;
+    finishBtn.classList.remove("armed");
+    finishUndo.hidden = true;
+  };
+  finish.addEventListener("submit", (e) => {
+    const now = Date.now();
+    if (!armedAt) {
+      e.preventDefault();
+      const { done, planned, logged } = tally();
+      armedAt = now;
+      finishBtn.textContent = MODE !== "force"
+        ? "Confirmer : terminer avec " + plural(logged, "série")
+        : done < planned
+          ? "Confirmer : terminer à " + done + " séries sur " + planned
+          : "Confirmer : terminer la séance";
+      finishBtn.classList.add("armed");
+      finishUndo.hidden = false;
+      disarm = setTimeout(unarm, 8000);
+      return;
+    }
+    if (now - armedAt < 700) { e.preventDefault(); return; }
+    finish.querySelector('input[type="hidden"][name="confirme"]').value = "1";
+    forget();
+  });
+  finishUndo.addEventListener("click", unarm);
   const cancel = document.querySelector("form.cancel");
   if (cancel) cancel.addEventListener("submit", (e) => { if (!e.defaultPrevented) forget(); });
 

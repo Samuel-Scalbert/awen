@@ -476,3 +476,111 @@ def apply_feedback_21oct():
     if poulie is not None and abs((poulie.weight_kg or 0) - to_kg(40, "lb")) < 0.01:
         poulie.weight_kg = to_kg(35, "lb")
     db.session.commit()
+
+
+def merge_push_29oct():
+    """La séance Push du 29/10/2026, recollée en une seule (02/11/2026).
+
+    Elle s'est fermée deux fois sous le pouce en pleine salle, et a fini en
+    trois morceaux, chacun « terminé » :
+    - n° 33 : développé incliné 4 x 8, puis 2 séries de chest press ;
+    - n° 34 : tout repris depuis le début (incliné, chest press, épaules),
+      puis 1 série de triceps à la poulie. Sa note : « la dernière séance
+      s'est fermée en plein workout donc supprime-la » ;
+    - n° 35 : la suite, triceps à la poulie 4 x 18 et presse triceps.
+
+    La séance propre est la n° 34 complétée par la n° 35 : la n° 33 est
+    supprimée, comme demandé, et la série de poulie de la n° 34 aussi, puisque
+    la n° 35 en compte quatre. Elle garde l'heure de début de la n° 33.
+
+    Les charges du programme ne bougent pas : chaque morceau a déjà déclenché
+    la progression, et ces séries isolées n'en ont produit aucune autre que
+    celle que la séance entière aurait produite (poulie à 35 lb).
+
+    Ne fait rien si la base ne ressemble pas à celle du 29/10 : trois Push ce
+    jour-là, de 6, 13 et 8 séries.
+    """
+    if not _once("2026-11-02-push-du-29-10"):
+        return
+    from datetime import date
+    from .models import Workout
+
+    morceaux = [db.session.get(Workout, i) for i in (33, 34, 35)]
+    attendu = (6, 13, 8)
+    if any(w is None or w.focus != "Push" or w.date.date() != date(2026, 10, 29)
+           or len(w.sets) != n for w, n in zip(morceaux, attendu)):
+        db.session.commit()
+        return
+    w33, w34, w35 = morceaux
+
+    def slug(s):
+        return s.program_exercise.slug if s.program_exercise else ""
+
+    debut = w33.date
+    if sum(1 for s in w35.sets if slug(s) == "triceps-poulie") >= 4:
+        for s in [s for s in w34.sets if slug(s) == "triceps-poulie"]:
+            w34.sets.remove(s)               # orphelin : supprimé
+    for s in sorted(w35.sets, key=lambda s: s.id):
+        w34.sets.append(s)                   # quitte la n° 35 avant sa suppression
+    db.session.flush()
+
+    numeros = {}
+    for s in sorted(w34.sets, key=lambda s: s.id):
+        numeros[s.program_exercise_id] = numeros.get(s.program_exercise_id, 0) + 1
+        s.set_number = numeros[s.program_exercise_id]
+    w34.date = debut
+    w34.notes = ("Séance reconstituée le 02/11 : elle s'était fermée deux fois "
+                 "en cours de route, ses morceaux sont réunis ici.")
+    db.session.delete(w33)
+    db.session.delete(w35)
+    db.session.commit()
+
+
+def apply_feedback_04nov():
+    """Retours de la séance Pull du 04/11/2026, appliqués une seule fois.
+
+    - La séance s'est encore fermée sous le pouce, après la première série
+      de curl inversé (20 x 18). « J'ai bien fait la poulie » : les trois
+      séries suivantes, identiques, sont ajoutées.
+    - « Pourquoi les sets annoncés sont parfois plus petits que ce que j'ai
+      fait la séance d'avant ? » La cible suit désormais la charge soulevée
+      (voir progression.nouvelle_cible). Les cibles restées en arrière sont
+      recalées une fois, d'après la dernière séance où l'exercice a été
+      fait : squat, leg extension, pec fly, tractions.
+    """
+    if not _once("2026-11-04-retours"):
+        return
+    from datetime import date
+    from .models import Workout
+    from .services.progression import PLYO, REPRISE, nouvelle_cible
+
+    w = db.session.get(Workout, 37)
+    inverse = ProgramExercise.query.filter_by(slug="curl-inverse").first()
+    if (w is not None and inverse is not None and w.focus == "Pull"
+            and w.date.date() == date(2026, 11, 4)):
+        faites = [s for s in w.sets if s.program_exercise_id == inverse.id]
+        if len(faites) == 1:
+            modele = faites[0]
+            for n in (2, 3, 4):
+                w.sets.append(ExerciseSet(
+                    program_exercise_id=inverse.id, exercise=inverse.name,
+                    set_number=n, reps=modele.reps, weight_kg=modele.weight_kg))
+            db.session.flush()
+
+    terminees = (Workout.query.filter_by(completed=True)
+                 .filter(Workout.focus.notin_((REPRISE, PLYO)))
+                 .order_by(Workout.date.desc(), Workout.id.desc()).all())
+    for pe in ProgramExercise.query.filter_by(active=True, block="force"):
+        if not pe.increment_kg:
+            continue
+        for seance in terminees:
+            series = [s for s in seance.sets if s.program_exercise_id == pe.id]
+            if not series:
+                continue
+            cible, raison = nouvelle_cible(pe, series)
+            # Seul le cas « dans la fourchette » est rattrapé : les montées et
+            # les deloads ont été appliqués à la fin de chaque séance.
+            if cible is not None and raison == "la charge que tu as prise":
+                pe.weight_kg = cible
+            break
+    db.session.commit()

@@ -74,15 +74,64 @@ def working_sets(sets, planned):
     return sorted(sets, key=lambda s: s.id)[-planned:] if sets else []
 
 
+def charge_tenue(recent):
+    """La charge des séries de travail, et si elle est restée la même.
+
+    Renvoie (charge, constante). Quand la charge a changé en cours
+    d'exercice, c'est celle des deux dernières séries qui compte : on a
+    trouvé la bonne charge en route, comme le 04/11 aux tractions (deux
+    séries à 130 lb d'assistance, puis deux à 120). (None, False) quand
+    rien ne se dégage.
+    """
+    poids = [round(s.weight_kg or 0, 2) for s in recent]
+    if poids and len(set(poids)) == 1:
+        return poids[0], True
+    if len(poids) >= 2 and poids[-1] == poids[-2]:
+        return poids[-1], False
+    return None, False
+
+
+def nouvelle_cible(pe, sets):
+    """La charge à proposer la prochaine fois, d'après les séries d'une
+    séance, et la raison du changement. (None, "") si rien ne se dit.
+
+    La cible suit la charge réellement soulevée : « pourquoi les sets
+    annoncés sont parfois plus petits que ce que j'ai fait la séance
+    d'avant ? » (04/11/2026). Avant, une charge choisie plus lourde que la
+    cible, sans atteindre le haut de la fourchette, ne changeait rien, et
+    l'appli reproposait l'ancienne.
+
+    - toutes les séries prévues au rep_max : un cran de plus (deux à
+      rep_max + 3) ;
+    - toutes sous le rep_min : un cran de moins ;
+    - sinon, dans la fourchette : la charge soulevée, plus ou moins lourde
+      que la cible.
+    """
+    recent = working_sets(sets, pe.sets)
+    if len(recent) < 2:
+        return None, ""                       # une série seule ne dit rien
+    base, constante = charge_tenue(recent)
+    if base is None:
+        return None, "charges variables sur les séries de travail, progression en pause"
+    if not constante:
+        recent = [s for s in recent if round(s.weight_kg or 0, 2) == base]
+    reps = [s.reps or 0 for s in recent]
+    complete = constante and len(sets) >= pe.sets
+    if complete and all(r >= pe.rep_max + OVERPERF_MARGIN for r in reps):
+        return snap(base + 2 * pe.increment_kg, pe), "surperformance, double palier"
+    if complete and all(r >= pe.rep_max for r in reps):
+        return snap(base + pe.increment_kg, pe), ""
+    if all(r < pe.rep_min for r in reps):
+        return snap(base - pe.increment_kg, pe), "deload, on corrige"
+    return snap(base, pe), "la charge que tu as prise"
+
+
 def apply_progression(workout):
     """Double progression appliquée à la fin d'une séance.
 
-    Jugée sur les séries de travail (voir working_sets) et à charge constante :
-    toutes au rep_max → +increment ; toutes à rep_max+3 → double palier ;
-    toutes sous rep_min → deload. Si ces séries ont été faites à des charges
-    différentes, il n'y a pas de comparaison possible et rien ne bouge.
-    La nouvelle charge tombe toujours sur un cran de la machine.
-    Renvoie la liste des changements pour affichage.
+    Jugée sur les séries de travail (voir working_sets et nouvelle_cible).
+    La nouvelle charge tombe toujours sur un cran de la machine. Renvoie la
+    liste des changements pour affichage.
     """
     by_exercise = {}
     for s in workout.sets:
@@ -91,33 +140,19 @@ def apply_progression(workout):
 
     changes = []
     for pe, sets in by_exercise.items():
-        if not pe.increment_kg or len(sets) < pe.sets:
+        if not pe.increment_kg:
             continue
-        recent = working_sets(sets, pe.sets)
-        weights = {round(s.weight_kg or 0, 2) for s in recent}
-        if len(weights) > 1:
-            # Charges hétérogènes : comparer des reps à 70 et à 90 livres
-            # n'a aucun sens, on préfère ne rien changer et le dire.
-            changes.append(
-                "{} : charges variables sur les séries de travail, "
-                "progression en pause".format(pe.name))
+        cible, raison = nouvelle_cible(pe, sets)
+        if cible is None:
+            if raison:
+                changes.append("{} : {}".format(pe.name, raison))
             continue
-
-        base = weights.pop()                  # charge réellement utilisée
-        reps = [s.reps or 0 for s in recent]
         old = pe.weight_kg
-        suffix = ""
-        if all(r >= pe.rep_max + OVERPERF_MARGIN for r in reps):
-            pe.weight_kg = snap(base + 2 * pe.increment_kg, pe)
-            suffix = " (surperformance, double palier)"
-        elif all(r >= pe.rep_max for r in reps):
-            pe.weight_kg = snap(base + pe.increment_kg, pe)
-        elif all(r < pe.rep_min for r in reps):
-            pe.weight_kg = snap(base - pe.increment_kg, pe)
-            suffix = " (deload, on corrige)"
-        if pe.weight_kg != old:
+        if abs(cible - (old or 0)) > 1e-3:
+            pe.weight_kg = cible
             changes.append("{} : {} → {}{}".format(
-                pe.name, label(old, pe), label(pe.weight_kg, pe), suffix))
+                pe.name, label(old, pe), label(cible, pe),
+                " ({})".format(raison) if raison else ""))
     db.session.commit()
     return changes
 

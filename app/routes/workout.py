@@ -448,6 +448,19 @@ def finish_session(workout_id):
     if request.form.get("notes"):
         workout.notes = request.form["notes"]
 
+    # TERMINER SE CONFIRME, TOUJOURS.
+    #
+    # Le bouton est en bas de la page, là où le pouce passe en faisant
+    # défiler. Le 29/10, une séance Push s'est fermée deux fois en pleine
+    # salle, et a fini en trois morceaux qu'il a fallu recoller à la main.
+    # Le premier toucher arme le bouton, le second confirme (voir
+    # seance.js) ; sans la confirmation, rien ne se termine.
+    if "1" not in request.form.getlist("confirme"):
+        db.session.commit()                  # la note, elle, est gardée
+        flash("Séance toujours en cours : touche « Terminer » une seconde "
+              "fois pour confirmer.")
+        return redirect(url_for("workout.session"))
+
     # UNE REPRISE NE TOUCHE PAS AUX CHARGES, ET C'EST LE POINT.
     #
     # On y fait ce qui tente, à l'intensité qui vient. Passer ça dans la

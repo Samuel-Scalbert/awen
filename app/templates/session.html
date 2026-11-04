@@ -186,9 +186,15 @@
       <textarea name="notes" id="session-note" rows="2"
         placeholder="Forme générale, sommeil, énergie, douleurs…">{{ workout.notes or '' }}</textarea></label>
     <span class="note-state" id="session-note-state" aria-live="polite"></span>
-    <button type="submit">{% if mode == 'force' %}Terminer la séance (applique la progression)
+    {# Terminer se confirme : le premier toucher arme le bouton, le second
+       termine. Sans script, la case à cocher fait le même travail. #}
+    <input type="hidden" name="confirme" value="0">
+    <noscript><label class="finish-check"><input type="checkbox" name="confirme" value="1">
+      Je confirme : terminer la séance</label></noscript>
+    <button type="submit" class="finish-btn">{% if mode == 'force' %}Terminer la séance (applique la progression)
       {%- elif mode == 'reprise' %}Terminer la reprise (les charges ne bougent pas)
       {%- else %}Terminer la séance{% endif %}</button>
+    <button type="button" class="btn-ghost finish-undo" hidden>Non, je continue la séance</button>
   </form>
   <form method="post" class="cancel"
         action="{{ url_for('workout.delete_session', workout_id=workout.id) }}"
