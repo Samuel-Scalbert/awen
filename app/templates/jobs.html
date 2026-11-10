@@ -97,6 +97,41 @@ la tâche tourne chaque matin à 9h.</p>
   </div>
   {% endif %}
 
+  {# Les offres que Samuel a rattrapées parmi les écartées : la veille les
+     avait mal lues, elles passent avant les autres. #}
+  {% if rattrapees %}
+  <section id="rattrapees" class="jw-rattrapees" aria-label="Offres rattrapées">
+    {% for o in rattrapees %}
+    <article class="jw-offer go jw-rattrapee">
+      <header class="jw-offer-head">
+        <span class="jw-rank" aria-hidden="true">↺</span>
+        <div class="jw-titles">
+          <h4>{{ o.intitule }}</h4>
+          {% if o.entreprise %}<p class="jw-company">{{ o.entreprise }}</p>{% endif %}
+        </div>
+      </header>
+      <div class="jw-chips"><span class="jw-chip verdict go">Rattrapée, à postuler</span></div>
+      <p class="jw-rattrapage-motif"><b>La veille l'avait écartée :</b> {{ o.motif_html|safe }}</p>
+      {% if not o.texte %}
+      <p class="muted">L'annonce n'a pas pu être lue depuis le serveur : colle-la dans le formulaire de la lettre.</p>
+      {% endif %}
+      <footer class="jw-actions">
+        {% if o.url %}<a class="btn small btn-ghost" href="{{ o.url }}" target="_blank" rel="noopener noreferrer">🔗 Voir l'offre</a>{% endif %}
+        {% if o.lettre %}
+        <a class="btn small" href="{{ url_for('jobs.letter_edit', lettre_id=o.lettre.id) }}">✍️ Reprendre la lettre</a>
+        {% else %}
+        <a class="btn small" href="{{ url_for('jobs.letters', offre=o.ref) }}">✍️ Écrire la lettre</a>
+        {% endif %}
+        <form method="post" class="jw-inline" action="{{ url_for('jobs.rattrapage_annuler', offre_id=o.id) }}"
+              onsubmit="return confirm('Annuler le rattrapage de cette offre ?')">
+          <button type="submit" class="btn-ghost small">Annuler le rattrapage</button>
+        </form>
+      </footer>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {% for o in sel.offers %}
   <article class="jw-offer {{ o.verdict.kind if o.verdict }}" id="offre-{{ o.rank or loop.index }}">
     <header class="jw-offer-head">
@@ -235,9 +270,34 @@ la tâche tourne chaque matin à 9h.</p>
 
   <div class="jw-sections">
     {% if sel.rejected_html %}
-    <details class="jw-section"><summary>{{ sel.rejected_count or '' }} offre{{ 's' if sel.rejected_count != 1 }}
+    <details class="jw-section" id="ecartees"><summary>{{ sel.rejected_count or '' }} offre{{ 's' if sel.rejected_count != 1 }}
       examinée{{ 's' if sel.rejected_count != 1 }} et écartée{{ 's' if sel.rejected_count != 1 }}</summary>
-      <div class="md">{{ sel.rejected_html|safe }}</div></details>
+      <div class="md">
+        {# Une offre mal écartée se rattrape d'un geste : elle remonte parmi
+           les offres à postuler, avec sa lettre. Voir services/rattrapage.py. #}
+        {% for b in sel.rejected_blocks %}
+        {% if b.kind == 'md' %}{{ b.html|safe }}
+        {% else %}
+        <ul class="jw-rejected">
+          {% for it in b.offres %}
+          <li>
+            <span>{{ it.html|safe }}</span>
+            {% if it.rattrapee %}
+            <span class="jw-chip verdict go">Rattrapée</span>
+            {% elif it.intitule %}
+            <form method="post" class="jw-inline" action="{{ url_for('jobs.rattraper') }}">
+              <input type="hidden" name="rapport" value="{{ sel.dirname }}">
+              <input type="hidden" name="ligne" value="{{ it.ligne }}">
+              <button type="submit" class="btn-ghost small"
+                      title="La remettre parmi les offres à postuler, avec sa lettre">Rattraper</button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% endfor %}
+      </div></details>
     {% endif %}
     {% for x in sel.extras %}
     <details class="jw-section"><summary>{{ x.title }}</summary>

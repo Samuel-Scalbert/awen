@@ -1707,6 +1707,16 @@ form.cancel { justify-content: flex-start; }
 .jw-section > summary { color: var(--muted-strong); font-weight: 600; }
 .jw-section > .md { margin-top: var(--s-3); font-size: .92rem; overflow-x: auto; }
 
+/* Rattraper une offre écartée : un bouton au bout de chaque ligne, et les
+   offres rattrapées en tête de la journée. */
+.jw-inline { display: inline-flex; margin: 0; }
+.jw-rejected { padding-left: 1.1rem; }
+.jw-rejected li { margin-bottom: var(--s-2); }
+.jw-rejected li > span:first-child { margin-right: var(--s-2); }
+.jw-rejected .jw-inline { vertical-align: middle; }
+.jw-rattrapees { margin-bottom: var(--s-4); }
+.jw-rattrapage-motif { margin: var(--s-3) 0 0; color: var(--muted-strong); font-size: .92rem; }
+
 /* Ce que produit chaque famille, cumulé sur les derniers comptes rendus */
 .jw-families { margin-top: var(--s-6); }
 .jw-fam-rows { display: grid; gap: var(--s-2); list-style: none; margin: 0; padding: 0; }

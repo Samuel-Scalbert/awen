@@ -3,12 +3,13 @@ from datetime import datetime
 from io import BytesIO
 
 import markdown as md
-from flask import (Blueprint, abort, jsonify, redirect,
+from flask import (Blueprint, abort, flash, jsonify, redirect,
                    render_template, request, send_file, send_from_directory,
                    url_for)
 
-from ..models import CoverLetter, LetterLesson, db
+from ..models import CoverLetter, LetterLesson, OffreRattrapee, db
 from ..services import lettres as lettres_svc
+from ..services import rattrapage
 from ..services.job_watch import (FAMILIES, cap, family_totals, freshness,
                                   get_cover_letters, get_daily_reports,
                                   get_report, letters_dir, read_cover_letter)
@@ -76,6 +77,17 @@ def _prepare(report):
     report["alerts_html"] = [_render_inline(a) for a in report["alerts"]]
     report["notes_html"] = _render_md(report["notes"])
     report["rejected_html"] = _render_md(report["rejected"])
+    # Chaque offre écartée, une par une, pour pouvoir la rattraper.
+    deja = {(o.entreprise, o.intitule) for o in
+            OffreRattrapee.query.filter_by(rapport=report["dirname"])}
+    blocs = rattrapage.blocs_ecartees(report["rejected"])
+    for b in blocs:
+        if b["kind"] == "md":
+            b["html"] = _render_md(b["text"])
+        for item in b.get("offres", []):
+            item["html"] = _render_inline(item["ligne"])
+            item["rattrapee"] = (item["entreprise"], item["intitule"]) in deja
+    report["rejected_blocks"] = blocs
     report["conclusion_html"] = _render_md(report["conclusion"])
     report["raw_html"] = _render_md(report["raw"])
     kinds = [o["verdict"]["kind"] for o in report["offers"] if o["verdict"]]
@@ -294,11 +306,42 @@ def daily_jobs():
     # Une offre qui a déjà sa lettre mène à cette lettre : « Écrire la
     # lettre » rouvrait sinon un formulaire vide, et la lettre commencée
     # depuis le PC semblait perdue quand on revenait depuis le téléphone.
-    lettres = {}
+    lettres, rattrapees = {}, []
     if sel:
         for l in (CoverLetter.query
                   .filter(CoverLetter.offre_ref.like(sel["dirname"] + "#%"))
                   .order_by(CoverLetter.id)):
             lettres[l.offre_ref] = l
+        rattrapees = (OffreRattrapee.query.filter_by(rapport=sel["dirname"])
+                      .order_by(OffreRattrapee.id).all())
+        for o in rattrapees:
+            o.ref = rattrapage.ref(o)
+            o.lettre = (CoverLetter.query.filter_by(offre_ref=o.ref)
+                        .order_by(CoverLetter.id.desc()).first())
+            o.motif_html = _render_inline(o.motif_ecart)
     return render_template("jobs.html", reports=reports, sel=sel,
-                           banner=banner, families=families, lettres=lettres)
+                           banner=banner, families=families, lettres=lettres,
+                           rattrapees=rattrapees)
+
+
+@bp.route("/rattraper", methods=["POST"])
+def rattraper():
+    """Une offre écartée par la veille remonte parmi celles à postuler."""
+    rapport = request.form.get("rapport", "")
+    ligne = request.form.get("ligne", "").strip()
+    if not ligne:
+        abort(400)
+    o = rattrapage.rattraper(rapport, ligne)
+    flash("Offre rattrapée : {}{}.{}".format(
+        o.intitule, ", " + o.entreprise if o.entreprise else "",
+        "" if o.texte else " L'annonce n'a pas pu être lue : colle-la dans "
+        "le formulaire de la lettre."))
+    return redirect(url_for("jobs.daily_jobs", jour=rapport) + "#rattrapees")
+
+
+@bp.route("/rattrapees/<int:offre_id>/annuler", methods=["POST"])
+def rattrapage_annuler(offre_id):
+    o = db.session.get(OffreRattrapee, offre_id) or abort(404)
+    rapport = o.rapport
+    rattrapage.annuler(o)
+    return redirect(url_for("jobs.daily_jobs", jour=rapport))

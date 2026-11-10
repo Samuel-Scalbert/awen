@@ -37,13 +37,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Ce que lisent app/services/job_watch.py (les deux dossiers) et
-# app/services/lettres.py (les quatre fichiers).
+# Ce que lisent app/services/job_watch.py (les deux dossiers),
+# app/services/lettres.py (les quatre fichiers) et app/services/rattrapage.py
+# (le registre, pour retrouver le lien d'une offre ecartee).
 $Wanted = @('Veille quotidienne', 'Lettres de motivation',
             'Fiche profil - Samuel Scalbert.md',
             '_CV ATS (source modifiable).html',
             '_Instructions veille PO (tache quotidienne).md',
-            'Suivi des candidatures.md')
+            'Suivi des candidatures.md',
+            'Offres vues.csv')
 
 # L'empreinte du dernier envoi reussi. Hors du depot : c'est un etat local,
 # propre a cette machine, pas quelque chose a versionner.
@@ -52,6 +54,22 @@ $StateFile = Join-Path $env:LOCALAPPDATA 'awen-sync-jobs.state'
 if (-not (Test-Path -LiteralPath $Source)) {
     throw "Dossier source introuvable : $Source"
 }
+
+# --- Dans l'autre sens : les offres rattrapees dans Awen --------------------
+#
+# Quand la veille ecarte une offre a tort, Samuel la rattrape sur la page Jobs
+# d'Awen, qui ecrit la liste sur le serveur. La veille ne lit que ce dossier :
+# on la rapatrie ici, a chaque passage et avant le test « rien de neuf »,
+# puisqu'elle change cote serveur. Un serveur eteint ou un fichier absent ne
+# bloquent pas l'envoi qui suit.
+$Retour = Join-Path $Source 'Offres rattrapees.md'
+$avant = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    scp -q "${RemoteHost}:awen/data/offres-rattrapees.md" $Retour 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Verbose "Offres rattrapees rapatriees : $Retour" }
+} catch { }
+$ErrorActionPreference = $avant
 
 $present = @($Wanted | Where-Object { Test-Path -LiteralPath (Join-Path $Source $_) })
 if ($present.Count -eq 0) {

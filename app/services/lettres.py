@@ -252,8 +252,23 @@ def date_du_jour(jour=None):
 
 
 def offres_recentes(jours=10):
-    """Les offres retenues par la veille, pour les choisir sans recopier."""
+    """Les offres retenues par la veille, pour les choisir sans recopier.
+
+    Les offres rattrapées passent en tête : c'est Samuel qui les a choisies,
+    contre l'avis de la veille (voir services/rattrapage.py).
+    """
+    from ..models import OffreRattrapee
+    from . import rattrapage
     out = []
+    for o in OffreRattrapee.query.order_by(OffreRattrapee.id.desc()).limit(20):
+        out.append({
+            "ref": rattrapage.ref(o),
+            "label": "Rattrapée : {}{}".format(
+                o.intitule, " ({})".format(o.entreprise) if o.entreprise else ""),
+            "entreprise": o.entreprise,
+            "poste": o.intitule,
+            "texte": rattrapage.texte_lettre(o),
+        })
     for r in get_daily_reports(limit=jours) or []:
         for i, o in enumerate(r["offers"]):
             ref = "{}#{}".format(r["dirname"], o.get("rank") or i + 1)

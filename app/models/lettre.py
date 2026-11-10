@@ -69,3 +69,24 @@ class LetterLesson(db.Model):
     texte = db.Column(db.String(400), nullable=False)
     active = db.Column(db.Boolean, default=True, nullable=False)
     lettre_id = db.Column(db.Integer, db.ForeignKey("cover_letters.id"))
+
+
+class OffreRattrapee(db.Model):
+    """Une offre que la veille avait écartée, et que Samuel a jugée bonne.
+
+    La veille lit mal, parfois : le 10/11/2026, elle a écarté un poste chez
+    INOCO pour « plus de 5 ans exigés », lus dans l'en-tête de Welcome to the
+    Jungle, alors que l'annonce dit « 3-5 ans ». Rattraper une offre la remet
+    parmi celles à postuler, avec sa lettre, et l'erreur repart vers la
+    veille pour qu'elle ne la refasse pas (voir services/rattrapage.py).
+    """
+    __tablename__ = "offres_rattrapees"
+
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    rapport = db.Column(db.String(20), default="")      # jour du compte rendu
+    entreprise = db.Column(db.String(120), default="")
+    intitule = db.Column(db.String(200), default="")
+    motif_ecart = db.Column(db.Text, default="")         # ce que la veille a dit
+    url = db.Column(db.String(500), default="")
+    texte = db.Column(db.Text, default="")               # l'annonce, lue sur sa page
