@@ -2236,3 +2236,143 @@ button.ghost {
   .lt-actions .lt-count { margin-top: var(--s-1); font-size: .82rem; }
   .lt-actions .lt-saved:empty { display: none; }
 }
+
+/* ---------- Dictée (/dictee) -------------------------------------------
+   Page installée sur l'écran d'accueil du téléphone : le micro au centre,
+   l'aperçu dessous, rien d'autre. */
+
+.dk-body { min-height: 100dvh; }
+.dk {
+  max-width: 30rem;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: max(var(--s-4), env(safe-area-inset-top)) var(--s-4)
+           max(var(--s-5), env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.dk-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: .9rem;
+}
+.dk-head a { color: var(--muted-strong); }
+.dk-micro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-top: clamp(1rem, 8vh, 4rem);
+}
+.dk-bouton {
+  width: 8.5rem;
+  height: 8.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform .15s var(--ease), background .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.dk-bouton:active { transform: scale(.96); }
+.dk-bouton svg {
+  width: 3.4rem;
+  height: 3.4rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.dk-bouton svg rect { fill: currentColor; stroke: none; }
+.dk-bouton.ecoute {
+  background: var(--accent);
+  color: var(--on-accent);
+  animation: dk-pouls 1.4s var(--ease) infinite;
+}
+@keyframes dk-pouls {
+  0%   { box-shadow: 0 0 0 0 var(--accent-ring); }
+  100% { box-shadow: 0 0 0 1.6rem rgba(110, 231, 183, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dk-bouton.ecoute { animation: none; }
+}
+.dk-etat {
+  margin: var(--s-5) 0 var(--s-2);
+  color: var(--muted-strong);
+}
+.dk-etat.erreur { color: var(--danger); }
+.dk-etat.ok { color: var(--accent); }
+.dk-entendu {
+  min-height: 1.6em;
+  font-size: 1.15rem;
+  margin: 0;
+}
+.dk-carte {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.dk-champ {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: .85rem;
+  color: var(--muted);
+}
+.dk-champ input,
+.dk-ecrire input {
+  font: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: .6rem .7rem;
+  min-width: 0;
+  color-scheme: dark;
+}
+.dk-libelle, .dk-message { margin: 0; }
+.dk-libelle { color: var(--accent); }
+.dk-actions { display: flex; gap: var(--s-2); }
+.dk-actions button {
+  font: inherit;
+  border-radius: var(--r-pill);
+  padding: .65rem 1.1rem;
+  cursor: pointer;
+}
+.dk-cta {
+  flex: 1;
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+}
+.dk-cta:disabled { opacity: .6; }
+.dk-second {
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--muted-strong);
+}
+.dk-ecrire {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: auto;
+}
+.dk-ecrire input { flex: 1; }
+.dk-ecrire button {
+  font: inherit;
+  border: 1px solid var(--border-strong);
+  background: var(--card);
+  color: var(--text);
+  border-radius: var(--r-sm);
+  padding: 0 1rem;
+}
+.dk-note { font-size: .85rem; color: var(--warn); margin: 0; }

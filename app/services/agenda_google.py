@@ -1,5 +1,8 @@
 """Le rappel de séance, écrit par le serveur dans un agenda Google « Awen ».
 
+(Et, depuis le 10/11/2026, les choses à faire dictées au téléphone : voir
+`poser` et `enlever`, en bas.)
+
 Le téléphone n'a rien à aller chercher : Awen écrit lui-même l'évènement
 dans un agenda Google que le téléphone synchronise déjà comme les autres.
 Ni Tailscale ni application d'abonnement ne sont nécessaires.
@@ -124,3 +127,37 @@ def retirer(workout):
     """
     if actif():
         _en_fond(_supprimer, workout.id, workout.date)
+
+
+# --------------------------------------------------------------------------
+# Les choses à faire dictées au téléphone (voir services/dictee.py)
+#
+# Appels directs, pas en arrière-plan : la page de dictée doit pouvoir dire
+# « c'est dans l'agenda » ou « Google n'a pas répondu », et rendre un
+# identifiant pour le bouton Annuler.
+
+
+def poser(titre, debut=None, jour=None, description=""):
+    """Pose un évènement dans l'agenda « Awen » et renvoie son identifiant.
+
+    Avec une heure, quinze minutes à partir de `debut` : la notification de
+    l'agenda sonne à l'heure dite. Avec un jour seulement, toute la journée.
+    """
+    corps = {"summary": titre, "description": description,
+             "reminders": {"useDefault": True},
+             "transparency": "transparent"}
+    if debut is not None:
+        corps["start"], corps["end"] = _heure(debut), _heure(debut + DUREE)
+    else:
+        corps["start"] = {"date": jour.isoformat()}
+        corps["end"] = {"date": (jour + timedelta(days=1)).isoformat()}
+    r = _session().post(_url(), json=corps, timeout=15)
+    r.raise_for_status()
+    return r.json()["id"]
+
+
+def enlever(event_id):
+    """Retire un évènement posé par `poser`. Déjà parti : très bien."""
+    r = _session().delete(_url(event_id), timeout=15)
+    if r.status_code not in (200, 204, 404, 410):
+        r.raise_for_status()

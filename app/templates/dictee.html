@@ -1,0 +1,71 @@
+<!doctype html>
+{# Page à part, sans les menus d'Awen : installée sur l'écran d'accueil, elle
+   s'ouvre comme une application, et le micro doit être tout ce qu'on voit. #}
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <meta name="color-scheme" content="dark">
+  <title>Dictée | Awen</title>
+  <link rel="manifest" href="{{ url_for('dictee.manifest') }}">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/dictee-192.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/dictee-192.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dk-body">
+<main class="dk">
+  <header class="dk-head">
+    <a href="{{ url_for('main.index') }}">🌀 Awen</a>
+    <a href="{{ url_for('todos.index') }}">Mes tâches</a>
+  </header>
+
+  <section class="dk-micro">
+    <button id="micro" class="dk-bouton" type="button" aria-label="Parler">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>
+      </svg>
+    </button>
+    <p id="etat" class="dk-etat">Touche le micro et dis la chose à faire.</p>
+    <p id="entendu" class="dk-entendu" aria-live="polite"></p>
+  </section>
+
+  <section id="apercu" class="dk-carte" hidden>
+    <label class="dk-champ">Quoi
+      <input id="titre" type="text" maxlength="200" autocomplete="off">
+    </label>
+    <label class="dk-champ" id="l-quand">Quand
+      <input id="quand" type="datetime-local">
+    </label>
+    <label class="dk-champ" id="l-jour" hidden>Jour, sans heure
+      <input id="jour" type="date">
+    </label>
+    <p id="libelle" class="dk-libelle"></p>
+    <div class="dk-actions">
+      <button id="ajouter" class="dk-cta" type="button">Ajouter</button>
+      <button id="refaire" class="dk-second" type="button">Recommencer</button>
+    </div>
+  </section>
+
+  <section id="fait" class="dk-carte dk-fait" hidden>
+    <p id="message" class="dk-message"></p>
+    <div class="dk-actions">
+      <button id="encore" class="dk-cta" type="button">Une autre</button>
+      <button id="annuler" class="dk-second" type="button">Annuler</button>
+    </div>
+  </section>
+
+  <form id="ecrire" class="dk-ecrire">
+    <input id="phrase" type="text" autocomplete="off" enterkeyhint="go"
+           placeholder="ou écris ta phrase ici">
+    <button type="submit">OK</button>
+  </form>
+
+  {% if not agenda %}
+  <p class="dk-note">L'agenda Google n'est pas configuré sur le serveur : tout ira dans tes tâches.</p>
+  {% endif %}
+</main>
+<script src="{{ url_for('static', filename='js/dictee.js') }}"></script>
+</body>
+</html>

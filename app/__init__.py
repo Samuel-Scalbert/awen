@@ -35,6 +35,7 @@ def create_app(config_class=Config):
     from .routes.coach import bp as coach_bp
     from .routes.todos import bp as todos_bp
     from .routes.jarvis import bp as jarvis_bp
+    from .routes.dictee import bp as dictee_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(workout_bp)
@@ -46,6 +47,7 @@ def create_app(config_class=Config):
     app.register_blueprint(coach_bp)
     app.register_blueprint(todos_bp)
     app.register_blueprint(jarvis_bp)
+    app.register_blueprint(dictee_bp)
 
     with app.app_context():
         db.create_all()
