@@ -7,8 +7,11 @@ from flask import (Blueprint, abort, flash, jsonify, redirect,
                    render_template, request, send_file, send_from_directory,
                    url_for)
 
-from ..models import CoverLetter, LetterLesson, OffreRattrapee, db
+from ..models import (CollecteLevees, CoverLetter, LetterLesson, Levee,
+                      MailProspection, OffreRattrapee, db)
+from ..models.levee import STATUTS
 from ..services import lettres as lettres_svc
+from ..services import levees as levees_svc
 from ..services import rattrapage
 from ..services.job_watch import (FAMILIES, cap, family_totals, freshness,
                                   get_cover_letters, get_daily_reports,
@@ -345,3 +348,122 @@ def rattrapage_annuler(offre_id):
     rapport = o.rapport
     rattrapage.annuler(o)
     return redirect(url_for("jobs.daily_jobs", jour=rapport))
+
+
+# --------------------------------------------------------------------------
+# Les levées de fonds et les mails de prospection
+
+
+def _groupes(levees):
+    """Les entreprises par statut, les plus prometteuses en tête de chaque groupe."""
+    ordre = (("a_contacter", "À contacter"), ("nouvelle", "Nouvelles"),
+             ("contactee", "Contactées"), ("repondu", "Ont répondu"), ("ecartee", "Écartées"))
+    par = {k: [] for k, _ in ordre}
+    for l in levees:
+        par.setdefault(l.statut, []).append(l)
+    return [(titre, sorted(par[k], key=lambda l: (-(l.priorite or 0), l.semaine or ""), reverse=False))
+            for k, titre in ordre]
+
+
+@bp.route("/levees")
+def levees():
+    for m in MailProspection.query.filter_by(etat="generation"):
+        levees_svc.abandonne(m)
+    collecte = levees_svc.collecte_en_cours() or levees_svc.derniere_collecte()
+    toutes = Levee.query.all()
+    return render_template("levees.html", collecte=collecte, levees=toutes,
+                           groupes=_groupes(toutes), statuts=STATUTS,
+                           moteur=lettres_svc.moteur())
+
+
+@bp.route("/levees/collecter", methods=["POST"])
+def levees_collect():
+    levees_svc.lancer_collecte(request.form.get("semaines", 4))
+    return redirect(url_for("jobs.levees"))
+
+
+@bp.route("/levees/etat")
+def levees_state():
+    c = levees_svc.collecte_en_cours() or levees_svc.derniere_collecte()
+    if c is None:
+        return jsonify(etat="aucune", message="")
+    return jsonify(etat=c.etat, message=c.message, nouvelles=c.nb_nouvelles)
+
+
+@bp.route("/levees/<int:levee_id>/statut", methods=["POST"])
+def levee_status(levee_id):
+    l = db.session.get(Levee, levee_id) or abort(404)
+    statut = request.form.get("statut", "")
+    if statut in dict(STATUTS):
+        l.statut = statut
+        db.session.commit()
+    return redirect(url_for("jobs.levees") + "#levee-{}".format(l.id))
+
+
+@bp.route("/levees/<int:levee_id>/mail", methods=["POST"])
+def prospect_mail_new(levee_id):
+    l = db.session.get(Levee, levee_id) or abort(404)
+    dest = (request.form.get("destinataire_libre", "").strip()
+            or request.form.get("destinataire", "").strip())
+    m = levees_svc.nouveau_mail(l, dest, request.form.get("consigne", ""))
+    return redirect(url_for("jobs.prospect_mail", mail_id=m.id))
+
+
+def _champs_mail(m):
+    return {"id": m.id, "etat": m.etat, "erreur": m.erreur,
+            "destinataire": m.destinataire, "objet": m.objet, "corps": m.corps,
+            "signature": m.signature, "resume": m.resume, "notes": m.notes,
+            "mots": levees_svc.mots(m)}
+
+
+@bp.route("/levees/mails/<int:mail_id>")
+def prospect_mail(mail_id):
+    m = db.session.get(MailProspection, mail_id) or abort(404)
+    levees_svc.abandonne(m)
+    return render_template("mail_prospection.html", mail=m, mots=levees_svc.mots(m))
+
+
+@bp.route("/levees/mails/<int:mail_id>/etat")
+def prospect_mail_state(mail_id):
+    m = db.session.get(MailProspection, mail_id) or abort(404)
+    levees_svc.abandonne(m)
+    return jsonify(_champs_mail(m))
+
+
+@bp.route("/levees/mails/<int:mail_id>/enregistrer", methods=["POST"])
+def prospect_mail_save(mail_id):
+    m = db.session.get(MailProspection, mail_id) or abort(404)
+    data = request.get_json(silent=True) or request.form
+    for cle in ("destinataire", "objet", "corps", "signature"):
+        if cle in data:
+            v = (data.get(cle) or "").replace("\r\n", "\n")
+            if cle in ("destinataire", "objet"):
+                v = " ".join(x.strip() for x in v.split("\n") if x.strip())[:200]
+            setattr(m, cle, v)
+    db.session.commit()
+    return jsonify(ok=True, mots=levees_svc.mots(m))
+
+
+@bp.route("/levees/mails/<int:mail_id>/regenerer", methods=["POST"])
+def prospect_mail_regenerate(mail_id):
+    """Après une erreur, on relance le même ; sinon une nouvelle version, et
+    l'ancienne reste dans la liste avec ses corrections."""
+    m = db.session.get(MailProspection, mail_id) or abort(404)
+    consigne = request.form.get("consigne", m.consigne)
+    if m.etat == "erreur":
+        m.etat, m.erreur, m.consigne = "generation", "", consigne
+        db.session.commit()
+        levees_svc.lancer(levees_svc.generer, m.id)
+        return redirect(url_for("jobs.prospect_mail", mail_id=m.id))
+    nouveau = levees_svc.nouveau_mail(m.levee, m.destinataire, consigne)
+    return redirect(url_for("jobs.prospect_mail", mail_id=nouveau.id))
+
+
+@bp.route("/levees/mails/<int:mail_id>/envoye", methods=["POST"])
+def prospect_mail_sent(mail_id):
+    m = db.session.get(MailProspection, mail_id) or abort(404)
+    m.envoye_le = datetime.now()
+    if m.levee.statut in ("nouvelle", "a_contacter"):
+        m.levee.statut = "contactee"
+    db.session.commit()
+    return redirect(url_for("jobs.prospect_mail", mail_id=m.id))

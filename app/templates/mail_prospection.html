@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Mail à {{ mail.levee.entreprise }} | Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>✉️ {{ mail.levee.entreprise }}
+    <small class="muted">{{ mail.levee.montant }} · {{ mail.levee.ville }}</small></h2>
+  <p class="sub">À {{ mail.destinataire or 'destinataire à préciser' }}</p>
+  <div class="page-links">
+    <a href="{{ url_for('jobs.levees') }}#levee-{{ mail.levee.id }}">← Levées de fonds</a>
+  </div>
+</div>
+
+<div id="lv-editor" class="lv-editor"
+     data-etat="{{ url_for('jobs.prospect_mail_state', mail_id=mail.id) }}"
+     data-enregistrer="{{ url_for('jobs.prospect_mail_save', mail_id=mail.id) }}">
+
+  <div class="lt-status">
+    <p class="lt-wait" {% if mail.etat != 'generation' %}hidden{% endif %}>
+      <span class="lt-dot" aria-hidden="true"></span>
+      Claude lit le site de l'entreprise et écrit le mail (une à deux minutes).
+    </p>
+    {% if mail.etat == 'erreur' %}
+    <p class="lt-error">{{ mail.erreur }}</p>
+    <form method="post" action="{{ url_for('jobs.prospect_mail_regenerate', mail_id=mail.id) }}">
+      <button class="cta" type="submit">Réessayer</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if mail.etat == 'pret' %}
+  <div class="lv-grid">
+    <form id="lv-form" class="lt-paper lv-paper">
+      <label class="lt-field">
+        <span>Destinataire</span>
+        <input type="text" name="destinataire" value="{{ mail.destinataire }}" autocomplete="off">
+      </label>
+      <label class="lt-field lt-objet">
+        <span>Objet <button type="button" class="lv-copy small" data-copie-de="objet">copier</button></span>
+        <textarea name="objet" rows="1">{{ mail.objet }}</textarea>
+      </label>
+      <label class="lt-field lt-body">
+        <span>Mail <em id="lv-mots">{{ mots }}</em> mots, viser 110 à 160</span>
+        <textarea name="corps" rows="10">{{ mail.corps }}</textarea>
+      </label>
+      <label class="lt-field">
+        <span>Signature <em>(ajoutée au mail copié ; gardée pour les suivants)</em></span>
+        <textarea name="signature" rows="2">{{ mail.signature }}</textarea>
+      </label>
+      <p class="lt-count"><span id="lt-saved">Enregistré</span></p>
+    </form>
+
+    <aside class="lt-side">
+      <div class="lt-actions">
+        <button type="button" class="cta" id="lv-copier-mail">📋 Copier le mail</button>
+        <p class="muted lv-aide">Colle-le dans ta messagerie, avec l'objet copié à part.
+          Puis marque-le envoyé : la carte passe en « Contactée ».</p>
+        {% if mail.envoye_le %}
+        <p class="lt-badge ok">Envoyé le {{ mail.envoye_le.strftime('%d/%m à %H:%M') }}</p>
+        {% else %}
+        <form method="post" action="{{ url_for('jobs.prospect_mail_sent', mail_id=mail.id) }}">
+          <button class="cta secondary" type="submit">✔ Marquer envoyé</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('jobs.prospect_mail_regenerate', mail_id=mail.id) }}"
+              onsubmit="return confirm('Écrire une nouvelle version ? Celle-ci reste dans la liste.')">
+          <input type="text" name="consigne" value="{{ mail.consigne }}" placeholder="À mettre en avant" autocomplete="off">
+          <button class="btn-ghost" type="submit">↻ Nouvelle version</button>
+        </form>
+      </div>
+
+      <section class="lv-resume">
+        <h3>L'entreprise, en cinq lignes</h3>
+        {% for ligne in mail.resume.splitlines() if ligne.strip() %}<p>{{ ligne }}</p>{% endfor %}
+      </section>
+      {% if mail.notes %}
+      <section class="lv-resume">
+        <h3>Notes de Claude</h3>
+        {% for ligne in mail.notes.splitlines() if ligne.strip() %}<p>{{ ligne }}</p>{% endfor %}
+      </section>
+      {% endif %}
+      <p class="muted lv-meta">{{ mail.modele }} · {{ mail.jetons_entree }} jetons lus, {{ mail.jetons_sortie }} écrits</p>
+    </aside>
+  </div>
+  {% endif %}
+</div>
+<script src="{{ url_for('static', filename='js/levees.js') }}"></script>
+{% endblock %}

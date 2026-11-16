@@ -17,6 +17,7 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 - [Démarrage rapide](#démarrage-rapide)
 - [Configuration](#configuration)
 - [Lettres de motivation](#lettres-de-motivation)
+- [Levées de fonds et mails de prospection](#levées-de-fonds-et-mails-de-prospection)
 - [Rappel de séance dans Google Agenda](#rappel-de-séance-dans-google-agenda)
 - [Endpoint ESP32](#endpoint-esp32)
 - [Dépannage](#dépannage)
@@ -151,6 +152,28 @@ c'est ce fichier qu'on retouche.
 
 Avec un jeton d'abonnement, c'est lui qui sert ; `LETTRE_MOTEUR=api` force
 l'API.
+
+## Levées de fonds et mails de prospection
+
+Page **Jobs → Levées de fonds**. Une entreprise qui vient de lever recrute :
+le bouton *Lancer la collecte* lit les récapitulatifs hebdomadaires de
+Maddyness, garde les startups d'Île-de-France de moins de 250 personnes,
+retrouve chacune au registre des entreprises (api.gouv.fr : SIREN, effectif,
+dirigeants), lit son site (pitch, adresses publiées) et propose l'adresse
+probable de chaque dirigeant, `prenom@` puis `prenom.nom@`, avec pour seule
+vérification que le domaine reçoit du courrier. Aucune sonde SMTP, aucun
+envoi : Awen ne fait que la liste. Deux à trois minutes par collecte, en
+arrière-plan ; les entreprises déjà vues gardent leur statut.
+
+Sous chaque entreprise, *Écrire le mail* : Claude (le même moteur que les
+lettres, avec le skill `.claude/skills/mail-prospection/SKILL.md`) écrit un
+résumé de l'entreprise en cinq lignes et un mail de 110 à 160 mots qui
+demande quinze minutes au téléphone, à partir du site, du récapitulatif et de
+la fiche profil. On le corrige, on le copie dans sa messagerie, on le marque
+envoyé : l'entreprise passe en « Contactée ».
+
+Ces tables contiennent des noms et des adresses de personnes : elles vivent
+dans `data/awen.db`, que git ignore. Rien n'en sort vers ce dépôt.
 
 ## Rappel de séance dans Google Agenda
 

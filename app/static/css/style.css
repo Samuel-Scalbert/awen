@@ -2376,3 +2376,86 @@ button.ghost {
   padding: 0 1rem;
 }
 .dk-note { font-size: .85rem; color: var(--warn); margin: 0; }
+
+/* ---------- Levées de fonds (/jobs/levees) ------------------------------
+   Une carte par entreprise : les faits, les adresses à copier, les mails
+   écrits, et le formulaire pour en écrire un. */
+
+.lv-collecte {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+.lv-collecte-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin: 0 0 var(--s-3); }
+.lv-collecte-form select, .lv-statut select, .lv-mail-form select, .lv-mail-form input {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: .45rem .6rem;
+  min-width: 0;
+}
+.lv-collecte-etat { display: flex; align-items: center; gap: var(--s-2); margin: 0; color: var(--muted-strong); }
+.lv-collecte-etat.erreur { color: var(--danger); }
+.lv-groupe { margin-bottom: var(--s-6); }
+.lv-groupe h3 { margin-bottom: var(--s-3); }
+.lv-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s-4);
+  margin-bottom: var(--s-3);
+}
+.lv-card.statut-ecartee { opacity: .6; }
+.lv-card.statut-a_contacter { border-color: var(--accent-ring); }
+.lv-head { display: flex; justify-content: space-between; gap: var(--s-3); align-items: flex-start; }
+.lv-head h3 { margin: 0 0 var(--s-1); }
+.lv-head h3 small { font-weight: 400; font-size: .85rem; margin-left: var(--s-2); }
+.lv-faits { margin: 0 0 var(--s-2); color: var(--muted-strong); font-size: .9rem; }
+.lv-pitch { margin: 0 0 var(--s-2); }
+.lv-contexte { margin: 0 0 var(--s-2); color: var(--muted-strong); font-size: .9rem; font-style: italic; }
+.lv-warn { color: var(--warn); }
+.lv-recrute { color: var(--accent); font-weight: 600; }
+.lv-contacts { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.lv-contacts li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.lv-copy {
+  font: inherit;
+  font-size: .85rem;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  padding: .15rem .6rem;
+  cursor: pointer;
+}
+.lv-copy:hover { border-color: var(--accent-ring); }
+.lv-copy.ok { color: var(--accent); border-color: var(--accent-ring); }
+.lv-copy.small { font-size: .75rem; padding: 0 .5rem; margin-left: var(--s-2); }
+.lv-mails { margin-bottom: var(--s-3); }
+.lv-mail-form { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.lv-mail-form select { flex: 1 1 18rem; }
+.lv-mail-form input { flex: 1 1 12rem; }
+.lv-grid { display: grid; gap: var(--s-4); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 60rem) { .lv-grid { grid-template-columns: minmax(0, 3fr) minmax(16rem, 2fr); } }
+.lv-paper { display: flex; flex-direction: column; gap: var(--s-3); }
+.lv-paper input, .lv-paper textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  padding: .55rem .7rem;
+  width: 100%;
+}
+.lv-paper textarea { field-sizing: content; min-height: 2.5rem; line-height: 1.5; }
+.lv-aide { font-size: .85rem; margin: var(--s-2) 0; }
+.lv-resume { background: var(--bg-sunken); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s-3) var(--s-4); }
+.lv-resume h3 { font-size: .95rem; margin-bottom: var(--s-2); }
+.lv-resume p { margin: 0 0 var(--s-2); line-height: 1.45; }
+.lv-meta { font-size: .8rem; }
+.lt-actions form { margin: var(--s-2) 0 0; display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.lt-actions form input { flex: 1 1 10rem; font: inherit; color: var(--text); background: var(--bg-sunken); border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: .45rem .6rem; min-width: 0; }

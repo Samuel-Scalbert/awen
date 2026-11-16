@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Levées de fonds | Awen{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h2>💶 Levées de fonds</h2>
+  <p class="sub">Les startups d'Île-de-France qui viennent de lever, leurs dirigeants,
+    et le mail qui demande quinze minutes au téléphone.</p>
+  <div class="page-links">
+    <a href="{{ url_for('jobs.daily_jobs') }}">← Jobs du jour</a>
+    <a href="{{ url_for('jobs.letters') }}">📄 Lettres</a>
+  </div>
+</div>
+
+<section class="lv-collecte" id="lv-collecte"
+         data-etat="{{ url_for('jobs.levees_state') }}"
+         data-en-cours="{{ 'oui' if collecte and collecte.etat == 'en_cours' else '' }}">
+  <form method="post" action="{{ url_for('jobs.levees_collect') }}" class="lv-collecte-form">
+    <label>Collecter les levées des
+      <select name="semaines">
+        {% for n in (2, 4, 6, 8) %}
+        <option value="{{ n }}" {% if n == 4 %}selected{% endif %}>{{ n }} dernières semaines</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="cta" type="submit" {% if collecte and collecte.etat == 'en_cours' %}disabled{% endif %}>
+      Lancer la collecte
+    </button>
+  </form>
+  {% if collecte %}
+  <p class="lv-collecte-etat {{ collecte.etat }}">
+    {% if collecte.etat == 'en_cours' %}
+      <span class="lt-dot" aria-hidden="true"></span>
+      <span id="lv-message">{{ collecte.message }}</span>
+      <span class="muted">(deux à trois minutes)</span>
+    {% elif collecte.etat == 'erreur' %}
+      {{ collecte.message }}
+    {% else %}
+      Dernière collecte le {{ collecte.fin.strftime('%d/%m à %H:%M') if collecte.fin else '?' }} :
+      {{ collecte.message }}
+    {% endif %}
+  </p>
+  {% else %}
+  <p class="muted">Aucune collecte pour l'instant. Sources : les récapitulatifs
+    hebdomadaires de Maddyness, le registre des entreprises (api.gouv.fr) et le site
+    de chaque entreprise. Rien n'est envoyé : tu écris toi-même.</p>
+  {% endif %}
+</section>
+
+{% macro carte(l) %}
+<article class="lv-card statut-{{ l.statut }}" id="levee-{{ l.id }}">
+  <header class="lv-head">
+    <div>
+      <h3>{{ l.entreprise }}
+        <small class="muted">{{ l.montant }} · {{ l.secteur or 'secteur ?' }}</small></h3>
+      <p class="lv-faits">
+        {{ l.ville or '?' }}{% if l.creee %}, créée en {{ l.creee }}{% endif %}
+        · effectif {{ l.effectif or '?' }}
+        {% if l.registre not in ('ok', 'probable') %}· <span class="lv-warn">registre : {{ l.registre or 'non cherché' }}</span>{% endif %}
+        {% if l.recrute or l.recrutement %}· <span class="lv-recrute">recrute</span>{% endif %}
+        · semaine du {{ l.semaine }}
+      </p>
+    </div>
+    <form method="post" action="{{ url_for('jobs.levee_status', levee_id=l.id) }}" class="lv-statut">
+      <select name="statut" aria-label="Statut" onchange="this.form.submit()">
+        {% for v, lib in statuts %}
+        <option value="{{ v }}" {% if v == l.statut %}selected{% endif %}>{{ lib }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </header>
+
+  {% if l.pitch %}<p class="lv-pitch">{{ l.pitch }}</p>{% endif %}
+  {% if l.contexte %}<p class="lv-contexte">{{ l.contexte }}</p>{% endif %}
+  <p class="lv-faits">
+    {% if l.investisseurs %}Investisseurs : {{ l.investisseurs }}. {% endif %}
+    {% if l.site %}<a href="{{ l.site }}" target="_blank" rel="noopener">{{ l.domaine or l.site }}</a>{% endif %}
+    {% if l.fiche_maddyness %}· <a href="{{ l.fiche_maddyness }}" target="_blank" rel="noopener">fiche Maddyness</a>{% endif %}
+  </p>
+
+  {% set dirigeants = l.dirigeants_liste %}
+  {% if dirigeants or l.nominatives or l.recrutement or l.generiques %}
+  <ul class="lv-contacts">
+    {% for d in dirigeants %}
+    <li><strong>{{ d.prenom }} {{ d.nom }}</strong> <span class="muted">{{ d.qualite }}</span>
+      {% for a in d.adresses %}
+      <button type="button" class="lv-copy" data-copie="{{ a }}" title="Copier">{{ a }}</button>
+      {% endfor %}
+      {% if d.adresses and not l.format_adresse %}<span class="muted">format probable</span>{% endif %}
+    </li>
+    {% endfor %}
+    {% if l.nominatives %}
+    <li><span class="muted">Publiées sur le site :</span>
+      {% for a in l.nominatives %}<button type="button" class="lv-copy" data-copie="{{ a }}">{{ a }}</button>{% endfor %}</li>
+    {% endif %}
+    {% if l.recrutement or l.generiques %}
+    <li><span class="muted">Génériques :</span>
+      {% for a in l.recrutement + l.generiques %}<button type="button" class="lv-copy" data-copie="{{ a }}">{{ a }}</button>{% endfor %}</li>
+    {% endif %}
+    {% if l.mx == 'non' %}<li class="lv-warn">Le domaine ne reçoit pas de courrier (pas de MX) : ces adresses ne marcheront pas.</li>{% endif %}
+  </ul>
+  {% else %}
+  <p class="muted">Aucune adresse trouvée : dirigeants à chercher à la main (LinkedIn, site).</p>
+  {% endif %}
+
+  {% if l.mails %}
+  <ul class="lt-list lv-mails">
+    {% for m in l.mails %}
+    <li>
+      <a href="{{ url_for('jobs.prospect_mail', mail_id=m.id) }}">
+        <span class="lt-who">{{ m.destinataire or 'destinataire à préciser' }}</span>
+        <span class="lt-what">{{ m.objet }}</span>
+      </a>
+      <span class="lt-meta">{{ m.created_at.strftime('%d/%m') }}
+        {% if m.etat == 'generation' %}<span class="lt-badge run">en cours</span>
+        {% elif m.etat == 'erreur' %}<span class="lt-badge err">erreur</span>
+        {% elif m.envoye_le %}<span class="lt-badge ok">envoyé {{ m.envoye_le.strftime('%d/%m') }}</span>
+        {% else %}<span class="lt-badge">à relire</span>{% endif %}
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('jobs.prospect_mail_new', levee_id=l.id) }}" class="lv-mail-form">
+    {% set dests = l.destinataires %}
+    {% if dests %}
+    <select name="destinataire" aria-label="Destinataire">
+      {% for d in dests %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+      <option value="">Autre (à écrire)</option>
+    </select>
+    {% endif %}
+    <input type="text" name="destinataire_libre" placeholder="Prénom Nom (rôle) <adresse>" autocomplete="off">
+    <input type="text" name="consigne" placeholder="À mettre en avant (facultatif)" autocomplete="off">
+    <button class="cta small" type="submit" {% if not moteur %}disabled title="Claude n'est pas relié"{% endif %}>✍️ Écrire le mail</button>
+  </form>
+</article>
+{% endmacro %}
+
+{% if not moteur %}
+<p class="lt-warn">Claude n'est pas relié : les mails ne peuvent pas être écrits.
+  Avec ton abonnement, crée un jeton par <code>claude setup-token</code> et mets-le
+  dans <code>CLAUDE_CODE_OAUTH_TOKEN</code> sur le serveur.</p>
+{% endif %}
+
+{% for titre, groupe in groupes %}
+{% if groupe %}
+<section class="lv-groupe">
+  <h3>{{ titre }} <small class="muted">{{ groupe|length }}</small></h3>
+  {% for l in groupe %}{{ carte(l) }}{% endfor %}
+</section>
+{% endif %}
+{% endfor %}
+{% if not levees %}
+<p class="muted">La liste se remplit à la première collecte.</p>
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/levees.js') }}"></script>
+{% endblock %}
