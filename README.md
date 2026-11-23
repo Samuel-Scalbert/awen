@@ -2,7 +2,7 @@
 
 > *Awen* — le concept celtique de l'inspiration.
 
-Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep de prise de masse, afficher des infos sur un écran ESP32, se synchroniser au calendrier Samsung et, à terme, aider à la recherche d'emploi.
+Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep de prise de masse, se synchroniser au calendrier Samsung et, à terme, aider à la recherche d'emploi.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
@@ -19,7 +19,6 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 - [Lettres de motivation](#lettres-de-motivation)
 - [Levées de fonds et mails de prospection](#levées-de-fonds-et-mails-de-prospection)
 - [Rappel de séance dans Google Agenda](#rappel-de-séance-dans-google-agenda)
-- [Endpoint ESP32](#endpoint-esp32)
 - [Dépannage](#dépannage)
 - [Roadmap](#roadmap)
 - [Licence](#licence)
@@ -28,7 +27,6 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 
 - 🏋️ Reprendre la salle : suivi des séances et de la progression
 - 🍚 Enregistrer les recettes de meal prep pour une vraie prise de masse
-- 📟 Utiliser l'ESP32 + écran pour afficher infos et notifications
 - 📅 Connecter le calendrier Samsung pour ne rien rater
 - 💼 Automatiser une aide à la recherche de travail (plus tard)
 
@@ -37,7 +35,6 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 Web app **Flask** hébergée sur l'ancien PC gamer (2018), qui :
 
 - expose une API + interface web pour toutes les infos ;
-- communique avec l'ESP32 via un endpoint JSON léger ;
 - se met à jour à chaque commit (webhook / script de déploiement).
 
 ## Structure du projet
@@ -47,12 +44,11 @@ awen/
 ├── app/                # Application Flask
 │   ├── __init__.py     # Factory create_app()
 │   ├── config.py       # Config (env vars)
-│   ├── routes/         # Blueprints (main, workout, meals, calendar, esp32)
+│   ├── routes/         # Blueprints (main, workout, meals, calendar, jobs, todos, jarvis, dictee)
 │   ├── models/         # Modèles de données
 │   ├── services/       # Logique métier (calendrier, sync…)
 │   ├── templates/      # Vues Jinja2
 │   └── static/         # CSS / JS
-├── esp32/              # Firmware / notes ESP32
 ├── data/               # SQLite (ignoré par git)
 ├── scripts/            # Déploiement, auto-update
 ├── docs/               # Notes de conception
@@ -93,7 +89,6 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 | `SECRET_KEY`                | Clé secrète Flask                            |
 | `DATABASE_URL`               | URL de connexion SQLite                      |
 | `SAMSUNG_CALENDAR_ICS_URL`   | URL d'export ICS du calendrier Samsung        |
-| `ESP32_API_KEY`              | Clé partagée avec l'ESP32                    |
 | `JOB_SEARCH_DIR`             | Dossier du pipeline Claude cowork de recherche d'emploi (page Jobs) |
 | `ANTHROPIC_API_KEY`          | Clé de l'API Claude, pour écrire les lettres de motivation |
 | `LETTRE_MODEL`               | Modèle des lettres (`claude-opus-5-5` par défaut) |
@@ -211,12 +206,6 @@ La clé reste dans `data/`, que git ignore. Tant qu'elle manque, le même
 rappel reste disponible en agenda à s'abonner, `/calendar/rappels.ics`, qui
 demande Tailscale sur le téléphone.
 
-## Endpoint ESP32
-
-`GET /api/esp32/pages` : JSON compact (heure, météo, agenda du flux ICS, lecture Spotify) pour les trois pages de l'afficheur, authentifié via `ESP32_API_KEY`.
-
-Le firmware est dans [esp32/awen_ui/](esp32/awen_ui/), et [esp32/README.md](esp32/README.md) dit comment mettre une modification sur l'écran. Le pilote de l'écran vient d'un autre dépôt : [esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display).
-
 ## Déploiement serveur (Docker)
 
 Sur le serveur Debian, une fois Docker installé :
@@ -224,7 +213,7 @@ Sur le serveur Debian, une fois Docker installé :
 ```bash
 git clone https://github.com/Samuel-Scalbert/awen.git
 cd awen
-cp .env.example .env && nano .env      # SECRET_KEY et ESP32_API_KEY réels
+cp .env.example .env && nano .env      # SECRET_KEY réel
 mkdir -p data
 docker compose up -d --build
 ```
@@ -373,10 +362,9 @@ Si `DATABASE_URL` est défini dans `.env` avec un chemin **relatif** (`sqlite://
 - [x] Statistiques (tableau de bord, page par exercice, graphiques SVG)
 - [x] Déploiement Docker + auto-update et sauvegardes sur le serveur maison
 - [x] Coach à base de règles (RIR, stagnation, deload, pesées, tests de détente)
-- [x] Endpoint JSON ESP32
-- [ ] Firmware de l'afficheur ([esp32-desk-display](https://github.com/Samuel-Scalbert/esp32-desk-display))
-- [ ] Liste de tâches (module web + ESP32)
-- [ ] Poste de commande Jarvis : pavé numérique à l'écran, conversation, tâches, parole
+- [x] Endpoint JSON ESP32 et afficheur à trois pages : archivés le 23/11/2026 (tag `esp32-v1`), un nouveau projet d'écran repart de zéro
+- [x] Liste de tâches (module web)
+- [x] Poste de commande Jarvis : pavé numérique à l'écran, conversation, tâches, parole
 - [ ] Assistant local sur le GPU du serveur
       — conception des trois lignes ci-dessus : [docs/jarvis.md](docs/jarvis.md)
 

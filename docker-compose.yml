@@ -13,7 +13,7 @@ services:
       TZ: Europe/Paris
     dns:
       # Sans ceci, le conteneur n'a AUCUN serveur DNS et rien ne sort : ni la
-      # meteo, ni Spotify, ni le calendrier. L'hote resout pourtant tres bien,
+      # calendrier, ni Google Agenda, ni Claude. L'hote resout pourtant tres bien,
       # mais son /etc/resolv.conf est ecrit par Tailscale et ne contient que
       # des adresses du tailnet ; Docker n'en retient aucune comme utilisable
       # et fabrique un resolv.conf marque « NO EXTERNAL NAMESERVERS DEFINED ».

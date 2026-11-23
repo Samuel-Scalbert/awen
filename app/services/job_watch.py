@@ -354,7 +354,7 @@ def _parse_offer(block, ref, today):
     age = (today - published).days if published else None
 
     return {
-        # Clés historiques, lues telles quelles par l'ESP32 et Jarvis.
+        # Clés historiques, lues telles quelles par Jarvis.
         "title": title,
         "body": body,
         "links": _LINK_RE.findall(body),
@@ -437,7 +437,7 @@ def parse_report(text, day, dirname):
                 if offer:
                     offers.append(offer)
         elif "benevolat" in key:
-            # À part des offres : l'ESP32 et Jarvis comptent des emplois, et
+            # À part des offres : Jarvis compte des emplois, et
             # la page leur donne un bloc qu'on ne peut pas confondre.
             for block in re.split(r"^###\s+", body, flags=re.M)[1:]:
                 mission = _parse_mission(block)

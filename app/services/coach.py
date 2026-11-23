@@ -370,13 +370,13 @@ def apply_advice(pe_id, new_weight, reason):
 
 
 def headline(advice=None):
-    """La phrase la plus importante du moment — pour l'accueil et l'ESP32."""
+    """La phrase la plus importante du moment — pour l'accueil."""
     advice = analyse() if advice is None else advice
     return advice[0] if advice else None
 
 
 def weekly_recap():
-    """Résumé de la semaine en cours, pour l'accueil et l'ESP32."""
+    """Résumé de la semaine en cours, pour l'accueil."""
     today = date.today()
     monday = today - timedelta(days=today.weekday())
     sessions = [w for w in Workout.query.filter_by(completed=True)

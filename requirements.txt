@@ -4,9 +4,6 @@ python-dotenv>=1.0
 requests>=2.31
 icalendar>=5.0
 markdown>=3.5
-# Réduction des pochettes Spotify en RGB565 pour l'afficheur ESP32 : un
-# microcontrôleur ne sait pas décoder un JPEG de 300 px.
-Pillow>=10.0
 gunicorn>=22.0
 # Lettres de motivation : Claude écrit le texte, reportlab le met en page.
 anthropic>=1.14,<2

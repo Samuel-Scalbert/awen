@@ -145,13 +145,13 @@ def fetch_events(limit=10, include_past=False):
 
 
 def get_upcoming_events(limit=10):
-    """Compatibilité : uniquement les évènements (utilisé par l'API ESP32)."""
+    """Les prochains évènements, titre et début seulement (pour Jarvis)."""
     events, _ = fetch_events(limit)
     return [{"title": e["title"], "start": e["start"].isoformat()} for e in events]
 
 
 # --------------------------------------------------------------------------
-# L'agenda jour par jour, pour l'afficheur
+# L'agenda jour par jour
 #
 # fetch_events() ne lit que la première occurrence d'un évènement répété :
 # suffisant pour une liste « à venir », faux pour un agenda du jour, où la

@@ -1,6 +1,6 @@
 """Les tâches, vues comme un service — parce que trois clients les lisent.
 
-L'interface web, l'ESP32 et Jarvis veulent tous la même liste. Écrire la
+L'interface web, l'accueil et Jarvis veulent tous la même liste. Écrire la
 requête trois fois, c'est trois endroits où l'ordre de tri finira par diverger
 et où « mes prochaines tâches » ne désignera plus la même chose selon l'écran
 qu'on regarde.
@@ -86,15 +86,3 @@ def complete_by_text(fragment):
             return complete(t.id)
     return None
 
-
-def lines(limit=3, width=30):
-    """Les prochaines tâches, prêtes à dessiner sur l'afficheur.
-
-    Formaté ici et pas sur l'ESP32 : la carte interprète du MicroPython, tout
-    ce qu'on prépare est autant de travail qu'elle n'a pas à faire.
-    """
-    out = []
-    for t in pending(limit):
-        marque = "!" if t.due and t.due < date.today() else "-"
-        out.append("{} {}".format(marque, t.text)[:width])
-    return out
