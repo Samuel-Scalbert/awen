@@ -59,6 +59,39 @@ CF = "1c" + "".join("{:02x}".format(ord(c) ^ 0x1c) for c in "marie@nuage-logicie
 SITE_NUAGE = SITE_NUAGE.replace("1c71757e7e7d5c72697d7b797173737b7d7f7832767e", CF)
 SITE_JOBS = "<html><body>Écris à jobs@nuage-logiciel.fr</body></html>"
 
+def _annonce(siren, nom, modif="modification survenue sur le capital (augmentation)", capital="3041.30"):
+    return {"dateparution": "2026-11-20", "commercant": nom, "registre": [siren, siren],
+            "modificationsgenerales": json.dumps({"descriptif": modif}),
+            "listepersonnes": json.dumps({"personne": {"capital": {"montantCapital": capital, "devise": "EUR"}}}),
+            "url_complete": "https://www.bodacc.fr/annonce/" + siren}
+
+
+BODACC = {"total_count": 6, "results": [
+    _annonce("444555666", "BRUME DATA"),
+    _annonce("444555666", "BRUME DATA"),                                  # deux annonces, une entreprise
+    _annonce("111111111", "SCI DES LILAS"),                               # pas une startup
+    _annonce("222222222", "VIEUX LOGICIEL", modif="modification survenue sur le capital (diminution)"),
+    _annonce("777888999", "FILIALE FRANCE"),                              # présidée par une société
+    _annonce("333444555", "CONSEIL ET CIE")]}                             # conseil, pas logiciel
+PAR_SIREN = {
+    "444555666": {"siren": "444555666", "nom_complet": "BRUME DATA", "date_creation": "2024-05-02",
+                  "tranche_effectif_salarie": "02", "activite_principale": "62.01Z",
+                  "siege": {"libelle_commune": "PARIS", "code_postal": "75011"},
+                  "dirigeants": [{"type_dirigeant": "personne physique", "prenoms": "LÉA", "nom": "ROUX",
+                                  "qualite": "Président de SAS"}]},
+    "777888999": {"siren": "777888999", "nom_complet": "FILIALE FRANCE", "date_creation": "2023-01-01",
+                  "tranche_effectif_salarie": "03", "activite_principale": "62.01Z",
+                  "siege": {"libelle_commune": "PARIS", "code_postal": "75008"},
+                  "dirigeants": [{"type_dirigeant": "personne morale", "denomination": "MAISON MERE INC",
+                                  "qualite": "Président"}]},
+    "333444555": {"siren": "333444555", "nom_complet": "CONSEIL ET CIE", "date_creation": "2025-01-01",
+                  "tranche_effectif_salarie": "NN", "activite_principale": "70.22Z",
+                  "siege": {"libelle_commune": "PARIS", "code_postal": "75002"}, "dirigeants": []}}
+SITE_PARKING = "<html><head><title>brumedata.com</title></head><body>This domain is for sale. Brume Data</body></html>"
+SITE_BRUME = """<html><head><title>Brume</title></head><body><h1>Vos données, sans brouillard</h1>
+<p>Une équipe de quatre personnes.</p><p>Mentions : SAS au capital de 3 041 €, RCS Paris 444 555 666.</p>
+<p>Écrivez à lea@brumedata.fr</p></body></html>"""
+
 BAN = {"Paris": {"features": [{"properties": {"context": "75, Paris, Île-de-France"}}]},
        "Rennes": {"features": [{"properties": {"context": "35, Ille-et-Vilaine, Bretagne"}}]}}
 
@@ -88,9 +121,19 @@ def faux_get(url, params=None, timeout=15, headers=None):
     if url == levees.API_ADRESSE:
         return Reponse(data=BAN.get(params.get("q"), {"features": []}))
     if url == levees.API_ENT:
-        return Reponse(data=REGISTRE_NUAGE if "nuage" in params.get("q", "").lower() else {"results": []})
+        q = params.get("q", "")
+        if q in PAR_SIREN:
+            return Reponse(data={"results": [PAR_SIREN[q]]})
+        return Reponse(data=REGISTRE_NUAGE if "nuage" in q.lower() else {"results": []})
+    if url == levees.BODACC:
+        return Reponse(data=BODACC if params.get("offset", 0) == 0 else {"total_count": 6, "results": []})
+    if url == "https://brumedata.com":
+        return Reponse(SITE_PARKING)
+    if url in ("https://brumedata.fr", "https://brumedata.fr/"):
+        return Reponse(SITE_BRUME)
     if url == levees.DNS:
-        return Reponse(data={"Answer": [{"data": "10 mx.example."}]} if params.get("name") == "nuage-logiciel.fr" else {})
+        return Reponse(data={"Answer": [{"data": "10 mx.example."}]}
+                       if params.get("name") in ("nuage-logiciel.fr", "brumedata.fr") else {})
     if url.startswith("https://www.nuage-logiciel.fr/"):
         reste = url[len("https://www.nuage-logiciel.fr/"):]
         if reste == "":
@@ -177,7 +220,7 @@ class CollecteTest(unittest.TestCase):
         self.assertEqual(op["mx"], "non")
 
     def test_la_collecte_garde_l_ile_de_france_et_dedoublonne(self):
-        retenues, ecartees = levees.collecter(4)
+        retenues, ecartees = levees.collecter(4, montant_max=None, equipe_max=None, sources=("maddyness",))
         self.assertEqual([o["entreprise"] for o in retenues], ["Nuage Logiciel"])
         self.assertEqual([(o["entreprise"], r) for o, r in ecartees], [("Ferme Bio", "hors Île-de-France (Rennes)")])
         self.assertEqual(levees.enregistrer(retenues), 1)
@@ -195,10 +238,63 @@ class CollecteTest(unittest.TestCase):
 
     def test_la_collecte_en_arriere_plan(self):
         with mock.patch.object(levees, "lancer", side_effect=lambda f, i: f(i)):
-            c = levees.lancer_collecte(2)
+            c = levees.lancer_collecte(2, "0", "0", ["maddyness"])
         self.assertEqual((c.etat, c.nb_operations, c.nb_nouvelles), ("terminee", 2, 1))
+        self.assertEqual((c.montant_max, c.equipe_max, c.sources), (None, None, "maddyness"))
         self.assertIn("1 nouvelle", c.message)
+        self.assertIn("1 (hors IDF)", c.message)
         self.assertEqual(Levee.query.count(), 1)
+
+    def test_les_reglages_par_defaut(self):
+        """500 k€, moins de 20 personnes, les deux sources ; une valeur
+        illisible garde le défaut, « 0 » lève la limite."""
+        with mock.patch.object(levees, "lancer"):
+            c = levees.lancer_collecte(4, None, "n'importe quoi", [])
+        self.assertEqual((c.montant_max, c.equipe_max, c.sources), (500000, 19, "maddyness,bodacc"))
+
+    def test_le_plafond_de_montant_avant_le_registre(self):
+        with mock.patch.object(levees, "fiche") as fiche:
+            retenues, ecartees = levees.collecter(4, sources=("maddyness",))
+        self.assertEqual(retenues, [])
+        self.assertEqual([r for _, r in ecartees], ["levée de 4.0 M€", "levée de 1.5 M€"])
+        fiche.assert_not_called()                                 # aucune requête perdue
+        self.assertEqual((levees.euros("400.0 k€"), levees.euros("1.5 M€"), levees.euros("")),
+                         (400000, 1500000, None))
+
+    def test_le_plafond_d_equipe(self):
+        retenues, ecartees = levees.collecter(4, montant_max=None, equipe_max=9, sources=("maddyness",))
+        self.assertEqual(retenues, [])
+        self.assertIn(("Nuage Logiciel", "effectif 10-19"), [(o["entreprise"], r) for o, r in ecartees])
+
+    def test_le_bodacc(self):
+        retenues, ecartees = levees.collecter(2, sources=("bodacc",))
+        # Ni la SCI, ni la baisse de capital, ni la filiale, ni le cabinet de conseil.
+        self.assertEqual([o["entreprise"] for o in retenues], ["Brume Data"])
+        o = retenues[0]
+        self.assertEqual((o["source"], o["montant"], o["secteur"], o["effectif"], o["ville"], o["creee"]),
+                         ("bodacc", "", "logiciel", "3-5", "Paris", "2024"))
+        self.assertEqual((o["capital"], o["semaine"]), ("3 041 €", "2026-11-20"))
+        # Le .com est une page parking ; le .fr porte le SIREN dans ses mentions.
+        self.assertEqual(o["site"], "https://brumedata.fr")
+        self.assertIn("Site vérifié", o["contexte"])
+        self.assertEqual(o["dirigeants"][0]["adresses"], ["lea@brumedata.fr"])
+        self.assertEqual(levees.enregistrer(retenues), 1)
+        l = Levee.query.one()
+        self.assertEqual((l.source, l.annonce), ("bodacc", "https://www.bodacc.fr/annonce/444555666"))
+        # Une entreprise déjà en base n'est pas relue.
+        self.assertEqual(levees.collecter(2, sources=("bodacc",), deja_vus={"444555666"}), ([], []))
+
+    def test_les_noms_lisibles(self):
+        self.assertEqual(levees.nom_lisible("DOYE (QWOTY)"), "Qwoty")
+        self.assertEqual(levees.nom_lisible("MACRODATA LABS"), "Macrodata Labs")
+        self.assertEqual(levees.nom_lisible("HERACLES AI"), "Heracles AI")
+        self.assertEqual(levees.nom_lisible("Shaarp"), "Shaarp")
+        self.assertEqual(levees._candidats_site("Prettywhale.ai"), ["https://prettywhale.ai"])
+
+
+# Les fixtures Maddyness sont de grosses levées (4 et 1,5 M€) : les tests de
+# page collectent sans plafond.
+SANS_PLAFOND = {"semaines": "4", "montant_max": "0", "equipe_max": "0", "sources": "maddyness"}
 
 
 class PageTest(unittest.TestCase):
@@ -234,7 +330,7 @@ class PageTest(unittest.TestCase):
     def test_le_bouton_collecte_puis_la_liste(self):
         page = self.client.get("/jobs/levees").get_data(as_text=True)
         self.assertIn("Lancer la collecte", page)
-        r = self.client.post("/jobs/levees/collecter", data={"semaines": "4"})
+        r = self.client.post("/jobs/levees/collecter", data=SANS_PLAFOND)
         self.assertEqual(r.status_code, 302)
         etat = self.client.get("/jobs/levees/etat").get_json()
         self.assertEqual(etat["etat"], "terminee")
@@ -248,7 +344,7 @@ class PageTest(unittest.TestCase):
         self.assertEqual(Levee.query.one().statut, "ecartee")
 
     def test_le_mail_puis_l_envoi(self):
-        self.client.post("/jobs/levees/collecter", data={"semaines": "4"})
+        self.client.post("/jobs/levees/collecter", data=SANS_PLAFOND)
         l = Levee.query.one()
         r = self.client.post("/jobs/levees/{}/mail".format(l.id), data={
             "destinataire": l.destinataires[0], "consigne": "Parle d'Awen"})
@@ -285,8 +381,36 @@ class PageTest(unittest.TestCase):
         self.client.post("/jobs/levees/{}/mail".format(l.id), data={"destinataire": "<contact@nuage-logiciel.fr>"})
         self.assertEqual(MailProspection.query.order_by(MailProspection.id.desc()).first().signature, "Samuel\n06 00")
 
+    def test_les_plafonds_masquent_les_grosses_levees(self):
+        self.client.post("/jobs/levees/collecter", data=SANS_PLAFOND)
+        page = self.client.get("/jobs/levees").get_data(as_text=True)
+        self.assertIn("Nuage Logiciel", page)
+        self.assertIn('value="500000" selected', page)                   # le formulaire part de 500 k€
+        # Une collecte BODACC avec les réglages par défaut : Brume Data entre,
+        # Nuage Logiciel (4 M€) se cache, sauf à tout afficher.
+        self.client.post("/jobs/levees/collecter", data={"semaines": "2", "sources": "bodacc"})
+        page = self.client.get("/jobs/levees").get_data(as_text=True)
+        self.assertIn("Brume Data", page)
+        self.assertIn("montant inconnu", page)
+        self.assertIn("annonce BODACC", page)
+        self.assertNotIn("Nuage Logiciel", page)
+        self.assertIn("1 entreprise au-dessus des plafonds", page)
+        self.assertIn("Nuage Logiciel", self.client.get("/jobs/levees?tout=1").get_data(as_text=True))
+        # Une conversation engagée ne se cache jamais.
+        nuage = Levee.query.filter_by(entreprise="Nuage Logiciel").one()
+        nuage.statut = "contactee"
+        db.session.commit()
+        self.assertIn("Nuage Logiciel", self.client.get("/jobs/levees").get_data(as_text=True))
+        # Le mail d'une entreprise BODACC ne donne ni montant ni investisseurs à Claude.
+        brume = Levee.query.filter_by(entreprise="Brume Data").one()
+        self.client.post("/jobs/levees/{}/mail".format(brume.id), data={"destinataire": brume.destinataires[0]})
+        demande = self.appel.call_args[0][1]
+        self.assertIn("Source : BODACC", demande)
+        self.assertNotIn("Levée :", demande)
+        self.assertIn("Quand la source est le BODACC", self.appel.call_args[0][0])
+
     def test_claude_en_panne(self):
-        self.client.post("/jobs/levees/collecter", data={"semaines": "4"})
+        self.client.post("/jobs/levees/collecter", data=SANS_PLAFOND)
         l = Levee.query.one()
         self.appel.side_effect = levees.LettreErreur("Ton abonnement Claude a atteint sa limite")
         self.client.post("/jobs/levees/{}/mail".format(l.id), data={"destinataire": "x <a@b.fr>"})

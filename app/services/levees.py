@@ -21,6 +21,19 @@ LA CHAÎNE, SANS CLÉ NI COMPTE
    une seule vérification : le domaine reçoit du courrier (MX). Aucune sonde
    SMTP : c'est intrusif et ça fait blacklister l'expéditeur.
 
+LES PETITES ÉQUIPES (25/11/2026)
+
+Samuel veut parler à des équipes de quelques personnes. Maddyness raconte
+surtout les grosses levées : sur douze semaines, 5 opérations sur 103 à
+500 k€ ou moins. D'où :
+- un plafond de montant sur Maddyness (500 k€ par défaut) ;
+- une seconde source, le BODACC : chaque levée laisse une annonce
+  d'augmentation de capital au journal officiel. Le montant levé n'y est pas
+  (le capital nominal ne dit rien de la prime d'émission) ; on garde les
+  entreprises du logiciel et de la donnée, créées depuis six ans au plus,
+  dirigées par des personnes (pas des filiales), et on cherche leur site ;
+- un plafond d'effectif pour les deux sources (moins de 20 par défaut).
+
 Le mail est écrit par le même moteur que les lettres (lettres.py) avec le
 skill .claude/skills/mail-prospection : l'abonnement Claude, l'API en secours.
 """
@@ -48,8 +61,25 @@ MADDY = "https://www.maddyness.com"
 API_ENT = "https://recherche-entreprises.api.gouv.fr/search"
 API_ADRESSE = "https://api-adresse.data.gouv.fr/search/"
 DNS = "https://cloudflare-dns.com/dns-query"
+BODACC = ("https://bodacc-datadila.opendatasoft.com/api/explore/v2.1/catalog/"
+          "datasets/annonces-commerciales/records")
 IDF = ("75", "77", "78", "91", "92", "93", "94", "95")
-EFFECTIF_MAX = 249
+MONTANT_MAX = 500_000            # euros ; le réglage par défaut de la page
+EQUIPE_MAX = 19                  # « moins de 20 personnes »
+SOURCES = ("maddyness", "bodacc")
+# BODACC : les activités où un dev/PO IA a sa place. Le conseil (70.22) et la
+# publicité (73.11) ramenaient surtout des holdings et des filiales.
+NAF_BODACC = {"58.29": "logiciel", "62.01": "logiciel", "62.02": "it", "62.03": "it",
+              "62.09": "it", "63.11": "data", "63.12": "data"}
+AGE_MAX_BODACC = 6               # années depuis la création
+BODACC_MAX = 2000                # annonces lues au plus par collecte
+# Les raisons sociales qui ne sont pas des startups.
+NON_STARTUP = re.compile(r"\b(sci|scp|scm|holding|manco|spv|invest\w*|participations?|patrimoine|"
+                         r"immo\w*|fonci\w*|property|propri[ée]t[ée]s?|soci[ée]t[ée] civile|"
+                         r"selarl|selas|pharmacie|cabinet|notaires?|avocats?)\b", re.I)
+PARKING = re.compile(r"domain (is )?for sale|domaine (est )?[àa] vendre|buy this domain|parked free|"
+                     r"sedo|afternic|hugedomains|dan\.com|godaddy", re.I)
+TLDS = ("com", "fr", "io", "ai", "co", "app", "tech")
 TEXTE_SITE_MAX = 2500
 ABANDON = timedelta(minutes=30)
 
@@ -108,6 +138,15 @@ def _norm(t):
     t = unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
     t = re.sub(r"\b(sas|sasu|sa|sarl|group|groupe|france|technologies|technology|labs?|ai|io)\b", " ", t)
     return re.sub(r"[^a-z0-9]+", "", t)
+
+
+def euros(montant):
+    """« 1.5 M€ » -> 1500000 ; None quand le montant n'est pas connu."""
+    v, _, unite = (montant or "").partition(" ")
+    try:
+        return int(float(v) * {"M€": 10 ** 6, "k€": 10 ** 3, "Md€": 10 ** 9}.get(unite, 1))
+    except ValueError:
+        return None
 
 
 # --------------------------------------------------------------------------
@@ -235,10 +274,15 @@ def registre(op):
     if not meilleur or score < 0.8:
         op["registre"] = "introuvable" if not meilleur else "douteux ({})".format(meilleur.get("nom_complet"))
         return
-    e, siege = meilleur, meilleur.get("siege") or {}
+    _remplir(op, meilleur, "ok" if score >= 1.0 else "probable")
+
+
+def _remplir(op, e, verdict):
+    """Ce que le registre dit d'une entreprise : effectif, activité, dirigeants."""
+    siege = e.get("siege") or {}
     tranche = e.get("tranche_effectif_salarie") or "NN"
     op.update({
-        "registre": "ok" if score >= 1.0 else "probable",
+        "registre": verdict,
         "siren": e.get("siren", ""),
         "raison_sociale": e.get("nom_complet", ""),
         "naf": e.get("activite_principale", ""),
@@ -252,9 +296,140 @@ def registre(op):
             if d.get("type_dirigeant") == "personne physique"
             and (d.get("qualite") or "").lower().startswith(ROLES)],
             key=lambda d: 0 if d["qualite"].lower().startswith("président") else 1),
+        # Une société présidée par une autre société est une filiale : pas une
+        # petite équipe qui décide seule de recruter.
+        "filiale": any(d.get("type_dirigeant") == "personne morale"
+                       and (d.get("qualite") or "").lower().startswith("président")
+                       for d in e.get("dirigeants") or []),
     })
     if not op.get("departement") and siege.get("code_postal"):
         op["departement"] = siege["code_postal"][:2]
+    if not op.get("ville") and siege.get("libelle_commune"):
+        op["ville"] = siege["libelle_commune"].title()
+    if not op.get("creee") and e.get("date_creation"):
+        op["creee"] = e["date_creation"][:4]
+
+
+# --------------------------------------------------------------------------
+# 2 bis. Le BODACC : les augmentations de capital
+
+
+def nom_lisible(nom):
+    """« DOYE (QWOTY) » -> « Qwoty » ; « MACRODATA LABS » -> « Macrodata Labs ».
+    La marque entre parenthèses l'emporte sur la raison sociale."""
+    m = re.search(r"\(([^)]+)\)\s*$", nom or "")
+    nom = (m.group(1) if m else nom or "").strip()
+    if nom != nom.upper():
+        return nom
+    return " ".join(w if w in ("AI", "IA", "IO", "SAS") else w[:1] + w[1:].lower() for w in nom.split())
+
+
+def annonces_bodacc(semaines):
+    """Les augmentations de capital publiées en Île-de-France, une par SIREN,
+    la plus récente d'abord. Les baisses de capital et les sociétés qui ne
+    sont visiblement pas des startups (SCI, holdings) sont écartées ici."""
+    depuis = (date.today() - timedelta(weeks=semaines)).isoformat()
+    par_siren, offset, total = {}, 0, 1
+    while offset < min(total, BODACC_MAX):
+        d = _json(get(BODACC, timeout=30, params={
+            "limit": 100, "offset": offset, "order_by": "dateparution desc",
+            "select": "dateparution,commercant,registre,modificationsgenerales,listepersonnes,url_complete",
+            "where": 'familleavis="modification" and region_code=11 and dateparution>="{}" '
+                     'and search(modificationsgenerales,"capital")'.format(depuis)}))
+        if not d:
+            break
+        total = d.get("total_count") or 0
+        offset += 100
+        for r in d.get("results") or []:
+            modif = (r.get("modificationsgenerales") or "").lower()
+            if "diminution" in modif or NON_STARTUP.search(r.get("commercant") or ""):
+                continue
+            siren = re.sub(r"\D", "", ((r.get("registre") or [""])[0]))
+            if len(siren) != 9 or siren in par_siren:
+                continue
+            capital = ""
+            try:
+                p = (json.loads(r.get("listepersonnes") or "{}") or {}).get("personne") or {}
+                p = p[0] if isinstance(p, list) else p
+                c = p.get("capital") or {}
+                if c.get("montantCapital"):
+                    capital = "{:,.0f} €".format(float(c["montantCapital"])).replace(",", " ")
+            except (ValueError, TypeError, AttributeError):
+                pass
+            par_siren[siren] = {"siren": siren, "commercant": r.get("commercant") or "",
+                                "semaine": r.get("dateparution") or "", "capital": capital,
+                                "annonce": r.get("url_complete") or ""}
+    return list(par_siren.values())
+
+
+def depuis_bodacc(a):
+    """Une annonce BODACC devenue opération, complétée par le registre ; None
+    si ce n'est pas une jeune entreprise du logiciel ou de la donnée."""
+    res = [e for e in _cherche(a["siren"]) if e.get("siren") == a["siren"]]
+    if not res:
+        return None
+    e = res[0]
+    naf = e.get("activite_principale") or ""
+    secteur = NAF_BODACC.get(naf[:5])
+    annee = (e.get("date_creation") or "")[:4]
+    if not secteur or not annee.isdigit() or date.today().year - int(annee) > AGE_MAX_BODACC:
+        return None
+    op = {"source": "bodacc", "semaine": a["semaine"], "capital": a["capital"], "annonce": a["annonce"],
+          "entreprise": nom_lisible(e.get("nom_complet") or a["commercant"]), "secteur": secteur,
+          "montant": "", "investisseurs": "", "fiche_maddyness": "",
+          "contexte": "Augmentation de capital publiée au BODACC le {}{}.".format(
+              "/".join(reversed(a["semaine"].split("-"))),
+              ", capital porté à {}".format(a["capital"]) if a["capital"] else "")}
+    _remplir(op, e, "ok")
+    return None if op["filiale"] else op
+
+
+def _candidats_site(nom):
+    """Les domaines à essayer pour une marque : « Macrodata Labs » ->
+    macrodatalabs.com, macrodata-labs.com, macrodata.com..."""
+    base = unicodedata.normalize("NFKD", nom).encode("ascii", "ignore").decode().lower()
+    mots_ = re.findall(r"[a-z0-9]+", base)
+    if not mots_:
+        return []
+    if base.strip().endswith((".ai", ".io", ".co", ".app", ".tech", ".fr", ".com")):
+        return ["https://" + "".join(re.findall(r"[a-z0-9.]+", base))]
+    racines = list(dict.fromkeys(["".join(mots_), "-".join(mots_)] + ([mots_[0]] if len(mots_) > 1 else [])))
+    return ["https://{}.{}".format(r, t) for r in racines for t in TLDS]
+
+
+def trouver_site(op):
+    """Le registre ne connaît pas les sites. On essaie les domaines évidents et
+    on garde le premier qui parle de l'entreprise : son nom dans le titre ou
+    le début du texte, ou son SIREN (mentions légales). Les pages parking
+    (« domain for sale ») sont refusées."""
+    cible = _norm(op["entreprise"])
+    if len(cible) < 3:
+        return
+    for url in _candidats_site(op["entreprise"]):
+        r = get(url, timeout=6)
+        if not r:
+            continue
+        final = getattr(r, "url", None) or url
+        # Un domaine qui renvoie ailleurs est à vendre ou appartient à un autre.
+        if _domaine(final) != _domaine(url):
+            continue
+        page = r.text[:200_000]
+        if PARKING.search(page[:20_000]):
+            continue
+        corps = texte(re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", page, flags=re.S))
+        if _siren_dans(op, corps) or cible in _norm(corps[:3000]):
+            op["site"] = final
+            return
+
+
+def _domaine(url):
+    return urlparse(url).netloc.lower().removeprefix("www.")
+
+
+def _siren_dans(op, txt):
+    """Le SIREN de l'entreprise apparaît-il dans ce texte (« 444 555 666 ») ?"""
+    s = op.get("siren")
+    return bool(s) and bool(re.search(r"(?<!\d){}(?!\d)".format(r"\s?".join(s)), txt or ""))
 
 
 # --------------------------------------------------------------------------
@@ -291,7 +466,9 @@ def adresses_du_site(op):
         # exemples de code) : on ne lit que le contenu. Les adresses masquées
         # par Cloudflare sont dans des liens, elles restent.
         contenu = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", r.text, flags=re.S)
-        brut = contenu + " " + " ".join(decode_cf(h) for h in re.findall(r"email-protection#([0-9a-f]+)", contenu))
+        if _siren_dans(op, texte(contenu)):
+            op["siren_sur_site"] = True               # mentions légales : c'est bien leur site
+        brut =contenu + " " + " ".join(decode_cf(h) for h in re.findall(r"email-protection#([0-9a-f]+)", contenu))
         for a in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", brut):
             a = a.lower().rstrip(".")
             if a.endswith("@" + domaine) or a.split("@")[1].endswith("." + domaine):
@@ -342,6 +519,8 @@ def priorite(op):
         p += 1
     if any(d.get("adresses") for d in op.get("dirigeants") or []) or op.get("adresses_nominatives"):
         p += 1                                        # quelqu'un à qui écrire
+    if op.get("siren_sur_site"):
+        p += 1                                        # le site est sûrement le leur
     return p
 
 
@@ -349,27 +528,57 @@ def priorite(op):
 # La collecte
 
 
-def collecter(semaines, avancement=lambda m: None):
-    """Toute la chaîne, sans toucher à la base. Renvoie (retenues, écartées)."""
-    rec = recaps(semaines)
-    ops = [op for r in rec for op in operations(r)]
-    avancement("{} récapitulatifs, {} opérations".format(len(rec), len(ops)))
-    for i, op in enumerate(ops, 1):
-        avancement("Fiches et registre : {}/{}".format(i, len(ops)))
-        fiche(op)
-        registre(op)
-    retenues, ecartees = [], []
+def collecter(semaines, avancement=lambda m: None, montant_max=MONTANT_MAX, equipe_max=EQUIPE_MAX,
+              sources=SOURCES, deja_vus=()):
+    """Toute la chaîne, sans toucher à la base. Renvoie (retenues, écartées).
+    `montant_max` et `equipe_max` à None : sans plafond. `deja_vus` : les SIREN
+    déjà en base, que le BODACC ne relit pas (une collecte en lit des
+    centaines)."""
+    ops, ecartees = [], []
+    if "maddyness" in sources:
+        rec = recaps(semaines)
+        brutes = [op for r in rec for op in operations(r)]
+        avancement("Maddyness : {} récapitulatifs, {} opérations".format(len(rec), len(brutes)))
+        for op in brutes:
+            op["source"] = "maddyness"
+            e = euros(op["montant"])
+            # Plafond avant le registre : autant de requêtes en moins.
+            if montant_max is not None and e is not None and e > montant_max:
+                ecartees.append((op, "levée de {}".format(op["montant"])))
+            else:
+                ops.append(op)
+        for i, op in enumerate(ops, 1):
+            avancement("Maddyness, fiches et registre : {}/{}".format(i, len(ops)))
+            fiche(op)
+            registre(op)
+    if "bodacc" in sources:
+        annonces = [a for a in annonces_bodacc(semaines) if a["siren"] not in set(deja_vus)]
+        connus = {op.get("siren") for op in ops}
+        for i, a in enumerate(annonces, 1):
+            if i % 10 == 1:
+                avancement("BODACC, registre : {}/{} augmentations de capital".format(i, len(annonces)))
+            if a["siren"] in connus:                  # déjà vue chez Maddyness, montant connu
+                continue
+            op = depuis_bodacc(a)
+            if op is not None:
+                ops.append(op)
+    retenues = []
     for op in ops:
         dep = op.get("departement") or ""
         if dep and dep not in IDF:
             ecartees.append((op, "hors Île-de-France ({})".format(op.get("ville") or dep)))
-        elif op.get("effectif_max") and op["effectif_max"] > EFFECTIF_MAX:
+        elif equipe_max is not None and op.get("effectif_max") and op["effectif_max"] > equipe_max:
             ecartees.append((op, "effectif {}".format(op["effectif"])))
         else:
             retenues.append(op)
     for i, op in enumerate(retenues, 1):
         avancement("Sites et adresses : {}/{}".format(i, len(retenues)))
+        if op.get("source") == "bodacc":
+            trouver_site(op)
         adresses_du_site(op)
+        if op.get("source") == "bodacc" and op.get("site"):
+            op["contexte"] += (" Site vérifié : le SIREN figure dans ses pages." if op.get("siren_sur_site")
+                               else " Site deviné d'après le nom : à vérifier.")
         adresses_probables(op)
         op["priorite"] = priorite(op)
     return retenues, ecartees
@@ -378,7 +587,7 @@ def collecter(semaines, avancement=lambda m: None):
 CHAMPS = ("semaine", "entreprise", "secteur", "montant", "investisseurs", "contexte", "ville",
           "departement", "creee", "effectif", "effectif_max", "siren", "raison_sociale", "naf",
           "registre", "site", "domaine", "pitch", "texte_site", "recrute", "format_adresse",
-          "mx", "priorite", "fiche_maddyness")
+          "mx", "priorite", "fiche_maddyness", "source", "capital", "annonce")
 LISTES = ("adresses_recrutement", "adresses_generiques", "adresses_nominatives", "dirigeants")
 
 
@@ -412,12 +621,19 @@ def _executer(collecte_id):
         db.session.commit()
 
     try:
-        retenues, ecartees = collecter(c.semaines, avancement)
+        deja = {s for (s,) in db.session.query(Levee.siren).filter(Levee.siren != "")}
+        retenues, ecartees = collecter(c.semaines, avancement, c.montant_max, c.equipe_max,
+                                       (c.sources or "maddyness").split(","), deja)
         c.nb_operations = len(retenues) + len(ecartees)
         c.nb_nouvelles = enregistrer(retenues)
-        c.message = "{} opérations, {} en Île-de-France dont {} nouvelle{}, {} écartée{}".format(
-            c.nb_operations, len(retenues), c.nb_nouvelles, "s" if c.nb_nouvelles > 1 else "",
-            len(ecartees), "s" if len(ecartees) > 1 else "")
+        raisons = {}
+        for _, r in ecartees:
+            cle = "montant" if r.startswith("levée") else "taille" if r.startswith("effectif") else "hors IDF"
+            raisons[cle] = raisons.get(cle, 0) + 1
+        c.message = "{} retenue{} dont {} nouvelle{}{}".format(
+            len(retenues), "s" if len(retenues) > 1 else "", c.nb_nouvelles,
+            "s" if c.nb_nouvelles > 1 else "",
+            " ; écartées : " + ", ".join("{} ({})".format(n, k) for k, n in raisons.items()) if raisons else "")
         c.etat = "terminee"
     except Exception as e:                           # jamais une collecte bloquée
         current_app.logger.exception("collecte des levées")
@@ -437,12 +653,26 @@ def collecte_en_cours():
     return c
 
 
-def lancer_collecte(semaines=4):
+def _entier(v, defaut):
+    """Un réglage du formulaire : un nombre, « 0 » ou vide pour « sans limite »."""
+    if v is None:
+        return defaut
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return defaut
+    return n if n > 0 else None
+
+
+def lancer_collecte(semaines=4, montant_max=MONTANT_MAX, equipe_max=EQUIPE_MAX, sources=SOURCES):
     """Démarre la collecte en arrière-plan ; renvoie celle en cours s'il y en a une."""
     c = collecte_en_cours()
     if c is not None:
         return c
-    c = CollecteLevees(semaines=max(1, min(int(semaines or 4), 12)), message="Démarrage")
+    sources = [s for s in sources if s in SOURCES] or list(SOURCES)
+    c = CollecteLevees(semaines=max(1, min(int(semaines or 4), 12)), message="Démarrage",
+                       montant_max=_entier(montant_max, MONTANT_MAX),
+                       equipe_max=_entier(equipe_max, EQUIPE_MAX), sources=",".join(sources))
     db.session.add(c)
     db.session.commit()
     lancer(_executer, c.id)
@@ -482,7 +712,7 @@ SYSTEME = """{consignes}
 {cv}
 </cv>"""
 DEMANDE = """<entreprise nom="{nom}">
-- Levée : {montant}, récapitulatif du {semaine} ; investisseurs : {investisseurs}
+- {levee}
 - Secteur : {secteur} ; siège : {ville} ; créée en {creee} ; effectif : {effectif}
 - Site : {site}
 - Pitch du site : {pitch}
@@ -516,9 +746,14 @@ def _systeme(src):
 
 
 def _demande(mail, l):
+    if l.source == "bodacc":
+        levee = ("Source : BODACC. Augmentation de capital publiée le {} ; montant levé et "
+                 "investisseurs non publiés (ce n'est peut-être pas une levée)").format(l.semaine or "?")
+    else:
+        levee = "Levée : {}, récapitulatif Maddyness du {} ; investisseurs : {}".format(
+            l.montant or "?", l.semaine or "?", l.investisseurs or "non précisés")
     return DEMANDE.format(
-        nom=escape(l.entreprise), montant=l.montant or "?", semaine=l.semaine or "?",
-        investisseurs=l.investisseurs or "non précisés", secteur=l.secteur or "?",
+        nom=escape(l.entreprise), levee=levee, secteur=l.secteur or "?",
         ville=l.ville or "?", creee=l.creee or "?", effectif=l.effectif or "non renseigné",
         site=l.site or "inconnu", pitch=l.pitch or "(aucun)", contexte=l.contexte or "(rien)",
         recrute="oui" if l.recrute or l.recrutement else "pas d'indication",

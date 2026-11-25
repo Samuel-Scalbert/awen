@@ -22,6 +22,23 @@ pitch, ce qu'en dit le récapitulatif, le texte de son site. N'invente ni
 produit, ni client, ni chiffre. Si le site n'a pas pu être lu, dis-le dans
 les notes et appuie-toi sur le pitch et le récapitulatif.
 
+## Quand la source est le BODACC
+
+Certaines entreprises viennent du BODACC : une augmentation de capital au
+journal officiel, sans montant ni investisseurs publiés. Ce n'est
+peut-être même pas une levée (exercice de BSPCE, entrée d'un associé).
+Alors :
+
+- ne cite aucun montant, aucun investisseur, et n'affirme pas qu'ils ont
+  levé ; ne parle pas du BODACC ni de leur capital (c'est indiscret) ;
+- le premier paragraphe s'appuie sur ce qu'ils construisent (le site, le
+  pitch) et sur le moment : une petite équipe qui grandit, un produit
+  jeune ; c'est ce qui justifie l'appel, pas la levée ;
+- dans le résumé, écris « montant inconnu (BODACC) » et ajoute la
+  vérification : confirmer la levée (LinkedIn, presse) avant d'envoyer ;
+- si le contexte dit « Site deviné d'après le nom : à vérifier », mets-le
+  en tête des notes.
+
 ## Ce que Samuel cherche
 
 Un CDI à Paris dans une petite ou moyenne structure, sur un poste de
@@ -38,7 +55,8 @@ construire quelque chose qui fonctionne et le présenter.
 - Le premier paragraphe parle d'eux, pas de lui : un élément précis de ce
   qu'ils construisent, et ce que la levée va leur demander (recruter, livrer
   plus vite, tenir une promesse faite aux investisseurs). Une phrase sur la
-  levée suffit ; pas de félicitations.
+  levée suffit ; pas de félicitations. Source BODACC : voir plus haut, pas
+  de levée affirmée.
 - Le deuxième paragraphe dit qui est Samuel en une ligne, puis une preuve
   choisie pour eux, racontée du problème au résultat : le problème de
   départ, ce qu'il a construit, ce que ça a changé. Awen pour une boîte

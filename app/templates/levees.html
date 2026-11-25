@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-head">
   <h2>💶 Levées de fonds</h2>
-  <p class="sub">Les startups d'Île-de-France qui viennent de lever, leurs dirigeants,
+  <p class="sub">Les petites équipes d'Île-de-France qui viennent de lever, leurs dirigeants,
     et le mail qui demande quinze minutes au téléphone.</p>
   <div class="page-links">
     <a href="{{ url_for('jobs.daily_jobs') }}">← Jobs du jour</a>
@@ -22,6 +22,24 @@
         {% endfor %}
       </select>
     </label>
+    <label>Levée jusqu'à
+      <select name="montant_max">
+        {% for v, lib in ((300000, '300 k€'), (500000, '500 k€'), (1000000, '1 M€'), (3000000, '3 M€'), (0, 'sans plafond')) %}
+        <option value="{{ v }}" {% if v == defaut_montant %}selected{% endif %}>{{ lib }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Équipe
+      <select name="equipe_max">
+        {% for v, lib in ((9, 'moins de 10'), (19, 'moins de 20'), (49, 'moins de 50'), (0, 'sans limite')) %}
+        <option value="{{ v }}" {% if v == defaut_equipe %}selected{% endif %}>{{ lib }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset class="lv-sources">
+      <label><input type="checkbox" name="sources" value="maddyness" checked> Maddyness <span class="muted">(montant connu)</span></label>
+      <label><input type="checkbox" name="sources" value="bodacc" checked> BODACC <span class="muted">(augmentations de capital, montant inconnu)</span></label>
+    </fieldset>
     <button class="cta" type="submit" {% if collecte and collecte.etat == 'en_cours' %}disabled{% endif %}>
       Lancer la collecte
     </button>
@@ -31,7 +49,7 @@
     {% if collecte.etat == 'en_cours' %}
       <span class="lt-dot" aria-hidden="true"></span>
       <span id="lv-message">{{ collecte.message }}</span>
-      <span class="muted">(deux à trois minutes)</span>
+      <span class="muted">(cinq à quinze minutes avec le BODACC)</span>
     {% elif collecte.etat == 'erreur' %}
       {{ collecte.message }}
     {% else %}
@@ -41,8 +59,17 @@
   </p>
   {% else %}
   <p class="muted">Aucune collecte pour l'instant. Sources : les récapitulatifs
-    hebdomadaires de Maddyness, le registre des entreprises (api.gouv.fr) et le site
-    de chaque entreprise. Rien n'est envoyé : tu écris toi-même.</p>
+    hebdomadaires de Maddyness, les augmentations de capital du BODACC, le registre
+    des entreprises (api.gouv.fr) et le site de chaque entreprise. Rien n'est envoyé :
+    tu écris toi-même.</p>
+  {% endif %}
+  {% if masquees and not tout %}
+  <p class="muted">{{ masquees }} entreprise{{ 's' if masquees > 1 }} au-dessus des plafonds de la dernière
+    collecte {{ 'sont masquées' if masquees > 1 else 'est masquée' }} ·
+    <a href="{{ url_for('jobs.levees', tout=1) }}">tout afficher</a></p>
+  {% elif tout %}
+  <p class="muted">Toutes les entreprises sont affichées ·
+    <a href="{{ url_for('jobs.levees') }}">appliquer les plafonds</a></p>
   {% endif %}
 </section>
 
@@ -51,7 +78,8 @@
   <header class="lv-head">
     <div>
       <h3>{{ l.entreprise }}
-        <small class="muted">{{ l.montant }} · {{ l.secteur or 'secteur ?' }}</small></h3>
+        <small class="muted">{{ l.montant or 'montant inconnu' }} · {{ l.secteur or 'secteur ?' }}</small>
+        {% if l.source == 'bodacc' %}<span class="lv-source">BODACC</span>{% endif %}</h3>
       <p class="lv-faits">
         {{ l.ville or '?' }}{% if l.creee %}, créée en {{ l.creee }}{% endif %}
         · effectif {{ l.effectif or '?' }}
@@ -75,6 +103,8 @@
     {% if l.investisseurs %}Investisseurs : {{ l.investisseurs }}. {% endif %}
     {% if l.site %}<a href="{{ l.site }}" target="_blank" rel="noopener">{{ l.domaine or l.site }}</a>{% endif %}
     {% if l.fiche_maddyness %}· <a href="{{ l.fiche_maddyness }}" target="_blank" rel="noopener">fiche Maddyness</a>{% endif %}
+    {% if l.annonce %}· <a href="{{ l.annonce }}" target="_blank" rel="noopener">annonce BODACC</a>{% endif %}
+    {% if l.siren %}· <a href="https://annuaire-entreprises.data.gouv.fr/entreprise/{{ l.siren }}" target="_blank" rel="noopener">registre</a>{% endif %}
   </p>
 
   {% set dirigeants = l.dirigeants_liste %}

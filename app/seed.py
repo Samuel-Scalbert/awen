@@ -206,6 +206,23 @@ def ensure_set_rir():
         db.session.commit()
 
 
+def ensure_levees_petites_equipes():
+    """Migration douce (25/11/2026) : la source BODACC et les réglages de
+    collecte. Les levées déjà enregistrées viennent toutes de Maddyness."""
+    ajouts = {
+        "levees": (("source", "VARCHAR(10) DEFAULT 'maddyness'"), ("capital", "VARCHAR(30) DEFAULT ''"),
+                   ("annonce", "VARCHAR(300) DEFAULT ''")),
+        "collectes_levees": (("montant_max", "INTEGER"), ("equipe_max", "INTEGER"),
+                             ("sources", "VARCHAR(40) DEFAULT 'maddyness'")),
+    }
+    for table, colonnes in ajouts.items():
+        cols = [row[1] for row in db.session.execute(sqltext("PRAGMA table_info({})".format(table)))]
+        for nom, type_ in colonnes:
+            if nom not in cols:
+                db.session.execute(sqltext("ALTER TABLE {} ADD COLUMN {} {}".format(table, nom, type_)))
+    db.session.commit()
+
+
 def ensure_program_block():
     """Migration douce : ajoute les colonnes `block`, `unit`, `active` et
     celles de la machine (`load_unit`, `load_step`)."""

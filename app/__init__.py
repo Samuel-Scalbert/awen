@@ -53,6 +53,7 @@ def create_app(config_class=Config):
                            merge_push_29oct, apply_feedback_04nov,
                            apply_october_feedback,
                            apply_pull_feedback,
+                           ensure_levees_petites_equipes,
                            ensure_program_block, ensure_recipe_servings,
                            ensure_set_rir, gym_in_pounds, plyo_as_session,
                            seed_default_recipes, seed_plyo_block, seed_program)
@@ -62,6 +63,7 @@ def create_app(config_class=Config):
         ensure_recipe_servings()
         ensure_program_block()
         ensure_set_rir()
+        ensure_levees_petites_equipes()
         seed_default_recipes()
         seed_program()
         seed_plyo_block()

@@ -150,15 +150,26 @@ l'API.
 
 ## Levées de fonds et mails de prospection
 
-Page **Jobs → Levées de fonds**. Une entreprise qui vient de lever recrute :
-le bouton *Lancer la collecte* lit les récapitulatifs hebdomadaires de
-Maddyness, garde les startups d'Île-de-France de moins de 250 personnes,
-retrouve chacune au registre des entreprises (api.gouv.fr : SIREN, effectif,
-dirigeants), lit son site (pitch, adresses publiées) et propose l'adresse
-probable de chaque dirigeant, `prenom@` puis `prenom.nom@`, avec pour seule
-vérification que le domaine reçoit du courrier. Aucune sonde SMTP, aucun
-envoi : Awen ne fait que la liste. Deux à trois minutes par collecte, en
-arrière-plan ; les entreprises déjà vues gardent leur statut.
+Page **Jobs → Levées de fonds**. Une entreprise qui vient de lever recrute ;
+la page vise les petites équipes d'Île-de-France. Le bouton *Lancer la
+collecte* lit deux sources :
+
+- les récapitulatifs hebdomadaires de **Maddyness** (montant connu), avec un
+  plafond réglable, 500 k€ par défaut ;
+- les augmentations de capital du **BODACC** (montant inconnu) : jeunes
+  entreprises du logiciel et de la donnée (NAF 58.29, 62, 63.1, six ans au
+  plus), dirigées par des personnes et pas par une maison mère. Leur site est
+  deviné d'après le nom, puis confirmé quand le SIREN figure dans ses pages.
+
+Les deux sources passent par un plafond d'effectif (moins de 20 par défaut).
+Chaque entreprise est retrouvée au registre (api.gouv.fr : SIREN, effectif,
+dirigeants), son site est lu (pitch, adresses publiées) et Awen propose
+l'adresse probable de chaque dirigeant, `prenom@` puis `prenom.nom@`, avec
+pour seule vérification que le domaine reçoit du courrier. Aucune sonde
+SMTP, aucun envoi : Awen ne fait que la liste. Cinq à quinze minutes par
+collecte, en arrière-plan ; les entreprises déjà vues gardent leur statut,
+et celles au-dessus des plafonds de la dernière collecte se cachent (lien
+*tout afficher*).
 
 Sous chaque entreprise, *Écrire le mail* : Claude (le même moteur que les
 lettres, avec le skill `.claude/skills/mail-prospection/SKILL.md`) écrit un

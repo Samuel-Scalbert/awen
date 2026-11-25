@@ -38,6 +38,10 @@ class CollecteLevees(db.Model):
     message = db.Column(db.Text, default="")
     nb_operations = db.Column(db.Integer, default=0)
     nb_nouvelles = db.Column(db.Integer, default=0)
+    # Les réglages du passage (25/11/2026) : viser les petites équipes.
+    montant_max = db.Column(db.Integer)                   # en euros ; None = sans plafond
+    equipe_max = db.Column(db.Integer)                    # borne haute de l'effectif ; None = sans limite
+    sources = db.Column(db.String(40), default="maddyness,bodacc")
 
 
 class Levee(db.Model):
@@ -77,6 +81,11 @@ class Levee(db.Model):
     dirigeants = db.Column(db.Text, default="[]")         # [{prenom, nom, qualite, adresses}]
     priorite = db.Column(db.Integer, default=0)
     fiche_maddyness = db.Column(db.String(300), default="")
+    # « maddyness » : un récapitulatif publié, montant connu. « bodacc » : une
+    # augmentation de capital au journal officiel, montant inconnu.
+    source = db.Column(db.String(10), default="maddyness")
+    capital = db.Column(db.String(30), default="")        # le capital après l'opération (BODACC)
+    annonce = db.Column(db.String(300), default="")       # le lien de l'annonce BODACC
     statut = db.Column(db.String(12), default="nouvelle")
     notes = db.Column(db.Text, default="")
 

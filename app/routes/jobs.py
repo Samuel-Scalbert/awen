@@ -371,14 +371,33 @@ def levees():
         levees_svc.abandonne(m)
     collecte = levees_svc.collecte_en_cours() or levees_svc.derniere_collecte()
     toutes = Levee.query.all()
-    return render_template("levees.html", collecte=collecte, levees=toutes,
-                           groupes=_groupes(toutes), statuts=STATUTS,
-                           moteur=lettres_svc.moteur())
+    # Les réglages de la dernière collecte servent aussi de filtre : les
+    # grosses levées des collectes d'avant restent en base mais se cachent,
+    # sauf celles où une conversation est engagée.
+    montant_max = collecte.montant_max if collecte else None
+    equipe_max = collecte.equipe_max if collecte else None
+
+    def au_dessus(l):
+        if l.statut in ("contactee", "repondu"):
+            return False
+        e = levees_svc.euros(l.montant)
+        return ((montant_max is not None and e is not None and e > montant_max)
+                or (equipe_max is not None and l.effectif_max is not None and l.effectif_max > equipe_max))
+
+    tout = request.args.get("tout") == "1"
+    masquees = [l for l in toutes if au_dessus(l)]
+    visibles = toutes if tout else [l for l in toutes if not au_dessus(l)]
+    return render_template("levees.html", collecte=collecte, levees=visibles,
+                           groupes=_groupes(visibles), statuts=STATUTS,
+                           moteur=lettres_svc.moteur(), masquees=len(masquees), tout=tout,
+                           defaut_montant=levees_svc.MONTANT_MAX, defaut_equipe=levees_svc.EQUIPE_MAX)
 
 
 @bp.route("/levees/collecter", methods=["POST"])
 def levees_collect():
-    levees_svc.lancer_collecte(request.form.get("semaines", 4))
+    levees_svc.lancer_collecte(request.form.get("semaines", 4),
+                               request.form.get("montant_max"), request.form.get("equipe_max"),
+                               request.form.getlist("sources"))
     return redirect(url_for("jobs.levees"))
 
 
