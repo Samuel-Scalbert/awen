@@ -21,6 +21,11 @@ class Config:
     SAMSUNG_CALENDAR_ICS_URL = os.getenv("SAMSUNG_CALENDAR_ICS_URL", "")
     # Dossier du pipeline Claude cowork de recherche d'emploi
     JOB_SEARCH_DIR = os.getenv("JOB_SEARCH_DIR", "")
+    # Récaps de fin de session Claude Code, poussés par le PC
+    # (scripts/dev-recap.ps1) et relus par PhoneBox. Sans clé, les routes
+    # /api/dev restent fermées.
+    DEV_API_KEY = os.getenv("DEV_API_KEY", "")
+    DEV_RECAP_DIR = os.getenv("DEV_RECAP_DIR", str(BASE_DIR / "data" / "dev-recaps"))
     # Jarvis. Ollama tourne sur l'hote, pas dans le conteneur : lui
     # passer le GPU demanderait nvidia-container-toolkit pour un gain
     # nul, puisqu'il expose deja une API HTTP.

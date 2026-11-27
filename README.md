@@ -19,6 +19,7 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 - [Lettres de motivation](#lettres-de-motivation)
 - [Levées de fonds et mails de prospection](#levées-de-fonds-et-mails-de-prospection)
 - [Rappel de séance dans Google Agenda](#rappel-de-séance-dans-google-agenda)
+- [Récaps de session Claude Code](#récaps-de-session-claude-code)
 - [Dépannage](#dépannage)
 - [Roadmap](#roadmap)
 - [Licence](#licence)
@@ -95,6 +96,8 @@ Variables définies dans `.env` (voir [.env.example](.env.example)) :
 | `LETTRE_EFFORT`              | Effort de réflexion des lettres (`high` par défaut) |
 | `CLAUDE_CODE_OAUTH_TOKEN`    | Jeton de `claude setup-token` : lettres écrites avec l'abonnement Claude |
 | `RAPPEL_SEANCE_HEURE`        | Heure du rappel quand une séance commencée n'est pas terminée (`20:00`) |
+| `DEV_API_KEY`                | Clé des récaps de session Claude Code ; vide, les routes `/api/dev` sont fermées |
+| `DEV_RECAP_DIR`              | Où stocker les récaps (défaut : `data/dev-recaps`, dans le volume) |
 
 ## Lettres de motivation
 
@@ -216,6 +219,40 @@ Mise en place, une fois :
 La clé reste dans `data/`, que git ignore. Tant qu'elle manque, le même
 rappel reste disponible en agenda à s'abonner, `/calendar/rappels.ics`, qui
 demande Tailscale sur le téléphone.
+
+## Récaps de session Claude Code
+
+Les projets de dev (awen, ASVP_STATOR, Keychain_Manon) poussent ici, en fin
+de session Claude Code, un récap « où on s'est arrêté, quoi ensuite », que le
+widget PhoneBox affiche sur le téléphone.
+
+| Route | Rôle |
+| ----- | ---- |
+| `POST /api/dev/recap` | Reçoit le récap d'un projet (un fichier par projet, écrasé) |
+| `GET /api/dev/recaps` | Tous les récaps en JSON, avec leur âge et un drapeau `stale` |
+| `GET /api/dev/board`  | Rendu texte de 34 colonnes, pour le widget Command de PhoneBox |
+
+Clé `DEV_API_KEY` en en-tête `X-API-Key` ou en `?key=` (le widget lance une
+commande, pas un client qui pose des en-têtes). Les récaps sont des fichiers
+dans `data/dev-recaps/`, dans le volume.
+
+Côté PC, deux hooks par projet appellent `scripts/dev-recap.ps1` :
+`Stop` (`-Mode journal`, à chaque réponse, sans réseau) tient un journal, et
+`SessionEnd` (`-Mode finish`) détache une synthèse par `claude -p --model
+haiku` puis la pousse. Sans réponse de Claude, un récap brut tiré de git ;
+serveur injoignable, le prochain `Stop` réessaie. `/recap` dans une session
+fait la même chose avec toute la conversation sous les yeux.
+
+```powershell
+setx AWEN_DEV_API_KEY "<la DEV_API_KEY du .env serveur>"    # une fois
+.\scripts\install-dev-recap.ps1 -Projects C:\chemin\du\projet
+.\scripts\dev-recap.ps1 -Mode show -Project C:\chemin\du\projet
+```
+
+La copie de `dev-recap.ps1` qu'appellent les hooks est celle de
+`C:\Users\User\awen\scripts` (le clone hors d'AppData) ; celle-ci est la
+version suivie par git. Widget PhoneBox **Command**, toutes les 300 s :
+`Invoke-RestMethod -Uri "http://192.168.1.32:5000/api/dev/board?key=<DEV_API_KEY>"`.
 
 ## Déploiement serveur (Docker)
 

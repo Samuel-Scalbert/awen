@@ -33,4 +33,9 @@ Thumbs.db
 # Sauvegardes locales de la base
 data/backups/
 
+# Récaps de session poussés par le PC : des données, pas du code
+data/dev-recaps/
+# Journal et récap de session Claude Code : état local
+.claude/recap/
+
 
