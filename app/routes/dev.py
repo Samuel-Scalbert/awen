@@ -51,4 +51,6 @@ def get_recaps():
 def get_board():
     _check_key()
     # text/plain : la sortie part telle quelle dans le widget Command.
-    return Response(board_text(), mimetype="text/plain; charset=utf-8")
+    # ?largeur=50 pour un widget plus large ; hors bornes, ramené à 20..120.
+    largeur = request.args.get("largeur", default=34, type=int) or 34
+    return Response(board_text(width=largeur), mimetype="text/plain; charset=utf-8")

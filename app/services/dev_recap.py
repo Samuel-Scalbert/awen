@@ -11,6 +11,7 @@ reconstruite ne les emporte pas, le volume est monté hors du conteneur.
 """
 import json
 import re
+import textwrap
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -134,13 +135,32 @@ def _fit(text, width):
     return cut.rstrip(" ,;:-") + ".."
 
 
+LARGEUR_MIN, LARGEUR_MAX = 20, 120
+LIGNES_PAR_POINT = 3
+
+
+def _plier(prefixe, texte, width):
+    """Une tâche sur plusieurs lignes plutôt que coupée : « Mettre a jour le
+    clone de.. » ne dit plus rien. Les suites s'alignent sous le texte ; au
+    delà de trois lignes, la dernière est tronquée."""
+    retrait = " " * len(prefixe)
+    lignes = textwrap.wrap(texte, width=width, initial_indent=prefixe,
+                           subsequent_indent=retrait, break_long_words=True)
+    if len(lignes) > LIGNES_PAR_POINT:
+        reste = " ".join(lignes[LIGNES_PAR_POINT - 1:]).strip()
+        lignes = lignes[:LIGNES_PAR_POINT - 1] + [_fit(retrait + reste, width)]
+    return lignes
+
+
 def board_text(width=34, max_next=2):
     """Rendu texte compact, pour le widget Command de PhoneBox.
 
     Pré-formaté ici et pas côté téléphone : le widget ne sait qu'afficher la
     sortie d'une commande, et une seule requête HTTP coûte moins qu'un bout
-    de logique à maintenir sur l'Android.
+    de logique à maintenir sur l'Android. Les tâches reviennent à la ligne ;
+    `width` suit la largeur du widget (paramètre `largeur` de la route).
     """
+    width = max(LARGEUR_MIN, min(int(width), LARGEUR_MAX))
     recaps = load_recaps()
     if not recaps:
         return "Aucun recap. Session Claude Code pas encore terminee ?"
@@ -157,9 +177,9 @@ def board_text(width=34, max_next=2):
         lines.append(_fit(head, width))
 
         for item in recap.get("next", [])[:max_next]:
-            lines.append(_fit(f"  -> {item}", width))
+            lines += _plier("  -> ", item, width)
         for item in recap.get("blockers", [])[:1]:
-            lines.append(_fit(f"  !! {item}", width))
+            lines += _plier("  !! ", item, width)
         if not recap.get("next") and not recap.get("blockers"):
             lines.append("  -> rien en cours")
         lines.append("")

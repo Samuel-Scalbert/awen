@@ -78,6 +78,30 @@ class DevRecapTest(unittest.TestCase):
         self.assertTrue(recaps[0]["stale"])
         self.assertIn("asvp · perime", self.client.get("/api/dev/board?key=" + CLE).get_data(as_text=True))
 
+    def test_les_taches_reviennent_a_la_ligne(self):
+        self.poster({"project": "awen", "branch": "main",
+                     "next": ["Mettre a jour le clone de septembre avant de toucher aux hooks"],
+                     "blockers": ["Coach et pesees : " + "tres long " * 20]})
+        tableau = self.client.get("/api/dev/board?key=" + CLE).get_data(as_text=True)
+        lignes = tableau.splitlines()
+        self.assertTrue(all(len(l) <= 34 for l in lignes), lignes)
+        # La tâche se lit en entier, ses suites alignées sous le texte.
+        self.assertEqual(lignes[1:4], ["  -> Mettre a jour le clone de",
+                                       "     septembre avant de toucher",
+                                       "     aux hooks"])
+        # Un point trop long s'arrête à trois lignes.
+        blocage = [l for l in lignes if l.startswith("  !! ")]
+        self.assertEqual(len(lignes[lignes.index(blocage[0]):]), 3)
+        self.assertTrue(lignes[-1].endswith(".."))
+
+    def test_la_largeur(self):
+        self.poster({"project": "awen", "next": ["Mettre a jour le clone de septembre avant de toucher aux hooks"]})
+        large = self.client.get("/api/dev/board?largeur=80&key=" + CLE).get_data(as_text=True)
+        self.assertIn("  -> Mettre a jour le clone de septembre avant de toucher aux hooks", large)
+        etroit = self.client.get("/api/dev/board?largeur=5&key=" + CLE).get_data(as_text=True)
+        self.assertTrue(all(len(l) <= 20 for l in etroit.splitlines()))      # ramené au minimum
+        self.assertEqual(self.client.get("/api/dev/board?largeur=abc&key=" + CLE).status_code, 200)
+
     def test_aucun_recap(self):
         self.assertIn("Aucun recap", self.client.get("/api/dev/board?key=" + CLE).get_data(as_text=True))
 
