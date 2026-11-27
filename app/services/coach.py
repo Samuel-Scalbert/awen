@@ -298,9 +298,14 @@ def _exercise_advice(pe, hist, advice):
         })
         return
 
-    # Règle 3 — stagnation : même charge depuis plusieurs séances
+    # Règle 3 — stagnation : même charge depuis plusieurs séances, ET des
+    # reps qui ne montent plus. En double progression, garder la charge
+    # pendant que les reps grimpent (12 → 14) est exactement ce qui doit se
+    # passer : ce n'est pas un plateau, et un deload le casserait.
     if len(hist) >= STALL_SESSIONS and pe.increment_kg:
-        if len({h["weight"] for h in hist[-STALL_SESSIONS:]}) == 1:
+        fenetre = hist[-STALL_SESSIONS:]
+        if (len({h["weight"] for h in fenetre}) == 1
+                and sum(fenetre[-1]["reps"]) <= sum(fenetre[0]["reps"])):
             new = _deload(pe)
             advice.append({
                 "level": "warn", "icon": "🔁",

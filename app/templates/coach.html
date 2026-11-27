@@ -12,6 +12,75 @@
   </div>
 </div>
 
+{% if bilan %}
+{% set c = bilan.contenu %}
+<section class="bilan" id="bilan">
+  <h3 class="section-title">Bilan du dimanche</h3>
+  <p class="muted bilan-semaine">Semaine du {{ bilan.semaine.strftime('%d/%m') }}
+    {%- if bilan.source == 'regles' %} · Claude n'a pas répondu, ce bilan
+    reprend seulement les observations des règles{% endif %}</p>
+
+  {% if c.cycle and c.cycle.decharge %}
+  <div class="advice warn">
+    <span class="advice-icon">🛌</span>
+    <div class="advice-body"><strong>Semaine de décharge conseillée</strong>
+      <p>{{ c.cycle.pourquoi }}</p></div>
+  </div>
+  {% endif %}
+
+  {% if c.bilan %}<p class="bilan-texte">{{ c.bilan }}</p>{% endif %}
+  {% if c.suivi %}<p class="bilan-suivi"><strong>La semaine dernière :</strong> {{ c.suivi }}</p>{% endif %}
+
+  {% if c.prochaine_seance %}
+  <h4 class="bilan-titre">Pour la prochaine séance</h4>
+  <ol class="bilan-consignes">
+    {% for consigne in c.prochaine_seance %}<li>{{ consigne }}</li>{% endfor %}
+  </ol>
+  {% endif %}
+
+  {% if propositions %}
+  <h4 class="bilan-titre">Charges proposées</h4>
+  <ul class="advice-list">
+    {% for p in propositions %}
+    <li class="advice info">
+      <span class="advice-icon">🎯</span>
+      <div class="advice-body">
+        <strong>{{ p.exercise.name }}</strong>
+        <p>{{ p.raison }}</p>
+        {% if p.faite %}
+        <p class="muted"><small>Déjà à {{ p.new_weight|charge(p.exercise) }}.</small></p>
+        {% else %}
+        <form method="post" action="{{ url_for('coach.apply') }}">
+          <input type="hidden" name="exercise_id" value="{{ p.exercise.id }}">
+          <input type="hidden" name="new_weight" value="{{ p.new_weight }}">
+          <input type="hidden" name="reason" value="Bilan du dimanche — {{ p.raison }}">
+          <input type="hidden" name="retour" value="bilan">
+          <button type="submit">Appliquer : {{ p.exercise.weight_kg|charge(p.exercise) }}
+            → {{ p.new_weight|charge(p.exercise) }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if c.cycle and not c.cycle.decharge and c.cycle.pourquoi %}
+  <p class="muted"><small>Cycle : {{ c.cycle.pourquoi }}</small></p>
+  {% endif %}
+
+  {% if bilan.question %}
+  <div class="bilan-question">
+    <strong>❓ {{ bilan.question }}</strong>
+    <form method="post" action="{{ url_for('coach.answer_brief', bilan_id=bilan.id) }}">
+      <textarea name="reponse" rows="2" placeholder="Ta réponse, en une ligne">{{ bilan.reponse or '' }}</textarea>
+      <button type="submit">{{ 'Modifier ma réponse' if bilan.reponse else 'Répondre' }}</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
 <h3 class="section-title">Cette semaine</h3>
 <ul class="stats">
   <li class="stat {{ 'accent' if recap.on_track }}">

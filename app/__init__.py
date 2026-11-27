@@ -49,6 +49,10 @@ def create_app(config_class=Config):
     app.register_blueprint(dictee_bp)
     app.register_blueprint(dev_bp)
 
+    # flask --app run coach-hebdo : le bilan du dimanche, lancé par le timer.
+    from .services.coach_hebdo import commande as coach_hebdo
+    app.cli.add_command(coach_hebdo)
+
     with app.app_context():
         db.create_all()
         from .seed import (apply_feedback_20oct, apply_feedback_21oct,

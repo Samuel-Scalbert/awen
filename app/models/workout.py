@@ -177,3 +177,27 @@ class CoachDecision(db.Model):
     reason = db.Column(db.String(300))
     old_weight = db.Column(db.Float)
     new_weight = db.Column(db.Float)
+
+
+class WeeklyBrief(db.Model):
+    """Le bilan du dimanche : Claude relit la semaine et prépare la suivante.
+
+    Un par semaine, repéré par le lundi de la semaine relue. `contenu` garde
+    la réponse telle qu'elle a été validée (voir services/coach_hebdo.py) :
+    bilan, suivi du bilan précédent, consignes pour la prochaine séance,
+    charges proposées, avis sur le cycle. La question de la semaine et la
+    réponse de Samuel vivent à part : c'est la seule partie qu'il écrit, et
+    le bilan suivant la relit.
+    """
+    __tablename__ = "weekly_briefs"
+    id = db.Column(db.Integer, primary_key=True)
+    semaine = db.Column(db.Date, nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    # « claude », ou « regles » quand Claude n'a pas pu répondre : le bilan
+    # se replie alors sur les observations du coach à règles.
+    source = db.Column(db.String(10), nullable=False, default="claude")
+    contenu = db.Column(db.JSON, nullable=False, default=dict)
+    question = db.Column(db.Text, default="")
+    reponse = db.Column(db.Text)
+    repondu_at = db.Column(db.DateTime)
+    erreur = db.Column(db.String(300))

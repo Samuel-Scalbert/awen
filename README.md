@@ -19,6 +19,7 @@ Assistant personnel auto-hébergé pour reprendre la muscu, gérer le meal prep 
 - [Lettres de motivation](#lettres-de-motivation)
 - [Levées de fonds et mails de prospection](#levées-de-fonds-et-mails-de-prospection)
 - [Rappel de séance dans Google Agenda](#rappel-de-séance-dans-google-agenda)
+- [Bilan du dimanche](#bilan-du-dimanche)
 - [Récaps de session Claude Code](#récaps-de-session-claude-code)
 - [Dépannage](#dépannage)
 - [Roadmap](#roadmap)
@@ -219,6 +220,35 @@ Mise en place, une fois :
 La clé reste dans `data/`, que git ignore. Tant qu'elle manque, le même
 rappel reste disponible en agenda à s'abonner, `/calendar/rappels.ics`, qui
 demande Tailscale sur le téléphone.
+
+## Bilan du dimanche
+
+Chaque dimanche à 20 h, Claude relit la semaine d'entraînement et prépare la
+suivante. Le bilan s'affiche en haut de la page Coach, et ses consignes pour
+la prochaine séance sur l'accueil.
+
+Le coach à règles et la double progression règlent déjà les charges ; le
+bilan fait ce qu'ils ne savent pas faire : lire les commentaires de salle,
+voir la semaine entière, relire le bilan précédent (charges appliquées,
+réponse à sa question), juger s'il est temps d'une semaine de décharge, et
+poser une question à laquelle on répond dans l'app. Il **propose** des
+charges, appliquées d'un clic et journalisées comme les conseils du coach ;
+il ne change jamais d'exercice.
+
+Les consignes sont dans `.claude/skills/coach-hebdo/SKILL.md`, le dossier
+qu'il lit et le tri de sa réponse dans `app/services/coach_hebdo.py`. Claude
+Code tourne avec l'abonnement, comme pour les lettres (une minute environ).
+Sans réponse, le bilan reprend les observations du coach à règles.
+
+```bash
+./scripts/install-coach-hebdo.sh                         # une fois, sur le serveur
+docker exec awen flask --app run coach-hebdo             # à la main
+docker exec awen flask --app run coach-hebdo --refaire   # réécrire celui de la semaine
+journalctl -u awen-coach-hebdo.service -n 20             # ce qu'il a dit
+```
+
+Le dimanche, il relit la semaine qui s'achève ; lancé un autre jour (serveur
+éteint dimanche, rattrapé au démarrage), la dernière semaine complète.
 
 ## Récaps de session Claude Code
 

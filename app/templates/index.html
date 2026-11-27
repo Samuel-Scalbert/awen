@@ -104,6 +104,29 @@
   </div>
 </section>
 
+{% if bilan and (bilan.contenu.prochaine_seance or bilan.contenu.bilan) %}
+<div class="coach-banner bilan-accueil">
+  <span class="advice-icon">🗓️</span>
+  <div class="advice-body">
+    <strong>Bilan du dimanche</strong>
+    {% if bilan.contenu.prochaine_seance %}
+    <ol class="bilan-consignes">
+      {% for consigne in bilan.contenu.prochaine_seance %}<li>{{ consigne }}</li>{% endfor %}
+    </ol>
+    {% else %}
+    <p>{{ bilan.contenu.bilan }}</p>
+    {% endif %}
+    {% if bilan.contenu.cycle and bilan.contenu.cycle.decharge %}
+    <p><strong>🛌 Semaine de décharge conseillée.</strong></p>
+    {% endif %}
+    {% if bilan.question and not bilan.reponse %}
+    <p class="muted"><small>Une question t'attend : {{ bilan.question }}</small></p>
+    {% endif %}
+    <a class="cta small" href="{{ url_for('coach.dashboard', _anchor='bilan') }}">Lire le bilan</a>
+  </div>
+</div>
+{% endif %}
+
 {% if headline %}
 <div class="coach-banner">
   <span class="advice-icon">{{ headline.icon }}</span>

@@ -1944,6 +1944,23 @@ ul.shop input:checked + span { text-decoration: line-through; opacity: .4; }
 }
 .coach-banner .advice-icon { font-size: 1.6rem; }
 
+/* Bilan du dimanche : à lire en une minute, avant la salle */
+.bilan { margin-bottom: var(--s-5); }
+.bilan-semaine { margin-top: calc(-1 * var(--s-2)); }
+.bilan-texte { font-size: 1rem; line-height: 1.55; }
+.bilan-suivi { color: var(--muted-strong); font-size: .94rem; }
+.bilan-titre { margin: var(--s-4) 0 var(--s-2); font-size: .95rem; }
+.bilan-consignes { margin: .3rem 0 .6rem; padding-left: 1.2rem; }
+.bilan-consignes li { margin-bottom: .3rem; }
+.bilan-question {
+  padding: var(--s-4); margin-top: var(--s-4);
+  background: var(--card); border: 1px solid var(--accent-ring);
+  border-radius: var(--r);
+}
+.bilan-question form { display: flex; flex-direction: column; gap: var(--s-2);
+                       margin-top: var(--s-2); }
+.bilan-question textarea { width: 100%; resize: vertical; }
+
 /* --- Assiduité et reprise -------------------------------------------------
  *
  * Une séance manquée n'est pas un échec par défaut : les trois états ont donc

@@ -4,8 +4,8 @@ from datetime import date
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ..services import charges
-from ..models import BodyWeight, CoachDecision, JumpTest, db
-from ..services import attendance, charts, coach
+from ..models import BodyWeight, CoachDecision, JumpTest, WeeklyBrief, db
+from ..services import attendance, charts, coach, coach_hebdo
 
 bp = Blueprint("coach", __name__, url_prefix="/coach")
 
@@ -24,8 +24,10 @@ def dashboard():
         [(j.date.strftime("%d/%m"), j.height_cm) for j in jumps],
         fmt=lambda v: f"{v:g} cm")
 
+    bilan = coach_hebdo.dernier()
     return render_template(
-        "coach.html", advice=advice, recap=recap,
+        "coach.html", advice=advice, recap=recap, bilan=bilan,
+        propositions=coach_hebdo.propositions(bilan) if bilan else [],
         attendance=attendance.summary(),
         weights=weights[-8:], jumps=jumps[-8:],
         weight_chart=weight_chart, jump_chart=jump_chart,
@@ -42,7 +44,18 @@ def apply():
         request.form.get("reason", ""))
     if pe:
         flash(f"{pe.name} : charge réglée à {charges.label(pe.weight_kg, pe)}.")
-    return redirect(url_for("coach.dashboard"))
+    return redirect(url_for("coach.dashboard",
+                            _anchor=request.form.get("retour") or None))
+
+
+@bp.route("/bilan/<int:bilan_id>/reponse", methods=["POST"])
+def answer_brief(bilan_id):
+    """La réponse à la question du bilan : relue par le bilan suivant."""
+    b = db.get_or_404(WeeklyBrief, bilan_id)
+    coach_hebdo.repondre(b, request.form.get("reponse", ""))
+    flash("Réponse notée : le prochain bilan en tiendra compte."
+          if b.reponse else "Réponse effacée.")
+    return redirect(url_for("coach.dashboard", _anchor="bilan"))
 
 
 @bp.route("/assiduite", methods=["POST"])

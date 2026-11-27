@@ -3,7 +3,7 @@ from datetime import date
 from flask import Blueprint, render_template
 
 from ..models import Workout
-from ..services import charges, charts, coach, todos
+from ..services import charges, charts, coach, coach_hebdo, todos
 from ..services.job_watch import date_fr, freshness, get_daily_reports
 from ..services.progression import (REPRISE, TRAINING_WEEKDAYS, rotation,
                                     upcoming)
@@ -113,6 +113,7 @@ def index():
     return render_template(
         "index.html", o=o, volume_chart=volume_chart,
         headline=coach.headline(), recap=coach.weekly_recap(),
+        bilan=coach_hebdo.dernier(today),
         jour=date_fr(today).rsplit(" ", 1)[0], today=today,
         seance=_seance(today), veille=_veille(),
         taches=todos.pending(4), compte=compte)
