@@ -47,6 +47,12 @@ param(
 $ErrorActionPreference = 'Continue'
 $ProgressPreference    = 'SilentlyContinue'
 
+# La synthese lance elle-meme une session `claude -p`, dont les hooks Stop et
+# SessionEnd nous rappelleraient : un journal pollue, et une synthese qui en
+# relance une autre. La synthese pose cette variable, heritee par ses hooks ;
+# ici on se tait.
+if ($env:AWEN_RECAP_SYNTH -and $Mode -in @('journal', 'finish')) { exit 0 }
+
 # --- Localisation du projet ------------------------------------------------
 
 function Get-StdinJson {
@@ -200,7 +206,9 @@ function New-FallbackRecap($entries, $git) {
 
 function Invoke-Synth {
     $git = Get-GitState -WithDiff
-    $entries = Get-JournalTail
+    # @() : une seule entree reviendrait en objet nu, sans .Count sous
+    # Windows PowerShell 5.1, et la synthese croirait le journal vide.
+    $entries = @(Get-JournalTail)
     if (-not $entries.Count) { Write-Verbose 'Journal illisible.'; return }
 
     $recap = $null
@@ -230,6 +238,11 @@ avec exactement ces cles :
 }
 Chaque element fait moins de 90 caracteres. Ecris en francais, sans accents.
 "@
+        # Depuis le dossier temporaire et pas depuis le projet : `claude -p`
+        # n'y charge ni les hooks du projet ni son CLAUDE.md et sa memoire,
+        # des milliers de jetons inutiles pour resumer un journal.
+        $env:AWEN_RECAP_SYNTH = '1'
+        Push-Location -LiteralPath ([System.IO.Path]::GetTempPath())
         try {
             $raw = $prompt | & claude -p --model $Model 2>$null
             if ($LASTEXITCODE -eq 0 -and $raw) {
@@ -253,6 +266,9 @@ Chaque element fait moins de 90 caracteres. Ecris en francais, sans accents.
             }
         } catch {
             Write-Verbose "claude -p a echoue : $_"
+        } finally {
+            Pop-Location
+            Remove-Item Env:\AWEN_RECAP_SYNTH -ErrorAction SilentlyContinue
         }
     } else {
         Write-Verbose 'Binaire claude absent du PATH.'
